@@ -9,6 +9,8 @@ const { createToken } = require('./middleware/authenticate');
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
 const VERIFICATION_TTL_MINUTES = 24 * 60;
+// Set EMAIL_VERIFICATION=off to skip verification emails (no mail provider configured).
+const emailVerificationOff = String(process.env.EMAIL_VERIFICATION || '').toLowerCase() === 'off';
 const RESET_TTL_MINUTES = 60;
 const recentEmailSends = new Map();
 
@@ -131,13 +133,14 @@ router.post('/register', async (req, res) => {
     const user = normalizeUser(
       await db.insert(
         // Keep the legacy NOT NULL `name` column populated in older SQLite files.
-        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified) VALUES (?, ?, ?, ?, ?, ?, 0)',
-        [fullName, fullName, username, email, passwordHash, null],
+        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0],
       ),
     );
 
     if (!user) throw new Error('The account was created but could not be loaded.');
     await createWelcomeNotification(user.id);
+    if (emailVerificationOff) return sendSession(res, user, 201, 'Account created');
     const delivery = await sendVerificationEmail(user);
     return res.status(201).json({
       message: delivery.delivered
@@ -173,7 +176,7 @@ router.post('/login', async (req, res) => {
     if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Email or password is incorrect.' });
     }
-    if (Number(user.email_verified) === 0) {
+    if (!emailVerificationOff && Number(user.email_verified) === 0) {
       return res.status(403).json({
         code: 'EMAIL_NOT_VERIFIED',
         message: 'Verify your email before signing in. Check your inbox or request a new verification link.',

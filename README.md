@@ -43,6 +43,8 @@ The APIs and their table creation are in `server/routes/` and `server/schema.js`
 - Configure email delivery in `server/.env` with `RESEND_API_KEY`, `SENDGRID_API_KEY`, or SMTP. For a custom domain mailbox set `SMTP_HOST`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`. For Gmail/Google Workspace use `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, your Gmail address as `SMTP_USER`, and a 16-character **Google App Password** as `SMTP_PASS` (a normal Gmail password will not work). `SMTP_URL` also accepts a full connection URL. Test it with `npm --prefix server run email:test -- you@example.com`. Without a provider, the server logs the email and the development UI shows a preview link; production needs a provider.
 - Set `GOOGLE_CLIENT_ID` (or `REACT_APP_GOOGLE_CLIENT_ID`) in `server/.env` and authorize the app origins in Google Cloud Console. Google-verified emails are treated as verified.
 
+Running without email: set `EMAIL_VERIFICATION=off` on the server. New accounts are then marked verified and signed in immediately, and existing unverified accounts can sign in. Password-reset emails still need a provider. Remove the variable once a provider is configured.
+
 ### NovaAI assistant
 
 - NovaAI works without extra configuration when Ollama is running locally. It uses `NOVA_AI_OLLAMA_URL` (default `http://localhost:11434/api/chat`). Set `NOVA_AI_MODEL_PATH` to the Ollama models directory (for example `C:\Users\you\.ollama\models`) and NovaAI discovers the installed model name from the manifests. Set `NOVA_AI_MODEL` explicitly to skip discovery; otherwise it falls back to `llama3.2`.
