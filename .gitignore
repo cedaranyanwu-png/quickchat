@@ -31,3 +31,15 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Environment and credentials
+.env
+config.php
+credentials.json
+
+# Documentation or notes containing keys
+Quickchat_ReadMe.md
+
+# OS or IDE junk
+.DS_Store
+Thumbs.db
+.vscode/
