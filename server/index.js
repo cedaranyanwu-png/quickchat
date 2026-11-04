@@ -186,6 +186,8 @@ async function addMissingColumns() {
     googleid: db.type === 'sqlite' ? 'TEXT' : 'VARCHAR(255)',
     picture: 'TEXT',
     createdat: db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP',
+    // Queries read u.created_at; older tables only have createdat.
+    created_at: db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
     bio: 'TEXT',
     interests: 'TEXT',
     location: db.type === 'sqlite' ? 'TEXT' : 'VARCHAR(120)',
@@ -218,8 +220,12 @@ async function addMissingColumns() {
 
   // Existing databases may have the older `name` and `google_id` column names.
   const hadEmailVerified = columns.has('email_verified');
+  const hadCreatedAt = columns.has('created_at');
   for (const [column, type] of Object.entries(columnTypes)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
+  }
+  if (!hadCreatedAt) {
+    await db.query('UPDATE users SET created_at = COALESCE(createdat, CURRENT_TIMESTAMP)');
   }
   if (!hadEmailVerified) {
     // Accounts created before email verification existed must keep signing in.
