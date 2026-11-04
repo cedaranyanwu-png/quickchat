@@ -69,7 +69,8 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   const isSharePage = location.pathname.startsWith('/share/');
   const isLiveWatchPage = /^\/live\/[^/]+\/?$/.test(location.pathname);
   const isVideosPage = location.pathname === '/videos';
-  const showRightSidebar = location.pathname !== '/messages' && !isAuthPage;
+  const isMessagesPage = location.pathname.replace(/\/$/, '') === '/messages';
+  const showRightSidebar = !isMessagesPage && !isAuthPage;
 
   // Register the notification worker and re-attach any existing browser
   // subscription to the signed-in account.
@@ -192,7 +193,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
       {showRightSidebar && <div className="hidden lg:block h-screen flex-shrink-0"><RightSidebar /></div>}
       {!isVideosPage && <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40"><BottomNav /></div>}
-      {!isVideosPage && <div className="lg:hidden fixed bottom-20 right-4 z-40"><FAB onOpenPost={openPostModal} /></div>}
+      {!isVideosPage && !isMessagesPage && <div className="lg:hidden fixed bottom-20 right-4 z-40"><FAB onOpenPost={openPostModal} /></div>}
       <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
       <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
 
