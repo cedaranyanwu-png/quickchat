@@ -3,9 +3,15 @@ const path = require('path');
 // Load server/.env even when the API is started from the project root.
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-const requestedType = (process.env.NODE_ENV === 'production' ? 'postgres' : process.env.DB_TYPE || 'sqlite')
-  .trim()
-  .toLowerCase();
+const databaseUrl = String(
+  process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING || '',
+).trim();
+const configuredType = String(process.env.DB_TYPE || '').trim().toLowerCase();
+// Cloud platforms commonly provide DATABASE_URL without setting NODE_ENV or
+// DB_TYPE. Detect that setup instead of silently falling back to an empty SQLite DB.
+const requestedType = process.env.NODE_ENV === 'production'
+  ? 'postgres'
+  : configuredType || (databaseUrl ? 'postgres' : 'sqlite');
 const aliases = {
   sqlite: 'sqlite',
   sqlite3: 'sqlite',
@@ -29,9 +35,6 @@ let adapter;
 
 if (type === 'postgres') {
   const { Pool } = require('pg');
-  const connectionString = String(
-    process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING || '',
-  ).trim();
   const sslEnabled = String(process.env.PG_SSL || '').trim().toLowerCase() === 'true' ||
     ['require', 'verify-ca', 'verify-full'].includes(String(process.env.PGSSLMODE || '').trim().toLowerCase());
   const ssl = sslEnabled ? { rejectUnauthorized: false } : undefined;
@@ -42,8 +45,8 @@ if (type === 'postgres') {
     connectionTimeoutMillis: positiveInteger(process.env.PG_CONNECTION_TIMEOUT_MS, 10000),
   };
 
-  if (connectionString) {
-    client = new Pool({ ...poolOptions, connectionString });
+  if (databaseUrl) {
+    client = new Pool({ ...poolOptions, connectionString: databaseUrl });
   } else {
     const host = String(process.env.PG_HOST || '').trim();
     const user = String(process.env.PG_USER || '').trim();
