@@ -43,6 +43,22 @@ The APIs and their table creation are in `server/routes/` and `server/schema.js`
 - Configure email delivery in `server/.env` with `RESEND_API_KEY`, `SENDGRID_API_KEY`, or SMTP. For a custom domain mailbox set `SMTP_HOST`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM`. For Gmail/Google Workspace use `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465`, `SMTP_SECURE=true`, your Gmail address as `SMTP_USER`, and a 16-character **Google App Password** as `SMTP_PASS` (a normal Gmail password will not work). `SMTP_URL` also accepts a full connection URL. Test it with `npm --prefix server run email:test -- you@example.com`. Without a provider, the server logs the email and the development UI shows a preview link; production needs a provider.
 - Set `GOOGLE_CLIENT_ID` (or `REACT_APP_GOOGLE_CLIENT_ID`) in `server/.env` and authorize the app origins in Google Cloud Console. Google-verified emails are treated as verified.
 
+### Email on Railway
+
+The server sends verification and password-reset emails through the first provider it finds, in this order: `RESEND_API_KEY`, `SENDGRID_API_KEY`, then SMTP (`SMTP_HOST` or `SMTP_URL`). Without one, emails are only logged and nobody can verify an account.
+
+Use Resend on Railway. It sends over HTTPS, so it works on every plan. Outbound SMTP is blocked on Railway's Free and Hobby plans, so SMTP only works on Pro.
+
+1. Create an API key at [resend.com](https://resend.com/api-keys).
+2. To email real users, add and verify your sending domain in Resend (add the DNS records it shows). Until then, Resend only delivers to the email address of your own Resend account, from `onboarding@resend.dev`.
+3. In the Railway service **Variables** tab, set:
+   - `RESEND_API_KEY` = the key from step 1
+   - `EMAIL_FROM` = `QuickChat <no-reply@yourdomain.com>` (an address on your verified domain)
+   - `PUBLIC_APP_URL` = your app's public URL, used to build the verification and reset links
+4. Railway redeploys on save. Register a new account and check that the verification email arrives. Failures appear in the deploy logs as `Resend rejected the email (...)`.
+
+SMTP alternative (Railway Pro only): set `SMTP_HOST`, `SMTP_PORT` (`587`, or `465` with `SMTP_SECURE=true`), `SMTP_USER`, `SMTP_PASS` and `EMAIL_FROM`. For Gmail, `SMTP_PASS` must be a Google App Password.
+
 ### NovaAI assistant
 
 - NovaAI works without extra configuration when Ollama is running locally. It uses `NOVA_AI_OLLAMA_URL` (default `http://localhost:11434/api/chat`). Set `NOVA_AI_MODEL_PATH` to the Ollama models directory (for example `C:\Users\you\.ollama\models`) and NovaAI discovers the installed model name from the manifests. Set `NOVA_AI_MODEL` explicitly to skip discovery; otherwise it falls back to `llama3.2`.
