@@ -1,0 +1,46 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.19.1
+2 info using node@v24.22.0
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat\server\.npmrc
+5 silly config load:file:C:\Users\Zuosoft Station 2\.npmrc
+6 silly config load:file:C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat\server\etc\npmrc
+7 verbose title npm install nodemailer
+8 verbose argv "install" "nodemailer" "--prefix" "server" "--cache" ".npm-cache" "--no-audit" "--no-fund"
+9 verbose logfile logs-max:10 dir:C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat\.npm-cache\_logs\2026-10-31T16_24_21_109Z-
+10 verbose logfile C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat\.npm-cache\_logs\2026-10-31T16_24_21_109Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:2348810240 maxSize:587202560 maxEntrySize:293601280
+13 silly idealTree buildDeps
+14 silly fetch manifest nodemailer@*
+15 silly packumentCache full:https://registry.npmjs.org/nodemailer cache-miss
+16 http fetch GET 200 https://registry.npmjs.org/nodemailer 1665ms (cache miss)
+17 silly packumentCache full:https://registry.npmjs.org/nodemailer set size:undefined disposed:false
+18 silly placeDep ROOT nodemailer@10.3.1 OK for: server@1.0.0 want: *
+19 silly reify mark retired [
+19 silly reify   'C:\\Users\\Zuosoft Station 2\\Desktop\\nodex_v32\\quickchat\\server\\node_modules\\@bachs\\sdk'
+19 silly reify ]
+20 silly reify moves {
+20 silly reify   'C:\\Users\\Zuosoft Station 2\\Desktop\\nodex_v32\\quickchat\\server\\node_modules\\@bachs\\sdk': 'C:\\Users\\Zuosoft Station 2\\Desktop\\nodex_v32\\quickchat\\server\\node_modules\\@bachs\\.sdk-dtGGCcAC'
+20 silly reify }
+21 http cache nodemailer@https://registry.npmjs.org/nodemailer/-/nodemailer-10.3.1.tgz 0ms (cache hit)
+22 silly tarball no local data for nodemailer@https://registry.npmjs.org/nodemailer/-/nodemailer-10.3.1.tgz. Extracting by manifest.
+23 http fetch GET 200 https://registry.npmjs.org/npm 2472ms
+24 http fetch GET 200 https://registry.npmjs.org/nodemailer/-/nodemailer-10.3.1.tgz 5101ms (cache miss)
+25 silly ADD node_modules/nodemailer
+26 silly REMOVE node_modules/@bachs/sdk
+27 warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+27 warn install-scripts   sqlite3@6.0.1 (install: node-gyp rebuild)
+27 warn install-scripts
+27 warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+28 verbose cwd C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat
+29 verbose os Windows_NT 10.0.19045
+30 verbose node v24.22.0
+31 verbose npm  v11.19.1
+32 notice
+32 notice New major version of npm available! 11.19.1 -> 12.2.1
+32 notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+32 notice To update run: npm install -g npm@12.2.1
+32 notice  { force: true, Symbol(proc-log.meta): true }
+33 verbose exit 0
+34 info ok

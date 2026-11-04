@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080f21">
+  <title>QuickChat — Find your people</title>
+  <style>
+    :root { color-scheme: dark; --ink:#080f21; --panel:#101a31; --blue:#2463eb; --cyan:#64d8f6; --muted:#a5b2c9; --white:#f5f8ff; --line:rgba(208,225,255,.13); }
+    * { box-sizing:border-box; }
+    html { background:#060b16; }
+    body { margin:0; min-height:100vh; background:radial-gradient(ellipse at 22% 4%, #15274a 0, #0b1428 38%, #060b16 80%); color:var(--white); font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .shell { width:min(1540px,100%); margin:0 auto; padding:30px clamp(14px,3vw,44px) 46px; }
+    .masthead { display:flex; align-items:center; gap:12px; margin:0 auto 22px; max-width:1390px; }
+    .brand-mark { width:42px; height:42px; border-radius:12px; object-fit:cover; box-shadow:0 0 28px rgba(62,123,255,.24); }
+    .brand-name { font-size:16px; font-weight:750; letter-spacing:-.035em; }
+    .mast-copy { margin-left:auto; color:#8291ad; font-size:11px; letter-spacing:.18em; text-transform:uppercase; }
+    .layout { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:22px; align-items:start; }
+    .stage { min-width:0; border:1px solid rgba(194,215,255,.16); background:rgba(9,16,31,.82); border-radius:18px; padding:12px; box-shadow:0 28px 90px rgba(0,0,0,.42),0 0 0 1px rgba(255,255,255,.015) inset; }
+    .canvas-wrap { position:relative; width:100%; overflow:hidden; border-radius:11px; background:#081124; aspect-ratio:16/9; }
+    canvas { width:100%; height:100%; display:block; }
+    .controls { padding:12px 4px 2px; }
+    .transport { display:flex; align-items:center; gap:10px; }
+    button { font:inherit; color:inherit; cursor:pointer; }
+    .control-btn { display:inline-flex; align-items:center; justify-content:center; min-height:38px; border:1px solid var(--line); border-radius:9px; padding:0 12px; background:#141f37; color:#eef4ff; font-size:12px; font-weight:650; transition:background .18s,border .18s,transform .18s; }
+    .control-btn:hover:not(:disabled) { background:#1a2b4e; border-color:rgba(140,183,255,.42); transform:translateY(-1px); }
+    .control-btn:focus-visible, input:focus-visible { outline:2px solid var(--cyan); outline-offset:2px; }
+    .control-btn.primary { border-color:#3976ff; background:#235ce1; box-shadow:0 7px 22px rgba(35,92,225,.25); }
+    .control-btn.primary:hover:not(:disabled) { background:#3472ff; }
+    .control-btn.record { margin-left:auto; border-color:rgba(255,110,121,.35); background:rgba(91,24,41,.54); color:#ffc3c9; }
+    .control-btn.record.is-recording { background:#b92c3d; color:#fff; animation:pulse 1.3s infinite; }
+    .control-btn:disabled { cursor:not-allowed; opacity:.55; }
+    @keyframes pulse { 50% { box-shadow:0 0 0 5px rgba(239,68,68,.15); } }
+    .timecode { min-width:98px; color:#a9b6cc; font:11px ui-monospace,SFMono-Regular,Consolas,monospace; text-align:center; }
+    .timeline-row { display:flex; align-items:center; gap:10px; padding:10px 1px 2px; }
+    .timeline { flex:1; width:100%; accent-color:#5aa6ff; cursor:pointer; }
+    .quality { color:#7f8da6; font-size:10px; white-space:nowrap; }
+    .side { display:flex; flex-direction:column; gap:15px; }
+    .panel { border:1px solid var(--line); border-radius:14px; background:linear-gradient(148deg,rgba(17,28,51,.88),rgba(9,15,29,.93)); padding:17px; box-shadow:0 12px 35px rgba(0,0,0,.15); }
+    .eyebrow { margin:0 0 9px; color:#76ccec; font-size:9px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; }
+    h1,h2,p { margin-top:0; }
+    h1 { margin-bottom:9px; font-size:20px; letter-spacing:-.045em; }
+    .intro { margin:0; color:#a7b4ca; font-size:12px; line-height:1.65; }
+    .scene-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-bottom:8px; }
+    .scene-head h2 { margin:0; font-size:14px; letter-spacing:-.02em; }
+    .scene-count { color:#8291aa; font:10px ui-monospace,monospace; }
+    .scene-copy { margin:0 0 13px; color:#8f9db5; font-size:11px; line-height:1.55; }
+    .voiceover { min-height:86px; padding:13px 14px; border-left:2px solid #4380ff; border-radius:0 8px 8px 0; background:rgba(40,81,154,.13); color:#eef4ff; font-size:12px; line-height:1.65; }
+    .scene-strip { display:flex; flex-direction:column; gap:4px; max-height:225px; overflow:auto; padding-right:3px; }
+    .scene-choice { display:grid; grid-template-columns:30px 1fr auto; align-items:center; gap:9px; width:100%; border:1px solid transparent; border-radius:8px; padding:8px 9px; background:transparent; text-align:left; color:#9aa8bf; }
+    .scene-choice:hover { background:rgba(255,255,255,.035); color:#eaf1ff; }
+    .scene-choice.active { border-color:rgba(79,136,255,.32); background:rgba(39,91,198,.13); color:#f3f7ff; }
+    .scene-num { color:#6ea8ff; font:10px ui-monospace,monospace; }
+    .scene-label { font-size:11px; font-weight:620; }
+    .scene-duration { color:#718099; font:9px ui-monospace,monospace; }
+    .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    .actions .control-btn { min-height:34px; padding:0 10px; font-size:10px; }
+    .url-note { margin:10px 0 0; color:#73839e; font-size:10px; line-height:1.5; }
+    .status { min-height:16px; margin:8px 2px 0; color:#93a4bf; font-size:10px; }
+    .fineprint { margin:0; color:#71809a; font-size:10px; line-height:1.65; }
+    .kbd { border:1px solid #354662; border-radius:4px; padding:1px 4px; color:#c5d5ee; font:9px ui-monospace,monospace; }
+    dialog { width:min(680px,calc(100% - 28px)); max-height:80vh; border:1px solid #334663; border-radius:14px; padding:0; background:#0d172b; color:#ecf3ff; box-shadow:0 30px 100px #000b; }
+    dialog::backdrop { background:rgba(0,0,0,.72); backdrop-filter:blur(5px); }
+    .dialog-head { display:flex; align-items:center; justify-content:space-between; padding:17px 20px; border-bottom:1px solid var(--line); }
+    .dialog-head h2 { margin:0; font-size:15px; }
+    .dialog-body { max-height:60vh; overflow:auto; padding:18px 22px; }
+    .transcript-entry { margin:0 0 17px; }
+    .transcript-entry strong { display:block; margin-bottom:5px; color:#82bbff; font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+    .transcript-entry p { margin:0; color:#dce7f8; font-size:12px; line-height:1.7; }
+    .dialog-foot { display:flex; justify-content:flex-end; padding:12px 20px; border-top:1px solid var(--line); }
+    @media(max-width:1040px) { .layout { grid-template-columns:minmax(0,1fr) 300px; gap:14px; } .shell { padding-top:18px; } }
+    @media(max-width:760px) { .layout { grid-template-columns:1fr; } .side { display:grid; grid-template-columns:1fr; } .shell { padding:12px 10px 26px; } .stage { padding:7px; border-radius:13px; } .controls { padding-top:8px; } .transport { gap:6px; } .control-btn { min-height:34px; padding:0 9px; font-size:10px; } .timecode { min-width:85px; font-size:9px; } .mast-copy { display:none; } .scene-strip { max-height:unset; display:grid; grid-template-columns:1fr 1fr; } }
+    @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <img class="brand-mark" src="assets/quickchat-logo.png" alt="QuickChat logo">
+      <span class="brand-name">QuickChat</span>
+      <span class="mast-copy">A product story · 75 seconds</span>
+    </header>
+    <div class="layout">
+      <section class="stage" aria-label="QuickChat promotional video preview">
+        <div class="canvas-wrap"><canvas id="film" width="1920" height="1080" aria-label="Animated QuickChat promotional presentation"></canvas></div>
+        <div class="controls">
+          <div class="transport">
+            <button class="control-btn primary" id="playButton" type="button" aria-label="Play presentation">▶ <span style="margin-left:6px">Play</span></button>
+            <button class="control-btn" id="rewindButton" type="button" aria-label="Restart presentation">↺ Restart</button>
+            <button class="control-btn" id="fullButton" type="button" aria-label="Toggle full screen">⛶ Full screen</button>
+            <span class="timecode" id="timecode">00:00 / 01:15</span>
+            <button class="control-btn record" id="recordButton" type="button">● Record 1080p</button>
+          </div>
+          <div class="timeline-row"><input class="timeline" id="timeline" type="range" min="0" max="75" step="0.05" value="0" aria-label="Video timeline"><span class="quality">1920 × 1080 · 30 fps</span></div>
+          <p class="status" id="status" role="status" aria-live="polite">Ready to preview. Recording saves a 1080p WebM file.</p>
+        </div>
+      </section>
+      <aside class="side">
+        <section class="panel">
+          <p class="eyebrow">QuickChat · Promo film</p>
+          <h1>Find your people.<br>Keep the conversation going.</h1>
+          <p class="intro">A 75-second story about turning a noisy feed into a more connected place to discover, share, and talk around the things you care about.</p>
+        </section>
+        <section class="panel" aria-labelledby="sceneTitle">
+          <div class="scene-head"><h2 id="sceneTitle">Opening hook</h2><span class="scene-count" id="sceneCount">01 / 08</span></div>
+          <p class="scene-copy" id="sceneCopy">Start with a familiar feeling: more posts, less connection.</p>
+          <div class="voiceover" id="voiceover" aria-live="polite">“A feed can be full—and still feel like it has nothing for you.”</div>
+          <div class="scene-strip" id="sceneStrip" aria-label="Jump to a scene"></div>
+          <div class="actions">
+            <button class="control-btn" id="transcriptButton" type="button">Read voiceover</button>
+            <button class="control-btn" id="downloadButton" type="button">Download transcript</button>
+          </div>
+          <p class="url-note">The public QuickChat URL is not confirmed yet. Add the real address to <code>PUBLIC_URL</code> near the top of the script before making a public export. It is blank by default.</p>
+        </section>
+        <section class="panel">
+          <p class="eyebrow">Export notes</p>
+          <p class="fineprint">This page contains no soundtrack or generated voice, so there are no unlicensed audio assets. Narration appears scene by scene and can be recorded or added in an editor. Record a 1080p WebM here, then use the included FFmpeg instructions to make an MP4.</p>
+          <p class="fineprint" style="margin-top:9px">Keyboard: <span class="kbd">Space</span> play/pause · <span class="kbd">←</span>/<span class="kbd">→</span> skip 5 seconds</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <dialog id="transcriptDialog">
+    <div class="dialog-head"><h2>QuickChat promotional voiceover</h2><button class="control-btn" id="closeDialog" type="button" aria-label="Close transcript">Close</button></div>
+    <div class="dialog-body" id="transcriptBody"></div>
+    <div class="dialog-foot"><button class="control-btn" id="downloadFromDialog" type="button">Download .txt</button></div>
+  </dialog>
+
+  <script>
+    // Update this once the QuickChat public domain is confirmed. Do not use NodexPlatform's URL here.
+    const PUBLIC_URL = '';
+    const DURATION = 75;
+    const W = 1920;
+    const H = 1080;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const scenes = [
+      { name:'Opening hook', duration:7, copy:'Start with a familiar feeling: more scrolling, less connection.', voice:'A busy feed can still feel lonely. Your people and conversations deserve a home.', visual:'hook' },
+      { name:'The problem', duration:9, copy:'Make the cost of scattered discovery and conversation feel immediate.', voice:'Finding your people shouldn’t feel like another job. Good ideas get buried when discovery, communities, and conversations live in different places.', visual:'problem' },
+      { name:'Meet QuickChat', duration:9, copy:'Introduce one social space centered on people, interests, and conversation.', voice:'Meet QuickChat. Find people, ideas, videos, and conversations around what matters to you—all in one social space.', visual:'reveal' },
+      { name:'A feed with direction', duration:12, copy:'Show Home and Explore with interest tabs, topics, people, and posts.', voice:'Start on Home, follow the people you care about, then explore posts and people by the topics you choose.', visual:'discover' },
+      { name:'Conversation, closer', duration:11, copy:'Move from reactions and replies into live-feeling direct messages.', voice:'React, comment, share, or take the conversation into messages—with online and typing cues that keep it feeling close.', visual:'chat' },
+      { name:'Video and community', duration:11, copy:'Show individual video playback and interest communities.', voice:'Watch and share videos, then find or build a community around the things you love.', visual:'community' },
+      { name:'Creator tools', duration:9, copy:'Present premium posts and 30-day pass options without promising earnings.', voice:'And when you’re ready to create, share posts and videos, offer a ₦500 premium post, or set a 30-day fan or community pass.', visual:'creator' },
+      { name:'Closing', duration:7, copy:'Brand and call to action. Add the public QuickChat address to PUBLIC_URL when confirmed.', voice:'QuickChat. Find your people. Keep the conversation going.', visual:'close' },
+    ];
+    let starts = [];
+    let total = 0;
+    scenes.forEach((scene) => { starts.push(total); total += scene.duration; });
+    const canvas = document.getElementById('film');
+    const ctx = canvas.getContext('2d', { alpha:false });
+    const logo = new Image();
+    logo.src = 'assets/quickchat-logo.png';
+    const homeDemo = new Image(); homeDemo.src = 'assets/quickchat-home-demo.png';
+    const exploreDemo = new Image(); exploreDemo.src = 'assets/quickchat-explore-demo.png';
+    const communitiesDemo = new Image(); communitiesDemo.src = 'assets/quickchat-communities-demo.png';
+    const playButton = document.getElementById('playButton');
+    const timeline = document.getElementById('timeline');
+    const timecode = document.getElementById('timecode');
+    const status = document.getElementById('status');
+    const recordButton = document.getElementById('recordButton');
+    const choices = [];
+    let currentTime = 0;
+    let playing = false;
+    let recording = false;
+    let lastFrame = 0;
+    let recorder;
+    let recorderChunks = [];
+
+    function clamp(n,a=0,b=1){ return Math.max(a,Math.min(b,n)); }
+    function ease(n){ n=clamp(n); return n*n*(3-2*n); }
+    function sceneAt(t){ for(let i=scenes.length-1;i>=0;i--) if(t>=starts[i]) return i; return 0; }
+    function localT(i,t){ return clamp((t-starts[i])/scenes[i].duration); }
+    function voiceFor(i){const text=scenes[i].voice;return scenes[i].visual==='close'&&PUBLIC_URL?`${text} Join us at ${PUBLIC_URL}.`:text;}
+    function roundRect(x,y,w,h,r,fill,stroke=null,lw=1){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.lineWidth=lw;ctx.strokeStyle=stroke;ctx.stroke();} }
+    function label(text,x,y,size=18,color='#93a3bd',weight=650,spacing=0){ ctx.fillStyle=color; ctx.font=`${weight} ${size}px Inter, "Segoe UI", sans-serif`; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; if(!spacing){ctx.fillText(text,x,y);return;} let p=x; for(const ch of text){ctx.fillText(ch,p,y);p+=ctx.measureText(ch).width+spacing;} }
+    function centerText(text,x,y,size=18,color='#fff',weight=650){ctx.fillStyle=color;ctx.font=`${weight} ${size}px Inter, "Segoe UI", sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(text,x,y);ctx.textAlign='left';}
+    function line(x1,y1,x2,y2,color='#ffffff22',width=1){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineWidth=width;ctx.strokeStyle=color;ctx.stroke();}
+    function pill(x,y,w,text,bg='#1d4ed8',fg='#eff6ff',size=15){roundRect(x,y,w,34,17,bg);centerText(text,x+w/2,y+17,size,fg,650);}
+    function wrap(text,x,y,maxWidth,lineHeight,size,color,weight=400){ctx.font=`${weight} ${size}px Inter, "Segoe UI", sans-serif`;ctx.fillStyle=color;ctx.textAlign='left';ctx.textBaseline='alphabetic';let words=text.split(' '), row='', yy=y;for(const word of words){const test=row?`${row} ${word}`:word;if(ctx.measureText(test).width>maxWidth&&row){ctx.fillText(row,x,yy);row=word;yy+=lineHeight;}else row=test;}if(row)ctx.fillText(row,x,yy);return yy;}
+    function background(t,index){
+      const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#091328');g.addColorStop(.5,'#0b1426');g.addColorStop(1,'#060a14');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+      const pulse=.55+.45*Math.sin(t*.75+index);
+      const glow=ctx.createRadialGradient(1170+Math.sin(t*.3)*160,260,12,1170,350,900);glow.addColorStop(0,`rgba(36,99,235,${.20*pulse})`);glow.addColorStop(.48,'rgba(25,64,142,.07)');glow.addColorStop(1,'rgba(0,0,0,0)');ctx.fillStyle=glow;ctx.fillRect(0,0,W,H);
+      // Sparse animated particles add a soft cinematic depth without competing with text.
+      for(let i=0;i<78;i++){let x=(i*271+((t*17*(i%3+1))%W))%W,y=(i*149+Math.sin(t*.4+i)*34)%H;ctx.fillStyle=`rgba(166,203,255,${.10+((i%5)/40)})`;ctx.fillRect(x,y,i%9===0?3:1.5,i%9===0?3:1.5);}
+      const v=ctx.createLinearGradient(0,0,0,H);v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,.36)');ctx.fillStyle=v;ctx.fillRect(0,0,W,H);
+    }
+    function drawBrand(x,y,size=64){if(logo.complete&&logo.naturalWidth){ctx.save();ctx.shadowColor='#2463eb88';ctx.shadowBlur=30;ctx.drawImage(logo,x,y,size,size);ctx.restore();}else{roundRect(x,y,size,size,16,'#174bd0');centerText('Q',x+size/2,y+size/2,size*.58,'#fff',800);}}
+    function drawCapture(image,x,y,w,h,alpha=1){
+      ctx.save();ctx.globalAlpha=alpha;ctx.shadowColor='#000b';ctx.shadowBlur=45;ctx.shadowOffsetY=20;roundRect(x,y,w,h,22,'#0d1729','#d0e3ff66',2);ctx.restore();
+      if(image.complete&&image.naturalWidth){ctx.save();ctx.globalAlpha=alpha;ctx.beginPath();ctx.roundRect(x+7,y+7,w-14,h-14,16);ctx.clip();ctx.drawImage(image,x+7,y+7,w-14,h-14);ctx.restore();}
+      else {ctx.save();ctx.globalAlpha=alpha;roundRect(x+7,y+7,w-14,h-14,16,'#152642');centerText('QuickChat',x+w/2,y+h/2,24,'#dbeaff',700);ctx.restore();}
+      ctx.save();ctx.globalAlpha=alpha;roundRect(x+22,y+h-45,312,28,14,'rgba(5,12,25,.84)','#ffffff33');label('QuickChat interface · demo content',x+37,y+h-26,11,'#eff5ff',650);ctx.restore();
+    }
+    function drawFooter(t){
+      ctx.fillStyle='rgba(222,233,255,.48)';ctx.font='600 13px Inter, sans-serif';ctx.textAlign='left';ctx.fillText('QUICKCHAT  /  FIND YOUR PEOPLE',88,1022);
+      ctx.textAlign='right';ctx.fillText(`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}`,1832,1022);ctx.textAlign='left';
+      roundRect(88,1040,1744,3,2,'rgba(218,231,255,.15)');roundRect(88,1040,1744*(t/DURATION),3,2,'#4c8dff');
+    }
+    function drawSceneTransition(index,t){
+      if(index===0)return;const p=localT(index,t);if(p>.075)return;const q=ease(p/.075);const beamX=-260+(W+520)*q;const g=ctx.createLinearGradient(beamX-260,0,beamX+260,0);g.addColorStop(0,'rgba(51,103,220,0)');g.addColorStop(.45,'rgba(63,124,249,.15)');g.addColorStop(.5,'rgba(126,227,248,.48)');g.addColorStop(.55,'rgba(54,112,231,.18)');g.addColorStop(1,'rgba(30,74,169,0)');ctx.fillStyle=g;ctx.fillRect(Math.max(0,beamX-260),0,Math.min(W,beamX+260)-Math.max(0,beamX-260),H);
+    }
+    function drawHeadline(kicker,title,subtitle,progress,options={}){
+      const x=options.x||112,y=options.y||405,width=options.width||680,size=options.size||66;
+      const intro=ease(clamp(progress/.32));
+      ctx.save();ctx.globalAlpha=ease(progress*3.2);
+      if(!prefersReducedMotion)ctx.translate(-42*(1-intro),12*(1-intro));
+      label(kicker.toUpperCase(),x,y-94,17,'#75d7f0',750,3);
+      const lines=title.split('\n');ctx.fillStyle='#f3f7ff';ctx.font=`780 ${size}px Inter, "Segoe UI", sans-serif`;ctx.textBaseline='alphabetic';
+      lines.forEach((s,i)=>{const reveal=ease(clamp((progress-i*.07)/.25));ctx.save();ctx.globalAlpha*=reveal;if(!prefersReducedMotion)ctx.translate(-24*(1-reveal),0);ctx.fillText(s,x,y+i*size*1.13);ctx.restore();});
+      const subY=y+lines.length*(size*1.13)+22;const subReveal=ease(clamp((progress-.12)/.30));ctx.save();ctx.globalAlpha*=subReveal;wrap(subtitle,x,subY,width,33,21,'#b1bed2',430);ctx.restore();ctx.restore();
+    }
+    function chip(x,y,text,bg='#eff6ff',fg='#32527d',w=null){ctx.font='600 13px Inter,sans-serif';const width=w||ctx.measureText(text).width+24;roundRect(x,y,width,26,13,bg);centerText(text,x+width/2,y+13,13,fg,600);return width;}
+    function avatar(x,y,r,initials,fill){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fill;ctx.fill();centerText(initials,x,y,r*.68,'#fff',700);}
+    function drawPortrait(x,y,r,variant=0){
+      const palettes=[['#8dd9e5','#e9b493','#24375f','#3b74c7'],['#f1bd79','#8d5c45','#2d354e','#925dd4'],['#c8b8f1','#b87562','#202b43','#148f83']];
+      const [sky,skin,hair,shirt]=palettes[variant%palettes.length];
+      ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();
+      const bg=ctx.createLinearGradient(x-r,y-r,x+r,y+r);bg.addColorStop(0,sky);bg.addColorStop(1,'#f7e6d0');ctx.fillStyle=bg;ctx.fillRect(x-r,y-r,r*2,r*2);
+      ctx.fillStyle=shirt;ctx.beginPath();ctx.ellipse(x,y+r*.84,r*.73,r*.5,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=skin;ctx.fillRect(x-r*.18,y+r*.12,r*.36,r*.38);ctx.beginPath();ctx.ellipse(x,y-r*.14,r*.48,r*.59,0,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle=hair;ctx.beginPath();ctx.ellipse(x,y-r*.38,r*.53,r*.38,0,Math.PI,Math.PI*2);ctx.lineTo(x+r*.47,y+r*.1);ctx.quadraticCurveTo(x+r*.23,y-r*.02,x+r*.14,y-r*.18);ctx.quadraticCurveTo(x-r*.1,y+r*.02,x-r*.47,y+r*.02);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#273448';ctx.beginPath();ctx.arc(x-r*.17,y-r*.12,r*.035,0,Math.PI*2);ctx.arc(x+r*.17,y-r*.12,r*.035,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#995f51';ctx.lineWidth=Math.max(1,r*.025);ctx.beginPath();ctx.arc(x,y+r*.06,r*.11,.18,Math.PI-.18);ctx.stroke();ctx.restore();
+      ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.strokeStyle='#ffffff';ctx.lineWidth=Math.max(2,r*.045);ctx.stroke();
+    }
+    function drawSamplePostCard(x,y,w,h,t,progress,variant=0,delay=0){
+      const data=[
+        {name:'Amara Nwosu',handle:'@amara.creates',copy:'Small ideas grow when we share what we’re learning.',likes:'12.8K likes',replies:'846 replies',topic:'CREATIVITY'},
+        {name:'Jordan Lee',handle:'@jordan.builds',copy:'A new perspective can turn a good idea into a great one.',likes:'8.4K likes',replies:'512 replies',topic:'TECH + DESIGN'},
+        {name:'Tobi Okafor',handle:'@tobi.ideas',copy:'What are you making this week? Let’s learn out loud.',likes:'6.2K likes',replies:'391 replies',topic:'COMMUNITY'},
+      ][variant%3];
+      const enter=ease(clamp((progress-delay)/.24));if(enter<=0)return;
+      const bob=prefersReducedMotion?0:Math.sin(t*1.25+variant*1.7)*9;
+      ctx.save();ctx.globalAlpha=enter;ctx.translate(x+(prefersReducedMotion?0:(1-enter)*112),y+bob+(prefersReducedMotion?0:(1-enter)*36));
+      if(!prefersReducedMotion)ctx.rotate(Math.sin(t*.55+variant)*.012);
+      ctx.shadowColor='#020714aa';ctx.shadowBlur=34;ctx.shadowOffsetY=19;roundRect(0,0,w,h,24,'#f8fbff','#ffffffcc',2);ctx.shadowColor='transparent';ctx.shadowBlur=0;
+      roundRect(18,16,116,23,11,'#e6edff');centerText('SAMPLE POST',76,27.5,10,'#315cc1',760);
+      drawPortrait(42,76,23,variant);label(data.name,77,72,14,'#1c2d49',760);label(data.handle,77,91,10,'#73839c',500);
+      roundRect(w-127,17,108,24,12,'#fff0d9');centerText('DEMO METRICS',w-73,29,9,'#8a5b17',760);
+      wrap(data.copy,22,126,w-44,22,14,'#26374f',560);
+      const imageY=149,imageH=Math.max(48,Math.min(78,h-213));const photo=ctx.createLinearGradient(18,imageY,w-18,imageY+imageH);photo.addColorStop(0,['#4b83d4','#cc745b','#45a69a'][variant%3]);photo.addColorStop(.55,['#8067cf','#dd9a67','#5c72c3'][variant%3]);photo.addColorStop(1,['#91d2d7','#efc47e','#a0d49c'][variant%3]);
+      roundRect(18,imageY,w-36,imageH,13,photo);
+      ctx.save();ctx.beginPath();ctx.roundRect(18,imageY,w-36,imageH,13);ctx.clip();
+      const drift=prefersReducedMotion?0:Math.sin(t*.48+variant)*12;ctx.fillStyle='rgba(255,255,255,.19)';ctx.beginPath();ctx.arc(w*.72+drift,imageY+22,33,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='rgba(16,37,73,.24)';ctx.beginPath();ctx.moveTo(18,imageY+imageH);ctx.lineTo(w*.34,imageY+26);ctx.lineTo(w*.57,imageY+imageH);ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,.24)';ctx.beginPath();ctx.moveTo(w*.35,imageY+imageH);ctx.lineTo(w*.73,imageY+19);ctx.lineTo(w-18,imageY+imageH);ctx.fill();ctx.restore();
+      label(`#${data.topic.replaceAll(' ','')}`,26,imageY+imageH-12,9,'#fff',760,1);
+      label(`♥  ${data.likes}    ·    ${data.replies}`,22,h-19,12,'#cc4562',720);label('SHARED INTERESTS',w-155,h-19,9,'#667994',700,1);
+      ctx.restore();
+    }
+    function drawSampleProfileCard(x,y,w,h,t,progress,delay=.1){
+      const enter=ease(clamp((progress-delay)/.24));if(enter<=0)return;
+      const bob=prefersReducedMotion?0:Math.sin(t*1.05+2.2)*8;
+      ctx.save();ctx.globalAlpha=enter;ctx.translate(x+(prefersReducedMotion?0:(1-enter)*90),y+bob+(prefersReducedMotion?0:(1-enter)*28));
+      ctx.shadowColor='#02071499';ctx.shadowBlur=34;ctx.shadowOffsetY=18;roundRect(0,0,w,h,22,'#f8fbff','#ffffffcc',2);ctx.shadowColor='transparent';ctx.shadowBlur=0;
+      roundRect(17,14,126,22,11,'#e6edff');centerText('SAMPLE PROFILE',80,25,9,'#315cc1',760);
+      roundRect(w-109,14,92,22,11,'#e6f7f2');centerText('DEMO',w-63,25,9,'#167d64',760);
+      drawPortrait(58,92,36,1);label('Maya Chen',108,72,17,'#1c2d49',760);label('@maya.makes',108,94,11,'#73839c',530);
+      label('Design · Culture · Tech',108,118,11,'#4a5e7c',600);
+      label('24.6K followers',20,h-27,15,'#20385f',760);roundRect(w-115,h-45,96,29,15,'#2864e8');centerText('Follow',w-67,h-30.5,11,'#fff',730);
+      ctx.restore();
+    }
+    function drawAppWindow(x,y,w,h,mode='home',t=0){
+      ctx.save();ctx.shadowColor='#0009';ctx.shadowBlur=48;ctx.shadowOffsetY=22;roundRect(x,y,w,h,28,'#f7f9fd','#ffffff65',2);ctx.restore();
+      ctx.save();ctx.beginPath();ctx.roundRect(x,y,w,h,28);ctx.clip();ctx.fillStyle='#f7f9fd';ctx.fillRect(x,y,w,h);
+      const topH=58,navW=224;ctx.fillStyle='#fff';ctx.fillRect(x,y,w,topH);line(x,y+topH,x+w,y+topH,'#dfe5ef');
+      drawBrand(x+22,y+11,35);label('QuickChat',x+68,y+37,18,'#17243b',760);
+      roundRect(x+w-245,y+13,210,31,15,'#f0f3f8');label('⌕  Search QuickChat',x+w-225,y+34,12,'#8492a7',500);
+      ctx.fillStyle='#fff';ctx.fillRect(x,y+topH,navW,h-topH);line(x+navW,y+topH,x+navW,y+h,'#e5e9f0');
+      const nav=['⌂  Home','◉  Explore','♧  Notifications','✉  Messages','▣  Videos','♧  Communities','▤  Bookmarks'];
+      nav.forEach((n,i)=>{let yy=y+topH+49+i*48;if((mode==='explore'&&i===1)||(mode==='chat'&&i===3)||(mode==='community'&&i===5)||(mode==='creator'&&i===0)){roundRect(x+14,yy-25,navW-28,38,10,'#e8efff');ctx.fillStyle='#2763df';}else ctx.fillStyle='#526176';ctx.font='650 15px Inter,sans-serif';ctx.fillText(n,x+28,yy);});
+      label('ILLUSTRATIVE PRODUCT UI',x+navW+28,y+topH+31,9,'#71829d',750,1.2);
+      if(mode==='home'||mode==='explore'||mode==='creator')drawFeedColumn(x+navW+25,y+topH+63,w-navW-48,h-topH-72,mode,t);
+      if(mode==='chat')drawChatColumn(x+navW+25,y+topH+63,w-navW-48,h-topH-72,t);
+      if(mode==='community')drawCommunityColumn(x+navW+25,y+topH+63,w-navW-48,h-topH-72,t);
+      ctx.restore();
+    }
+    function drawFeedColumn(x,y,w,h,mode,t){
+      label(mode==='explore'?'Explore':'Home',x,y+22,25,'#18263c',750);
+      if(mode==='explore'){
+        roundRect(x,y+40,w,37,11,'#edf1f7');label('⌕  Search posts and people',x+16,y+64,13,'#8390a4',450);
+        label('Browse Categories',x,y+112,15,'#1e2b41',740);
+        const cats=[['Technology','#2264dc'],['Design','#825ce4'],['Business','#218b71'],['Sports','#de7a2f'],['News','#526783']];
+        const cw=(w-32)/5;cats.forEach((c,i)=>{roundRect(x+i*(cw+8),y+125,cw,73,10,c[1]);label(c[0],x+i*(cw+8)+10,y+169,11,'#fff',720);});
+        label('Recommended posts',x,y+234,14,'#26344a',740);y+=254;
+      }else{
+        const tabs=['All','Following','Technology','Design'];let xx=x;tabs.forEach((tab,i)=>{const width=chip(xx,y+39,tab,i===0?'#2864e8':'#edf1f7',i===0?'#fff':'#57657a');xx+=width+8;});
+        label('What’s happening?',x,y+100,13,'#91a0b3',450);line(x,y+115,x+w,y+115,'#e4e8ef');y+=134;
+      }
+      const rows=mode==='creator'?2:3;
+      for(let i=0;i<rows;i++){
+        const yy=y+i*(mode==='creator'?155:135);if(yy+118>y+h)break;
+        const colors=['#3268c8','#d87953','#8564d9'];avatar(x+19,yy+18,16,['AM','JS','TK'][i],colors[i]);
+        label(['Amina M.','Jordan S.','Tobi K.'][i],x+47,yy+14,12,'#1b2a41',730);
+        label(['@amina.design · 2h','@jordan.builds · 4h','@tobi.ideas · 6h'][i],x+47,yy+32,9,'#8592a4',480);
+        const copy=['Small ideas grow when we share what we’re learning.','A good conversation can change the whole direction.','Making room for new perspectives today.'][i];wrap(copy,x+47,yy+55,w-70,17,11,'#3f4b5f',450);
+        const actionY=yy+83;label('♡  24       ◌  8       ↗  Share',x+47,actionY,10,'#8390a2',550);
+        if(i===0&&mode!=='explore'){roundRect(x+47,yy+94,w-70,24,6,'#eaf0fb');label('Shared in Technology',x+58,yy+110,9,'#47699c',600);}
+        line(x,yy+(mode==='creator'?136:122),x+w,yy+(mode==='creator'?136:122),'#e3e8f0');
+      }
+      if(mode==='creator'){
+        roundRect(x+w-140,y+240,132,52,10,'#fff5db','#f1cf77');label('₦500 · Premium',x+w-128,y+262,12,'#7b5613',750);label('30-day pass options',x+w-128,y+281,9,'#8a6c31',560);
+      }
+    }
+    function drawChatColumn(x,y,w,h,t){
+      label('Messages',x,y+24,25,'#18263c',750);line(x,y+43,x+w,y+43,'#e2e7ef');
+      avatar(x+21,y+85,18,'JS','#3869cf');label('Jordan S.',x+52,y+80,14,'#1d2c43',730);label('● Online',x+52,y+99,10,'#18845c',600);line(x,y+120,x+w,y+120,'#e4e8ef');
+      roundRect(x+8,y+144,Math.min(w*.60,275),63,14,'#eaf0f8');wrap('Have you tried the new design thread?',x+22,y+169,Math.min(w*.53,240),18,12,'#35435a',480);
+      roundRect(x+w*.35,y+227,Math.min(w*.59,280),58,14,'#2864e8');wrap('Yes! I shared a few ideas there.',x+w*.35+15,y+251,Math.min(w*.49,242),18,12,'#fff',500);
+      roundRect(x+8,y+305,Math.min(w*.56,260),58,14,'#eaf0f8');label('That’s a great start.',x+22,y+340,12,'#35435a',480);
+      roundRect(x+8,y+392,95,34,17,'#eaf0f8');for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x+34+i*18,y+408+Math.sin(t*5+i)*3,4,0,Math.PI*2);ctx.fillStyle='#71839f';ctx.fill();}
+      roundRect(x,y+h-54,w,41,14,'#fff','#dce3ed');label('Write a message…',x+15,y+h-28,11,'#9aa6b6',450);roundRect(x+w-46,y+h-48,31,29,9,'#2864e8');centerText('↑',x+w-30.5,y+h-34,16,'#fff',750);
+    }
+    function drawCommunityColumn(x,y,w,h,t){
+      label('Communities',x,y+23,25,'#18263c',750);roundRect(x+w-150,y+3,145,32,16,'#2864e8');centerText('+  Create community',x+w-77,y+19,10,'#fff',700);
+      roundRect(x,y+48,w,96,15,'#102449');label('Find your people',x+20,y+82,18,'#fff',760);label('Discover spaces around the things you love.',x+20,y+107,11,'#bbcae3',500);
+      const groups=[['Design Circle','Design','2.4k members','#db8e65'],['Lagos Creators','Business','860 members','#287c78'],['Weekend Football','Sports','1.2k members','#597fd7']];
+      groups.forEach((g,i)=>{let yy=y+165+i*105;if(yy+92>y+h) return;roundRect(x,yy,w,88,13,'#fff','#e2e7ee');roundRect(x+13,yy+13,58,58,12,g[3]);centerText(g[0].slice(0,1),x+42,yy+42,21,'#fff',760);label(g[0],x+84,yy+34,14,'#24334a',740);label(`${g[1]}  ·  ${g[2]}`,x+84,yy+56,10,'#8090a4',500);roundRect(x+w-89,yy+28,74,29,14,'#edf3ff');centerText('Explore',x+w-52,yy+42,10,'#3263c6',650);});
+    }
+    function drawPhone(x,y,w,h,screen='feed',t=0){
+      ctx.save();ctx.shadowColor='#0009';ctx.shadowBlur=35;ctx.shadowOffsetY=18;roundRect(x,y,w,h,52,'#111927','#65748e',2);ctx.restore();
+      ctx.save();ctx.beginPath();ctx.roundRect(x+13,y+13,w-26,h-26,41);ctx.clip();ctx.fillStyle='#f9fbff';ctx.fillRect(x+13,y+13,w-26,h-26);
+      roundRect(x+w/2-35,y+17,70,12,6,'#111927');
+      label('Home',x+35,y+73,21,'#1e2b40',760);line(x+20,y+87,x+w-20,y+87,'#e3e7ee');
+      if(screen==='feed'){
+        ['All','Following','Design','Tech'].forEach((a,i)=>{roundRect(x+24+i*70,y+101,i===0?50:64,25,13,i===0?'#2864e8':'#edf1f7');centerText(a,x+49+i*70,y+114,9,i===0?'#fff':'#5e6a7f',650);});
+        for(let i=0;i<3;i++){const yy=y+150+i*150;avatar(x+47,yy+17,14,['AM','JS','TK'][i],['#3268c8','#d87953','#8564d9'][i]);label(['Amina M.','Jordan S.','Tobi K.'][i],x+72,yy+12,11,'#24334a',730);label(['Small ideas, shared.','Fresh perspective.','Making things together.'][i],x+34,yy+52,11,'#3d4a60',500);roundRect(x+34,yy+67,w-68,50,10,['#d2e5f6','#f0dec9','#dcd5f4'][i]);label('♡  24       ◌  8       ↗',x+34,yy+137,10,'#8290a3',560);}
+      } else if(screen==='chat'){
+        label('Jordan S.',x+35,y+111,12,'#28364d',720);label('● online',x+35,y+129,9,'#11865d',600);
+        roundRect(x+30,y+155,w-72,60,14,'#eaf0f8');wrap('Seen your post about design.',x+43,y+178,w-100,15,10,'#405069');roundRect(x+77,y+230,w-110,58,14,'#2864e8');wrap('Thanks! What do you think?',x+91,y+253,w-140,15,10,'#fff');roundRect(x+30,y+306,w-72,53,14,'#eaf0f8');label('I like where it’s going.',x+43,y+338,10,'#405069',500);
+        for(let i=0;i<3;i++){ctx.beginPath();ctx.arc(x+53+i*17,y+392+Math.sin(t*5+i)*3,4,0,Math.PI*2);ctx.fillStyle='#64748b';ctx.fill();}
+      } else {
+        label('Explore videos',x+35,y+112,12,'#28364d',720);roundRect(x+28,y+128,w-56,248,14,'#183560');ctx.save();const gradient=ctx.createLinearGradient(x+28,y+128,x+w-28,y+376);gradient.addColorStop(0,'#2b67dc');gradient.addColorStop(.65,'#263b67');gradient.addColorStop(1,'#13203a');ctx.fillStyle=gradient;ctx.fill();ctx.restore();ctx.beginPath();ctx.arc(x+w/2,y+250,32,0,Math.PI*2);ctx.fillStyle='#ffffffdd';ctx.fill();centerText('▶',x+w/2+2,y+251,23,'#2864db',800);label('City lights & late ideas',x+35,y+405,12,'#28364d',720);label('♡  48        ◌  12        ↗',x+35,y+430,10,'#8290a3',560);
+      }
+      ctx.restore();
+    }
+    function drawScene(index,t){
+      const p=localT(index,t);background(t,index);
+      switch(scenes[index].visual){
+        case 'hook':{
+          drawHeadline('THE PROBLEM','Scrolling more.\nConnecting less.','Great posts and your people shouldn’t feel worlds apart.',p,{x:142,y:420,width:640,size:70});
+          ctx.save();ctx.globalAlpha=.42;ctx.strokeStyle='#77dff4';ctx.lineWidth=2;ctx.setLineDash([3,15]);ctx.lineDashOffset=prefersReducedMotion?0:-t*28;ctx.beginPath();ctx.moveTo(860,315);ctx.bezierCurveTo(1040,190,1140,760,1320,730);ctx.bezierCurveTo(1510,700,1580,350,1785,390);ctx.stroke();ctx.restore();
+          drawSamplePostCard(978,170,454,306,t,p,0,.03);
+          drawSampleProfileCard(1422,400,380,184,t,p,.13);
+          drawSamplePostCard(1035,615,470,285,t,p,2,.22);
+          const pop=ease(clamp((p-.28)/.2));if(pop>0){ctx.save();ctx.globalAlpha=pop;const bob=prefersReducedMotion?0:Math.sin(t*2.1)*7;roundRect(1120,506+bob,212,39,20,'#e84869','#ffbfd0',1);centerText('♥  12.8K LIKES  ·  DEMO',1226,525.5,12,'#fff',760);ctx.restore();}
+          break;
+        }
+        case 'problem':{
+          drawHeadline('THE PROBLEM','Your people are\nscattered across apps.','Finding new ideas, keeping up with creators, and continuing conversations takes too many steps.',p,{x:120,y:410,width:650,size:62});
+          const panels=[{x:970,y:220,w:360,h:240,title:'THE FEED',sym:'↻'},{x:1370,y:330,w:355,h:220,title:'THE CHAT',sym:'•••'},{x:1100,y:600,w:500,h:220,title:'THE VIDEO',sym:'▶'}];
+          panels.forEach((c,i)=>{const slide=ease(clamp((p-i*.08)/.24)),from=[-210,240,-180][i];ctx.save();ctx.globalAlpha=.72*slide;ctx.translate(c.x+(prefersReducedMotion?0:(1-slide)*from),c.y+(1-slide)*(i===1?-95:85));if(!prefersReducedMotion)ctx.rotate((1-slide)*(i-1)*.09);roundRect(0,0,c.w,c.h,21,'#0e1a31','#8aa5d64c',2);label(c.title,24,35,12,'#8da9d4',780,2);if(i===0){for(let j=0;j<3;j++){roundRect(24,58+j*48,c.w-48,33,8,'#ffffff0c');roundRect(40,69+j*48,115,9,5,'#bdd0eb66');}}else if(i===1){for(let j=0;j<3;j++)roundRect(24+j*56,81+j*47,175-j*20,29,14,j===1?'#235bd1':'#ffffff16');}else {roundRect(25,57,c.w-50,116,13,'#172c4f');ctx.beginPath();ctx.arc(c.w/2,116,24,0,Math.PI*2);ctx.fillStyle='#8bb6ff77';ctx.fill();centerText('▶',c.w/2+2,116,17,'#fff',750);}ctx.restore();});
+          break;
+        }
+        case 'reveal':{
+          ctx.save();const reveal=ease(p*1.5);ctx.globalAlpha=reveal;const scale=.82+.18*reveal;ctx.translate(W/2,H/2-55);ctx.scale(scale,scale);drawBrand(-86,-86,172);ctx.restore();
+          ctx.save();ctx.globalAlpha=reveal;centerText('QuickChat',W/2,665,68,'#f5f8ff',780);centerText('Your interests. Your people. One conversation.',W/2,731,24,'#b5c7e1',440);pill(W/2-118,790,236,'FIND YOUR PEOPLE','#235be0','#fff',16);ctx.restore();
+          ctx.save();ctx.globalAlpha=.45;ctx.strokeStyle='#79b8ff';ctx.lineWidth=2;ctx.setLineDash([4,13]);ctx.lineDashOffset=prefersReducedMotion?0:-t*24;ctx.beginPath();ctx.ellipse(W/2,H/2-55,355,169,0,0,Math.PI*2);ctx.stroke();ctx.restore();
+          const orbitLabels=[['INTERESTS',384,363],['CREATORS',1390,363],['COMMUNITIES',354,570],['MESSAGES',1410,570]];
+          orbitLabels.forEach(([text,x,y],i)=>{const fade=ease(clamp((p-.1-i*.025)/.3));ctx.save();ctx.globalAlpha=fade*.92;const drift=prefersReducedMotion?0:Math.sin(t*.7+i)*7;pill(x,y+drift, text==='COMMUNITIES'?164:128,text,'#102346','#d5e8ff',11);ctx.restore();});
+          for(let i=0;i<5;i++){const a=(prefersReducedMotion?0:t*.19)+i*Math.PI*2/5;const x=W/2+Math.cos(a)*355,y=H/2-55+Math.sin(a)*169;const fade=ease(clamp((p-.06-i*.035)/.28));ctx.save();ctx.globalAlpha=fade;ctx.shadowColor='#55b8ff88';ctx.shadowBlur=24;drawPortrait(x,y,31,i);ctx.restore();}
+          break;
+        }
+        case 'discover':{
+          drawHeadline('A feed with direction','Find what\nfeels relevant.','Move from your Home feed to Explore: follow people, browse categories, and search the conversations you want to find.',p,{x:102,y:432,width:590,size:55});
+          const blend=ease(clamp((p-.37)/.12)),entrance=ease(clamp(p/.2)),w=1050,h=591;
+          const scale=prefersReducedMotion?1:.93+.07*entrance,x=760+(prefersReducedMotion?0:(1-entrance)*138),y=205+(prefersReducedMotion?0:(1-entrance)*18);
+          const slideCapture=(image,alpha,offset)=>{ctx.save();ctx.globalAlpha=alpha;ctx.translate(x+w/2+offset,y+h/2);ctx.scale(scale,scale);ctx.translate(-w/2,-h/2);drawCapture(image,0,0,w,h,1);ctx.restore();};
+          if(blend<.999)slideCapture(homeDemo,1-blend,0);
+          if(blend>.001)slideCapture(exploreDemo,blend,prefersReducedMotion?0:(1-blend)*115);
+          break;
+        }
+        case 'chat':{
+          drawHeadline('Conversation, closer','A reply can\nstart something.','Like, comment, repost, follow, or keep talking in direct messages—with online and typing cues.',p,{x:102,y:420,width:610,size:58});
+          ctx.save();ctx.globalAlpha=ease(p*2);ctx.translate((1-ease(p*2))*80,0);drawAppWindow(760,167,1055,700,'chat',t);ctx.restore();
+          // A small floating activity indicator echoes the real presence state.
+          roundRect(1300,815,330,73,16,'#0d1a30','#6da0fa4a',2);ctx.beginPath();ctx.arc(1334,851,7,0,Math.PI*2);ctx.fillStyle='#46d6a0';ctx.fill();label('Jordan is online',1355,848,14,'#eef4ff',680);label('Typing now',1355,869,11,'#9dafca',480);
+          break;
+        }
+        case 'community':{
+          drawHeadline('Video and community','Watch. Share.\nFind your circle.','Explore video posts and join or create communities around shared interests.',p,{x:105,y:423,width:620,size:58});
+          const phoneIn=ease(clamp(p/.2));ctx.save();ctx.globalAlpha=phoneIn;if(!prefersReducedMotion)ctx.translate(0,(1-phoneIn)*125);drawPhone(748,192,326,647,'video',t);label('VIDEO · ILLUSTRATIVE',786,866,10,'#8299bb',720,1.4);ctx.restore();
+          const panelIn=ease(clamp((p-.08)/.24));ctx.save();ctx.globalAlpha=panelIn;if(!prefersReducedMotion)ctx.translate((1-panelIn)*150,0);label('DISCOVER A COMMUNITY',1114,291,12,'#86d6ef',760,2);drawCapture(communitiesDemo,1100,310,710,400);ctx.restore();
+          break;
+        }
+        case 'creator':{
+          drawHeadline('Creator tools','Make room for\nyour next idea.','Share with images or video. Choose a premium post or offer a 30-day fan or community pass.',p,{x:105,y:425,width:615,size:58});
+          ctx.save();ctx.globalAlpha=ease(p*2);drawAppWindow(770,166,1040,705,'creator',t);
+          roundRect(1350,772,414,100,18,'#0d1b34','#6791e64a',2);label('CREATOR OPTIONS',1375,803,11,'#6fd5ef',760,2);pill(1375,820,148,'₦500 · POST','#2864e8','#fff',13);pill(1536,820,198,'30-DAY PASS','#f0b85f','#392607',13);ctx.restore();
+          break;
+        }
+        case 'close':{
+          const fade=ease(p*2);ctx.save();ctx.globalAlpha=fade;drawBrand(W/2-57,220,114);centerText('QuickChat',W/2,407,78,'#f6f8ff',790);centerText('Find your people. Keep the conversation going.',W/2,489,24,'#bdcce2',480);roundRect(W/2-224,580,448,66,33,'#2563e8');centerText('JOIN QUICKCHAT',W/2,613,17,'#fff',780);if(PUBLIC_URL)centerText(PUBLIC_URL,W/2,690,19,'#86dff5',630);centerText('Explore · Share · Talk',W/2,790,15,'#91a5c4',500);ctx.restore();break;
+        }
+      }
+      drawSceneTransition(index,t);drawFooter(t);
+    }
+    function draw(t){const i=sceneAt(t);drawScene(i,t);updateUI(i,t);}
+    function frame(now){if(playing){if(!lastFrame)lastFrame=now;const dt=(now-lastFrame)/1000;currentTime+=dt;lastFrame=now;if(currentTime>=DURATION){currentTime=DURATION;playing=false;lastFrame=0;if(recording)stopRecording();}}draw(currentTime);requestAnimationFrame(frame);}
+    function formatTime(n){n=Math.floor(n);return `${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;}
+    function updateUI(i,t){if(Math.abs(Number(timeline.value)-t)>.15)timeline.value=t;timecode.textContent=`${formatTime(t)} / 01:15`;playButton.innerHTML=playing?'Ⅱ <span style="margin-left:6px">Pause</span>':'▶ <span style="margin-left:6px">Play</span>';document.getElementById('sceneTitle').textContent=scenes[i].name;document.getElementById('sceneCount').textContent=`${String(i+1).padStart(2,'0')} / ${String(scenes.length).padStart(2,'0')}`;document.getElementById('sceneCopy').textContent=scenes[i].copy;document.getElementById('voiceover').textContent=`“${voiceFor(i)}”`;choices.forEach((button,j)=>{button.classList.toggle('active',i===j);button.setAttribute('aria-current',i===j?'step':'false');});}
+    function togglePlay(){if(currentTime>=DURATION)currentTime=0;playing=!playing;lastFrame=0;}
+    function seek(t){currentTime=clamp(t,0,DURATION);lastFrame=0;draw(currentTime);}
+    function downloadTranscript(){const content=scenes.map((s,i)=>`${formatTime(starts[i])}–${formatTime(starts[i]+s.duration)} | ${s.name}\n${voiceFor(i)}`).join('\n\n');const blob=new Blob([`QuickChat promotional voiceover\nApprox. duration: 75 seconds\n\n${content}\n`],{type:'text/plain;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='QuickChat-voiceover.txt';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+    function initTranscript(){const strip=document.getElementById('sceneStrip'),body=document.getElementById('transcriptBody');scenes.forEach((s,i)=>{const button=document.createElement('button');button.className='scene-choice';button.type='button';const number=document.createElement('span');number.className='scene-num';number.textContent=String(i+1).padStart(2,'0');const title=document.createElement('span');title.className='scene-label';title.textContent=s.name;const duration=document.createElement('span');duration.className='scene-duration';duration.textContent=`${s.duration}s`;button.append(number,title,duration);button.addEventListener('click',()=>{playing=false;seek(starts[i]);});strip.appendChild(button);choices.push(button);const article=document.createElement('article');article.className='transcript-entry';const heading=document.createElement('strong');heading.textContent=`${formatTime(starts[i])} · ${s.name}`;const paragraph=document.createElement('p');paragraph.textContent=voiceFor(i);article.append(heading,paragraph);body.appendChild(article);});}
+    async function startRecording(){
+      if(!canvas.captureStream||!window.MediaRecorder){status.textContent='This browser cannot record canvas video. Use the playback plus a screen recorder.';return;}
+      if(recording){stopRecording();return;}
+      const mimeTypes=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];const mime=mimeTypes.find((type)=>MediaRecorder.isTypeSupported(type));if(!mime){status.textContent='No WebM encoder is available in this browser.';return;}
+      recorderChunks=[];const stream=canvas.captureStream(30);recorder=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:12000000});recorder.ondataavailable=(event)=>{if(event.data?.size)recorderChunks.push(event.data);};recorder.onstop=()=>{stream.getTracks().forEach((track)=>track.stop());if(!recorderChunks.length){status.textContent='The browser returned an empty video file.';recording=false;return;}const blob=new Blob(recorderChunks,{type:mime});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='QuickChat-Promo-1080p.webm';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);recording=false;recordButton.classList.remove('is-recording');recordButton.textContent='● Record 1080p';status.textContent=`Saved ${Math.round(blob.size/1024/1024)} MB WebM. Convert it to MP4 with the included FFmpeg command.`;};
+      recording=true;recordButton.classList.add('is-recording');recordButton.textContent='■ Stop recording';status.textContent='Recording full 75-second promo at 1080p / 30 fps…';seek(0);recorder.start(1000);playing=true;lastFrame=0;
+    }
+    function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop();}
+    playButton.addEventListener('click',togglePlay);document.getElementById('rewindButton').addEventListener('click',()=>{playing=false;seek(0);status.textContent='Preview restarted.';});
+    document.getElementById('fullButton').addEventListener('click',()=>{const target=document.querySelector('.canvas-wrap');if(!document.fullscreenElement)target.requestFullscreen?.();else document.exitFullscreen?.();});
+    recordButton.addEventListener('click',startRecording);timeline.addEventListener('input',()=>{playing=false;seek(Number(timeline.value));});
+    document.getElementById('transcriptButton').addEventListener('click',()=>document.getElementById('transcriptDialog').showModal());document.getElementById('closeDialog').addEventListener('click',()=>document.getElementById('transcriptDialog').close());document.getElementById('downloadButton').addEventListener('click',downloadTranscript);document.getElementById('downloadFromDialog').addEventListener('click',downloadTranscript);
+    window.addEventListener('keydown',(event)=>{if(event.target.matches('input,textarea,button')&&event.code!=='Space')return;if(event.code==='Space'){event.preventDefault();togglePlay();}if(event.code==='ArrowRight'){event.preventDefault();playing=false;seek(currentTime+5);}if(event.code==='ArrowLeft'){event.preventDefault();playing=false;seek(currentTime-5);}});
+    initTranscript();draw(0);requestAnimationFrame(frame);
+  </script>
+</body>
+</html>
