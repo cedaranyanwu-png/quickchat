@@ -29,22 +29,47 @@ let adapter;
 
 if (type === 'postgres') {
   const { Pool } = require('pg');
-  const connectionString =
-    process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING;
-  const ssl = process.env.PG_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
+  const connectionString = String(
+    process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_CONNECTION_STRING || '',
+  ).trim();
+  const sslEnabled = String(process.env.PG_SSL || '').trim().toLowerCase() === 'true' ||
+    ['require', 'verify-ca', 'verify-full'].includes(String(process.env.PGSSLMODE || '').trim().toLowerCase());
+  const ssl = sslEnabled ? { rejectUnauthorized: false } : undefined;
+  const poolOptions = {
+    ssl,
+    max: positiveInteger(process.env.PG_POOL_SIZE, 10),
+    idleTimeoutMillis: positiveInteger(process.env.PG_IDLE_TIMEOUT_MS, 10000),
+    connectionTimeoutMillis: positiveInteger(process.env.PG_CONNECTION_TIMEOUT_MS, 10000),
+  };
 
-  client = new Pool(
-    connectionString
-      ? { connectionString, ssl }
-      : {
-          host: process.env.PG_HOST || 'localhost',
-          port: Number(process.env.PG_PORT || 5432),
-          user: process.env.PG_USER,
-          password: process.env.PG_PASSWORD,
-          database: process.env.PG_DATABASE,
-          ssl,
-        },
-  );
+  if (connectionString) {
+    client = new Pool({ ...poolOptions, connectionString });
+  } else {
+    const host = String(process.env.PG_HOST || '').trim();
+    const user = String(process.env.PG_USER || '').trim();
+    const database = String(process.env.PG_DATABASE || '').trim();
+    if (!host || !user || !database) {
+      throw new Error(
+        '[Database] PostgreSQL settings are incomplete. Set DATABASE_URL or PG_HOST, PG_PORT, PG_USER, and PG_DATABASE in server/.env.',
+      );
+    }
+    const port = Number(process.env.PG_PORT || 5432);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new Error('[Database] PG_PORT must be a valid port number.');
+    }
+    client = new Pool({
+      ...poolOptions,
+      host,
+      port,
+      user,
+      password: process.env.PG_PASSWORD,
+      database,
+    });
+  }
+
+  client.on('error', (error) => {
+    console.error('[Database] PostgreSQL pool error:', error.message);
+  });
 
   adapter = {
     async query(sql, params = []) {
@@ -137,6 +162,11 @@ if (type === 'postgres') {
       });
     },
   };
+}
+
+function positiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 function toPostgresPlaceholders(sql) {
