@@ -286,7 +286,7 @@ export default function RecommendationAssistant({ openModal, openVideo }) {
               </div>
               <h3 className="text-base font-extrabold text-slate-900">No Business Profile Connected Yet</h3>
               <p className="mx-auto mt-1 max-w-md text-xs text-slate-600 leading-relaxed">
-                Connect your business or startup in Settings to unlock business-aware recommendations: developers, packaging designers, suppliers, B2B discussions, and marketing opportunities tailored to your company's stage.
+                Connect your business or startup in Settings to unlock business-aware recommendations: developers, packaging designers, suppliers, B2B discussions, and marketing opportunities tailored to your goals.
               </p>
               <Link
                 to="/settings"
@@ -395,6 +395,7 @@ export default function RecommendationAssistant({ openModal, openVideo }) {
               <input
                 type="checkbox"
                 checked={prefs.personalized_ads}
+                disabled={savingPrefs}
                 onChange={(e) => savePreferences({ personalized_ads: e.target.checked })}
                 className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
               />
@@ -409,6 +410,7 @@ export default function RecommendationAssistant({ openModal, openVideo }) {
               </div>
               <select
                 value={prefs.ad_frequency}
+                disabled={savingPrefs}
                 onChange={(e) => savePreferences({ ad_frequency: e.target.value })}
                 className="rounded-lg border border-slate-200 p-1.5 text-xs text-slate-800 outline-none"
               >
@@ -428,6 +430,7 @@ export default function RecommendationAssistant({ openModal, openVideo }) {
               <input
                 type="checkbox"
                 checked={prefs.opportunity_notifications}
+                disabled={savingPrefs}
                 onChange={(e) => savePreferences({ opportunity_notifications: e.target.checked })}
                 className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
               />
