@@ -37,8 +37,8 @@ const POST_SELECT = `
          EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
          CASE WHEN p.author_id = ? OR p.visibility = 'public'
            OR (p.visibility = 'premium' AND EXISTS(SELECT 1 FROM content_purchases cp WHERE cp.post_id = p.id AND cp.user_id = ?))
-           OR (p.visibility = 'fans' AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'creator' AND cs.entity_id = p.author_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
-           OR (p.community_id IS NOT NULL AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'community' AND cs.entity_id = p.community_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
+           OR (p.visibility = 'fans' AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'creator' AND cs.entity_id = p.author_id AND cs.subscriber_id = ? AND cs.status = 'active'))
+           OR (p.community_id IS NOT NULL AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'community' AND cs.entity_id = p.community_id AND cs.subscriber_id = ? AND cs.status = 'active'))
            THEN 1 ELSE 0 END AS can_view
     FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id`;
 
@@ -231,16 +231,22 @@ router.get('/profiles/:username', asyncRoute(async (req, res) => {
 
 router.get('/users', asyncRoute(async (req, res) => {
   const query = String(req.query.q || '').trim().slice(0, 100);
-  const likeQuery = `%${query}%`;
-  const queryFilter = query ? 'AND (LOWER(u.fullname) LIKE LOWER(?) OR LOWER(u.username) LIKE LOWER(?))' : '';
-  const params = [req.user.id];
-  if (query) params.push(likeQuery, likeQuery);
-  params.push(req.user.id, clampLimit(req.query.limit, 20, 100));
+  const queryFilter = query
+    ? "AND (LOWER(COALESCE(u.fullname, '')) LIKE LOWER(?) OR LOWER(COALESCE(u.username, '')) LIKE LOWER(?))"
+    : '';
+  // Keep bindings in the same order as their SQL placeholders for both SQLite and PostgreSQL:
+  // following-state user, excluded current user, optional name/username patterns, then result limit.
+  const params = [req.user.id, req.user.id];
+  if (query) {
+    const likeQuery = `%${query}%`;
+    params.push(likeQuery, likeQuery);
+  }
+  params.push(clampLimit(req.query.limit, 20, 100));
 
   const users = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = u.id) AS following
-       FROM users u WHERE u.id <> ? ${queryFilter} ORDER BY u.fullname LIMIT ?`,
+       FROM users u WHERE u.id <> ? ${queryFilter} ORDER BY LOWER(COALESCE(u.fullname, '')), u.id LIMIT ?`,
     params,
   );
   res.json({ users: users.map(toSuggestion) });
