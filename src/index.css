@@ -53,6 +53,14 @@ code {
   }
 }
 
+/* The message composer should take its place in the chat panel's flex layout,
+   rather than being anchored to the viewport/panel bottom on desktop. */
+section.relative.min-h-0.min-w-0.flex-1.flex-col.overflow-hidden > form {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+}
+
 /* --- Live streaming ------------------------------------------------------ */
 .qc-live-heart {
   position: absolute;
