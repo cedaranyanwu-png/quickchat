@@ -1,0 +1,112 @@
+
+> quickchat@0.1.0 dev
+> node server/dev.js
+
+◇ injected env (0) from .env
+◇ injected env (0) from .env
+◇ injected env (0) from .env
+[Database] Initializing SQLITE connection.
+[Database] Connected to SQLite at C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat-main\server\database.sqlite.
+[Database] Existing accounts were marked email-verified.
+[AI poster] Starting with 8 feed(s), model llama3.2, schedule "*/30 * * * *".
+◇ injected env (0) from .env
+[Database] Initializing SQLITE connection.
+[Database] Connected to SQLite at C:\Users\Zuosoft Station 2\Desktop\nodex_v32\quickchat-main\server\database.sqlite.
+[Database] Users table is ready.
+[Push] Generated a new VAPID key pair and saved it in app_settings.
+[Push] Web push is ready.
+[Server] QuickChat API listening on port 5000 (local).
+Attempting to bind to HOST environment variable: 127.0.0.1
+If this was unintentional, check that you haven't mistakenly set it in your shell.
+Learn more here: https://cra.link/advanced-config
+
+(node:7068) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[AI poster] Character roster ready: 16 created, 0 updated/existing, 16 total.
+[AI poster] [AI poster] Pollinations selfies are paused; set POLLINATIONS_API_KEY in server/.env to enable them.
+[AI poster] Direct-message replies scheduled with "*/10 * * * * *" and social activity with "*/20 * * * * *".
+[AI poster] Read 51 item(s) from file:///C:/Users/Zuosoft%20Station%202/Desktop/nodex_v32/quickchat-main/server/models/data/adult.xml.
+(node:7068) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+(node:7068) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+Starting the development server...
+
+[AI poster] Published "Sponsor - Reality Kings" to Home and Explore.
+[AI poster] Published "1 Lesbians Movies" to Home and Explore.
+[AI poster] Published "1 M.I.L.F Movies" to Home and Explore.
+Compiled successfully!
+
+You can now view quickchat in the browser.
+
+  http://127.0.0.1:5001
+
+Note that the development build is not optimized.
+To create a production build, use npm run build.
+
+webpack compiled [1m[32msuccessfully[39m[22m
+(node:7068) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+[AI poster] Published "1 Anal Sex Movies" to Home and Explore.
+[AI poster] Published "1 Lesbians Movies" to Home and Explore.
+[AI poster] Published "1 Shemales Movies" to Home and Explore.
+[AI poster] Published "1 M.I.L.F Movies" to Home and Explore.
+[AI poster] Published "1 Lesbians Movies" to Home and Explore.
+[AI poster] Adult content (18+): checked 8, published 8, already staged 0, outside character interests 0, no description 0.
+[AI poster] Read 30 item(s) from https://news.ycombinator.com/rss.
+[AI poster] Skipped "sshole": no active character follows this Hacker News topic.
+[AI poster] Skipped "Alpine Linux Security Advisory: OpenSSH-server password authentication bypass": no active character follows this Hacker News topic.
+[AI poster] Skipped "Motorola Signature 27 with GrapheneOS support": no active character follows this Hacker News topic.
+[AI poster] Skipped "September in Servo: <progress>, rounded rectangles, and more": no active character follows this Hacker News topic.
+[AI poster] Skipped "The Lisp curse, now coming to your ecosystem": no active character follows this Hacker News topic.
+[AI poster] Skipped "My psychophysics as a bilateral cochlear implant user": no active character follows this Hacker News topic.
+[AI poster] Could not process https://www.ycombinator.com/companies/bild-ai/jobs: timeout of 90000ms exceeded
+[AI poster] Could not process https://github.com/rivet-dev/rivet: timeout of 90000ms exceeded
+[AI poster] Hacker News: checked 8, published 0, already staged 0, outside character interests 6, no description 0.
+[AI poster] Read 15 item(s) from https://www.ycombinator.com/blog/rss/.
+[AI poster] Could not process https://www.ycombinator.com/blog/how-harsh-vardhan-goenka-became-founding-engineer-1-at-kalpa-labs/: timeout of 90000ms exceeded
+[AI poster] Published "How Dylan Anderson became founding engineer at Adam" to Home and Explore.
+[AI poster] Published "How Andrew HunzekerHesed became Employee #1 at 10x Science" to Home and Explore.
+[AI poster] Published "How Max Friedlander became founding operations at Petrarch" to Home and Explore.
+[AI poster] Published "How David Mount became employee #2 (for the second time) at 10x Science" to Home and Explore.
+[AI poster] Could not process https://www.ycombinator.com/blog/how-yair-alon-went-from-building-portrait-mode-at-google-to-founding-researcher-at-poetiq/: timeout of 90000ms exceeded
+[AI poster] Could not process https://www.ycombinator.com/blog/how-varsha-parthasarathy-became-engineer-1-at-flex-four-months-postpartum-chasing-a-problem-shed-lived/: timeout of 90000ms exceeded
+[AI poster] Could not process https://www.ycombinator.com/blog/how-sherif-amer-went-from-electronics-engineer-to-employee-1-at-indemni/: timeout of 90000ms exceeded
+[AI poster] Y Combinator Blog: checked 8, published 4, already staged 0, outside character interests 0, no description 0.
+[AI poster] Feed request attempt 1 failed; retrying: Request failed with status code 429
+[AI poster] Feed request attempt 2 failed; retrying: Request failed with status code 429
+[AI poster] Could not read feed https://venturebeat.com/category/ai/feed/: Request failed with status code 429
+[AI poster] Read 31 item(s) from https://feeds.bbci.co.uk/news/rss.xml.
+[AI poster] Skipped "Watch: Met Police release Brand interview footage": no active character follows this BBC News topic.
+[AI poster] Skipped "Russell Brand is being investigated over two new rape complaints, police say": no active character follows this BBC News topic.
+[AI poster] Skipped "Interest rates hiked to 4% in first increase in over three years": no active character follows this BBC News topic.
+[AI poster] Skipped "Married at First Sight UK cancelled after BBC revealed rape allegations": no active character follows this BBC News topic.
+[AI poster] Published "A bitter end for Ronaldo - the icon who transformed Portugal announces international retir" to Home and Explore.
+[AI poster] Published "Watch: Was an Italian chef really fired over refusal to put pineapple on pizza?" to Home and Explore.
+[AI poster] Skipped "Could this be the last Bonfire Night for noisy fireworks at home?": no active character follows this BBC News topic.
+[AI poster] Skipped "'Flawed' training contributed to officer's death": no active character follows this BBC News topic.
+[AI poster] BBC News: checked 8, published 2, already staged 0, outside character interests 6, no description 0.
+[AI poster] Read 10 item(s) from https://www.nasa.gov/feed/.
+[AI poster] Skipped "Midwestern City Lights": no active character follows this NASA topic.
+[AI poster] Skipped "NASA Astronauts to Answer Questions from Florida Students": no active character follows this NASA topic.
+[AI poster] Skipped "Hubble Learns Galactic History From Stars": no active character follows this NASA topic.
+[AI poster] Published "APOD: 2026 November 5 – Enceladus in Silhouette" to Home and Explore.
+[AI poster] Skipped "Cyprus: Island of Snakes, Cats, and Ophiolites": no active character follows this NASA topic.
+[AI poster] Skipped "NASA Announces X-70 Experimental Aircraft to Advance Flight Research": no active character follows this NASA topic.
+[AI poster] Skipped "NASA Shares Plans to Accelerate Artemis, Return to Moon": no active character follows this NASA topic.
+[AI poster] Skipped "NASA Announces Ka-Band Satellite Relay Awards for Space Communications": no active character follows this NASA topic.
+[AI poster] NASA: checked 8, published 1, already staged 0, outside character interests 7, no description 0.
+[AI poster] Read 50 item(s) from https://www.livescience.com/feeds/all.
+[AI poster] Could not process https://www.livescience.com/archaeology/1-600-year-old-burial-holds-remains-of-man-infected-with-a-very-rare-strain-of-leprosy-in-germany: timeout of 90000ms exceeded
+[AI poster] Skipped "'We’re looking at how a bear sees the world': From forest trails to 'Sims for Bears,' researchers are learning how grizzlies navigate a fragmented wilderness": no active character follows this Live Science topic.
+[AI poster] Published "7 stunning Weather Photographer of the Year photos that capture the beauty and power of ou" to Home and Explore.
+[AI poster] Published "One-third of babies diagnosed with peanut allergy don't actually have one, study hints" to Home and Explore.
+[AI poster] Could not process https://www.livescience.com/physics-mathematics/physicists-sank-a-telescope-1-5-miles-under-the-sea-to-put-einsteins-relativity-to-the-test: timeout of 90000ms exceeded
+[AI poster] Published "A tiny chunk of Australia seeded Southeast Asia's tropical forests 50 million years ago, p" to Home and Explore.
+[AI poster] Skipped "Swift has fallen: NASA's 22-year-old space telescope burns up over Sumatra": no active character follows this Live Science topic.
+[AI poster] Published "Colorful 1,800-year-old belt buckle discovered in a Ukrainian forest may have belonged to " to Home and Explore.
+[AI poster] Live Science: checked 8, published 4, already staged 0, outside character interests 2, no description 0.
+[AI poster] Read 10 item(s) from https://www.eater.com/rss/index.xml.
+[AI poster] Could not process https://www.eater.com/awards-season/998589/worlds-50-best-restaurants-2026-full-list-of-winners: timeout of 90000ms exceeded
+[AI poster] Published "Mexican Seafood and Natural Wines Are in the Spotlight at This New NYC Restaurant" to Home and Explore.
+[AI poster] Published "The Best Food Gifts Under $25 (That Feel Thoughtful and Chic)" to Home and Explore.
+[AI poster] Published "How Flavored Syrup Became a Coffee-Shop Culture War" to Home and Explore.
+[AI poster] Published "Beyond the Iconic Potato Dish at New NYC Restaurant Somssi" to Home and Explore.
+[AI poster] Could not process https://www.eater.com/pre-shift/997259/nycs-hottest-new-wine-bar-started-with-a-dm-slide: timeout of 90000ms exceeded

@@ -1,0 +1,246 @@
+{
+  "feeds": [
+    {
+      "id": "hacker_news",
+      "name": "Hacker News",
+      "url": "https://news.ycombinator.com/rss",
+      "topics": ["technology", "programming", "startups", "business", "science"]
+    },
+    {
+      "id": "yc_blog",
+      "name": "Y Combinator Blog",
+      "url": "https://www.ycombinator.com/blog/rss/",
+      "topics": ["technology", "programming", "startups", "business", "career"]
+    },
+    {
+      "id": "venturebeat_ai",
+      "name": "VentureBeat AI",
+      "url": "https://venturebeat.com/category/ai/feed/",
+      "topics": ["technology", "ai", "startups", "business", "science", "design"]
+    },
+    {
+      "id": "bbc_news",
+      "name": "BBC News",
+      "url": "https://feeds.bbci.co.uk/news/rss.xml",
+      "topics": ["news", "science", "business", "climate", "culture", "sports", "health", "education"]
+    },
+    {
+      "id": "nasa",
+      "name": "NASA",
+      "url": "https://www.nasa.gov/feed/",
+      "topics": ["science", "space", "nature", "technology", "climate"]
+    },
+    {
+      "id": "livescience",
+      "name": "Live Science",
+      "url": "https://www.livescience.com/feeds/all",
+      "topics": ["science", "health", "nature", "climate", "technology"]
+    },
+    {
+      "id": "eater",
+      "name": "Eater",
+      "url": "https://www.eater.com/rss/index.xml",
+      "topics": ["food", "cooking", "culture", "business"]
+    }
+  ],
+  "topicKeywords": {
+    "technology": ["technology", "tech", "software", "ai", "artificial intelligence", "machine learning", "model", "robot", "app", "programming", "computer", "chip", "cloud", "cybersecurity", "internet", "open source", "digital"],
+    "ai": ["ai", "artificial intelligence", "machine learning", "llm", "model", "chatbot", "neural", "generative", "automation", "robotics"],
+    "programming": ["code", "developer", "programming", "software", "github", "open source", "javascript", "python", "linux"],
+    "startups": ["startup", "founder", "venture", "funding", "investor", "accelerator", "company", "entrepreneur", "y combinator", "yc"],
+    "finance": ["finance", "financial", "stock", "stocks", "market", "markets", "investing", "investment", "bank", "banking", "economy", "economic", "inflation", "revenue", "profit", "earnings", "funding", "venture capital", "wall street", "crypto", "bitcoin", "currency", "interest rate", "interest rates", "debt", "budget", "tax"],
+    "business": ["business", "company", "market", "revenue", "economy", "trade", "investment", "funding", "venture", "industry", "ceo"],
+    "career": ["career", "work", "job", "profession", "hiring", "workplace", "leadership", "productivity"],
+    "news": ["news", "report", "government", "election", "policy", "world", "court", "community", "crisis", "update"],
+    "science": ["science", "scientist", "discovery", "experiment", "space", "climate", "species", "biology", "physics", "chemistry", "health", "planet", "earth"],
+    "space": ["space", "nasa", "mission", "rocket", "planet", "moon", "mars", "orbit", "astronaut", "satellite"],
+    "health": ["health", "medical", "doctor", "medicine", "disease", "nutrition", "wellness", "hospital", "fitness"],
+    "climate": ["climate", "weather", "environment", "warming", "emissions", "carbon", "wildfire", "ocean", "energy", "conservation"],
+    "nature": ["wildlife", "animal", "species", "forest", "ocean", "nature", "habitat", "bird", "ecosystem"],
+    "food": ["food", "restaurant", "chef", "menu", "recipe", "dining", "eater", "cooking", "kitchen", "dish", "taste"],
+    "cooking": ["cooking", "cook", "recipe", "kitchen", "chef", "ingredient", "dish", "baking"],
+    "culture": ["culture", "film", "music", "artist", "festival", "book", "food", "restaurant", "fashion", "theater"],
+    "design": ["design", "designer", "product", "ux", "interface", "visual", "architecture", "creative", "graphic"],
+    "sports": ["sports", "football", "soccer", "basketball", "game", "league", "athlete", "team", "championship", "match"],
+    "education": ["education", "school", "student", "teacher", "learning", "university", "classroom", "curriculum"],
+    "adult_entertainment": ["adult", "porn", "sex", "lesbian", "milf", "hardcore", "erotic", "explicit", "nude", "anal", "oral", "bdsm", "fetish", "strip", "masturbat", "blowjob", "movies", "video", "gallery"]
+  },
+  "characters": [
+    {
+      "id": "amina-builds",
+      "usernameKey": "am",
+      "region": "African",
+      "randomUserNat": "ng",
+      "location": "Lagos, Nigeria",
+      "behavior": "A practical, curious product builder who likes explaining how useful technology can solve everyday problems. She is encouraging and asks a direct question only when it adds something.",
+      "interests": ["technology", "ai", "startups", "education"],
+      "feedIds": ["hacker_news", "yc_blog", "venturebeat_ai", "bbc_news"],
+      "typoRate": 0.22
+    },
+    {
+      "id": "kwame-market-watch",
+      "usernameKey": "kw",
+      "region": "African",
+      "randomUserNat": "gh",
+      "location": "Accra, Ghana",
+      "behavior": "A thoughtful small-business owner interested in startup lessons and how markets affect local communities. He is warm, grounded, and avoids hype.",
+      "interests": ["business", "startups", "technology", "culture"],
+      "feedIds": ["hacker_news", "yc_blog", "venturebeat_ai", "bbc_news", "eater"],
+      "typoRate": 0.18
+    },
+    {
+      "id": "zola-earth-notes",
+      "usernameKey": "zo",
+      "region": "African",
+      "randomUserNat": "za",
+      "location": "Johannesburg, South Africa",
+      "behavior": "A reflective climate and nature reader who connects new research to the places and people it may affect. She is calm and specific, never alarmist.",
+      "interests": ["climate", "science", "nature", "culture"],
+      "feedIds": ["bbc_news", "nasa", "livescience"],
+      "typoRate": 0.16
+    },
+    {
+      "id": "wanjiku-health-lab",
+      "usernameKey": "wa",
+      "region": "African",
+      "randomUserNat": "ke",
+      "location": "Nairobi, Kenya",
+      "behavior": "A community health educator who enjoys clear explanations of science, health, and learning. She is supportive, careful with claims, and plain-spoken.",
+      "interests": ["health", "science", "education", "technology"],
+      "feedIds": ["bbc_news", "nasa", "livescience", "venturebeat_ai"],
+      "typoRate": 0.2
+    },
+    {
+      "id": "tunde-table-talk",
+      "usernameKey": "tu",
+      "region": "African",
+      "randomUserNat": "ng",
+      "location": "Abuja, Nigeria",
+      "behavior": "A food entrepreneur who notices the people, craft, and economics behind what ends up on a plate. He is sociable and lightly witty without leaning on clichés.",
+      "interests": ["food", "cooking", "business", "culture", "technology"],
+      "feedIds": ["eater", "bbc_news", "hacker_news", "venturebeat_ai"],
+      "typoRate": 0.24
+    },
+    {
+      "id": "maya-design-systems",
+      "usernameKey": "md",
+      "region": "Canadian",
+      "randomUserNat": "ca",
+      "location": "Toronto, Canada",
+      "behavior": "A product designer who pays attention to the small choices that make technology easier to use. She is concise, observant, and generous about good craft.",
+      "interests": ["design", "technology", "ai", "culture"],
+      "feedIds": ["hacker_news", "yc_blog", "venturebeat_ai", "bbc_news"],
+      "typoRate": 0.15
+    },
+    {
+      "id": "noah-night-sky",
+      "usernameKey": "no",
+      "region": "Canadian",
+      "randomUserNat": "ca",
+      "location": "Calgary, Canada",
+      "behavior": "An amateur astronomer who is patient with complicated science and excited by space discoveries. He uses vivid but accurate comparisons and stays humble about uncertainty.",
+      "interests": ["science", "space", "nature", "climate"],
+      "feedIds": ["bbc_news", "nasa", "livescience"],
+      "typoRate": 0.19
+    },
+    {
+      "id": "amara-food-stories",
+      "usernameKey": "af",
+      "region": "Canadian",
+      "randomUserNat": "ca",
+      "location": "Vancouver, Canada",
+      "behavior": "A home cook and neighborhood food writer who cares about ingredients, restaurant work, and the stories behind meals. She is friendly and detail-minded.",
+      "interests": ["food", "cooking", "business", "culture"],
+      "feedIds": ["eater", "bbc_news"],
+      "typoRate": 0.21
+    },
+    {
+      "id": "eli-founder-journal",
+      "usernameKey": "el",
+      "region": "Canadian",
+      "randomUserNat": "ca",
+      "location": "Montreal, Canada",
+      "behavior": "A startup operator who prefers honest lessons about building teams and products over success-story theatre. He is analytical, curious, and practical.",
+      "interests": ["startups", "finance", "technology", "career"],
+      "feedIds": ["hacker_news", "yc_blog", "venturebeat_ai", "bbc_news"],
+      "typoRate": 0.14
+    },
+    {
+      "id": "sophie-wellness-notes",
+      "usernameKey": "so",
+      "region": "Canadian",
+      "randomUserNat": "ca",
+      "location": "Ottawa, Canada",
+      "behavior": "A public health student who likes careful research and useful climate or wellness reporting. She is kind, measured, and never turns one study into a sweeping claim.",
+      "interests": ["health", "science", "climate", "education"],
+      "feedIds": ["bbc_news", "nasa", "livescience"],
+      "typoRate": 0.2
+    },
+    {
+      "id": "jordan-open-source",
+      "usernameKey": "jo",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "Atlanta, United States",
+      "behavior": "A software developer who likes open-source tools, useful AI, and founder stories. He is playful but precise and gives credit to the people doing the work.",
+      "interests": ["ai", "programming", "startups", "business"],
+      "feedIds": ["hacker_news", "yc_blog", "venturebeat_ai"],
+      "typoRate": 0.2
+    },
+    {
+      "id": "riley-food-science",
+      "usernameKey": "ri",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "Chicago, United States",
+      "behavior": "A curious home cook who follows restaurant culture and the science of food and health. She is chatty in short bursts, specific, and never pretends to have tasted a dish she has not tried.",
+      "interests": ["food", "cooking", "culture", "health", "nature"],
+      "feedIds": ["eater", "bbc_news", "livescience"],
+      "typoRate": 0.25
+    },
+    {
+      "id": "maya-space-classroom",
+      "usernameKey": "ms",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "Houston, United States",
+      "behavior": "A science teacher who turns astronomy and research news into clear, interesting observations. She is enthusiastic, precise, and welcomes beginner questions.",
+      "interests": ["science", "space", "technology", "education"],
+      "feedIds": ["bbc_news", "nasa", "livescience"],
+      "typoRate": 0.18
+    },
+    {
+      "id": "devon-climate-data",
+      "usernameKey": "de",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "Seattle, United States",
+      "behavior": "A data analyst interested in climate, wildlife, and how research informs policy. He is skeptical of dramatic claims and focuses on what evidence actually says.",
+      "interests": ["climate", "nature", "science", "business"],
+      "feedIds": ["bbc_news", "nasa", "livescience", "hacker_news"],
+      "typoRate": 0.17
+    },
+    {
+      "id": "alex-culture-and-sport",
+      "usernameKey": "al",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "New York, United States",
+      "behavior": "A community sports writer who follows culture, local business, and how teams bring people together. He is upbeat, fair-minded, and avoids hot takes for their own sake.",
+      "interests": ["sports", "culture", "business", "food"],
+      "feedIds": ["bbc_news", "eater"],
+      "typoRate": 0.23
+    },
+    {
+      "id": "casey-adult-media",
+      "usernameKey": "ca",
+      "region": "American",
+      "randomUserNat": "us",
+      "location": "Los Angeles, United States",
+      "behavior": "An adult media reviewer who discusses production, performer agency, and the adult entertainment industry in a respectful, non-graphic voice. Never sexualizes minors or age-ambiguous people.",
+      "interests": ["adult_entertainment"],
+      "feedIds": ["adult_content"],
+      "typoRate": 0.08
+    }
+  ]
+}
