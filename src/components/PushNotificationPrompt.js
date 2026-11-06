@@ -48,7 +48,7 @@ export default function PushNotificationPrompt() {
   if (!show) return null;
 
   return (
-    <div className="relative z-40 border-b border-indigo-100 bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 px-4 py-2.5 shadow-sm text-slate-800">
+    <div className="fixed left-3 right-3 top-16 z-50 rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50 via-blue-50 to-purple-50 px-4 py-2.5 text-slate-800 shadow-lg lg:left-auto lg:right-6 lg:top-4 lg:max-w-3xl">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
         <div className="flex items-center gap-2.5">
           <span className="grid h-8 w-8 flex-shrink-0 place-items-center rounded-full bg-blue-600 text-white shadow">
@@ -56,7 +56,7 @@ export default function PushNotificationPrompt() {
           </span>
           <p className="font-semibold text-slate-800">
             {success ? (
-              <span className="text-emerald-700 font-bold">
+              <span className="font-bold text-emerald-700">
                 <i className="fa-solid fa-circle-check mr-1.5" />
                 Push notifications enabled! You'll receive alerts for messages and activity even when you are away.
               </span>
@@ -75,19 +75,15 @@ export default function PushNotificationPrompt() {
               type="button"
               onClick={handleEnable}
               disabled={loading}
-              className="flex items-center gap-1.5 rounded-full bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 disabled:opacity-50 transition"
+              className="flex items-center gap-1.5 rounded-full bg-blue-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-blue-700 active:scale-95 disabled:opacity-50"
             >
-              {loading ? (
-                <i className="fa-solid fa-circle-notch fa-spin" />
-              ) : (
-                <i className="fa-solid fa-bell" />
-              )}
+              {loading ? <i className="fa-solid fa-circle-notch fa-spin" /> : <i className="fa-solid fa-bell" />}
               Turn On
             </button>
             <button
               type="button"
               onClick={handleDismiss}
-              className="rounded-full px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-200/60 transition"
+              className="rounded-full px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-200/60"
               aria-label="Dismiss notification prompt"
             >
               Maybe later
@@ -98,4 +94,3 @@ export default function PushNotificationPrompt() {
     </div>
   );
 }
-
