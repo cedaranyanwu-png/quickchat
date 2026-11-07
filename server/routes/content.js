@@ -435,10 +435,27 @@ router.post('/posts', asyncRoute(async (req, res) => {
 
   if (communityId) {
     const membership = await db.getOne(
-      'SELECT community_id FROM community_members WHERE community_id = ? AND user_id = ?',
-      [communityId, req.user.id],
+      `SELECT c.id
+         FROM communities c
+        WHERE c.id = ?
+          AND (
+            c.created_by = ?
+            OR EXISTS (
+              SELECT 1 FROM community_members cm
+               WHERE cm.community_id = c.id AND cm.user_id = ?
+            )
+            OR EXISTS (
+              SELECT 1 FROM content_subscriptions cs
+               WHERE cs.entity_type = 'community'
+                 AND cs.entity_id = c.id
+                 AND cs.subscriber_id = ?
+                 AND cs.status = 'active'
+                 AND cs.current_period_end > CURRENT_TIMESTAMP
+            )
+          )`,
+      [communityId, req.user.id, req.user.id, req.user.id],
     );
-    if (!membership) return res.status(403).json({ message: 'Join that community before publishing there.' });
+    if (!membership) return res.status(403).json({ message: 'Join that community or activate its pass before publishing there.' });
   }
 
   let topics = Array.isArray(req.body?.topics) ? req.body.topics : [];
