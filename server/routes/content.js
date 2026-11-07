@@ -418,7 +418,7 @@ router.post('/posts', asyncRoute(async (req, res) => {
   const communityId = req.body?.communityId === null || req.body?.communityId === undefined || req.body?.communityId === ''
     ? null
     : positiveId(req.body.communityId);
-  const videoId = positiveId(req.body?.videoId);
+  let videoId = positiveId(req.body?.videoId);
   if (!body && media.length === 0 && !videoId) {
     return res.status(400).json({ message: 'Write something or attach media before posting.' });
   }
@@ -448,7 +448,21 @@ router.post('/posts', asyncRoute(async (req, res) => {
     } catch (_err) {}
   }
 
-  const type = videoId || media.some((item) => item.type === 'video') ? 'video' : media.length ? 'image' : 'text';
+  // Keep the feed post and the dedicated Videos library in sync. A video
+  // attached through the regular composer is also registered in the videos
+  // table, which powers video likes, comments, views, and the Videos page.
+  const attachedVideos = media.filter((item) => item.type === 'video');
+  if (visibility === 'public' && attachedVideos.length) {
+    for (const item of attachedVideos) {
+      const insertedVideo = await db.insert(
+        'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, (body || 'Video').slice(0, 180), body, item.url, item.thumbnailUrl || null, ''],
+      );
+      if (!videoId && insertedVideo?.id) videoId = Number(insertedVideo.id);
+    }
+  }
+
+  const type = videoId || attachedVideos.length ? 'video' : media.length ? 'image' : 'text';
   const result = await db.insert(
     'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [req.user.id, body, type, category, JSON.stringify(hashtags), JSON.stringify(targetInterests), communityId, JSON.stringify(media), videoId, visibility, priceAmount, priceAmount ? 'NGN' : null, JSON.stringify(topics), JSON.stringify(keywords), JSON.stringify(audienceSignals)],
@@ -604,6 +618,15 @@ router.post('/videos', asyncRoute(async (req, res) => {
     'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
     [req.user.id, title, String(req.body?.description || '').slice(0, 5000), videoUrl,
       validMediaUrl(req.body?.thumbnailUrl), String(req.body?.duration || '').slice(0, 20)],
+  );
+  // A video published from the Videos page is also a normal public post.
+  // This makes it discoverable in Home/Explore and keeps both entry points
+  // backed by the same uploaded media URL.
+  const media = [{ type: 'video', url: videoUrl, ...(validMediaUrl(req.body?.thumbnailUrl) ? { thumbnailUrl: validMediaUrl(req.body?.thumbnailUrl) } : {}) }];
+  const postText = String(req.body?.description || title).trim().slice(0, 5000);
+  await db.insert(
+    'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [req.user.id, postText, 'video', null, '[]', '[]', null, JSON.stringify(media), Number(inserted.id), 'public', null, null, '[]', '[]', '[]'],
   );
   const video = await db.getOne(
     `SELECT v.*, u.fullname AS creator, u.username, u.avatar_url, u.picture,
