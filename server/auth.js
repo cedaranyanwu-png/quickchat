@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./database');
 const { sendEmail } = require('./email');
+const whatsapp = require('./whatsapp');
 const { createToken } = require('./middleware/authenticate');
 
 const router = express.Router();
@@ -113,10 +114,11 @@ router.post('/register', async (req, res) => {
   const username = String(req.body?.username || '').trim();
   const email = normalizeEmail(req.body?.email);
   const password = String(req.body?.password || '');
+  const whatsappPhone = whatsapp.normalizePhone(req.body?.whatsappPhone);
 
-  if (!fullName || !username || !email || password.length < 6) {
+  if (!fullName || !username || !email || password.length < 6 || !whatsappPhone) {
     return res.status(400).json({
-      message: 'Enter your name, username, valid email, and a password with at least 6 characters.',
+      message: 'Enter your name, username, valid email, international WhatsApp number (for example +2348012345678), and a password with at least 6 characters.',
     });
   }
 
@@ -133,13 +135,14 @@ router.post('/register', async (req, res) => {
     const user = normalizeUser(
       await db.insert(
         // Keep the legacy NOT NULL `name` column populated in older SQLite files.
-        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0],
+        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified, whatsapp_phone, whatsapp_phone_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
+        [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0, whatsappPhone],
       ),
     );
 
     if (!user) throw new Error('The account was created but could not be loaded.');
     await createWelcomeNotification(user.id);
+    const whatsappDelivery = await sendWhatsappVerification(user.id, whatsappPhone);
     if (emailVerificationOff) return sendSession(res, user, 201, 'Account created');
     const delivery = await sendVerificationEmail(user);
     return res.status(201).json({
@@ -149,6 +152,8 @@ router.post('/register', async (req, res) => {
       requiresVerification: true,
       email: user.email,
       emailSent: Boolean(delivery.delivered),
+      whatsappSent: Boolean(whatsappDelivery.delivered),
+      whatsappStatus: whatsappDelivery.status,
       delivery: delivery.provider,
       ...(!isProduction && !delivery.delivered ? { previewUrl: delivery.verificationUrl } : {}),
     });
@@ -175,6 +180,9 @@ router.post('/login', async (req, res) => {
     );
     if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Email or password is incorrect.' });
+    }
+    if (Number(user.whatsapp_phone_verified || 0) === 0 && user.whatsapp_phone) {
+      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
     }
     if (!emailVerificationOff && Number(user.email_verified) === 0) {
       return res.status(403).json({
@@ -313,6 +321,39 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
+
+router.post('/whatsapp/resend', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  if (!email) return res.status(400).json({ message: 'Enter the email address for your account.' });
+  if (recentlySent(`whatsapp-verify:${email}`, 60_000)) return res.json({ message: 'If the account needs WhatsApp verification, a new link is on its way.' });
+  try {
+    const user = await db.getOne('SELECT id, email, whatsapp_phone, whatsapp_phone_verified FROM users WHERE LOWER(email) = LOWER(?)', [email]);
+    if (!user || !user.whatsapp_phone || Number(user.whatsapp_phone_verified) === 1) {
+      return res.json({ message: 'If the account needs WhatsApp verification, a new link is on its way.' });
+    }
+    const delivery = await sendWhatsappVerification(user.id, user.whatsapp_phone);
+    return res.json({ message: delivery.delivered ? 'WhatsApp verification link sent.' : 'WhatsApp could not send the link. Check the number or contact QuickChat support.', status: delivery.status });
+  } catch (error) {
+    console.error('[Auth] WhatsApp resend failed:', error.message);
+    return res.status(500).json({ message: 'Could not send a WhatsApp verification link.' });
+  }
+});
+
+router.post('/whatsapp/verify', async (req, res) => {
+  const token = String(req.body?.token || '').trim();
+  if (!token) return res.status(400).json({ message: 'A verification token is required.' });
+  try {
+    const user = await db.getOne('SELECT id, email, whatsapp_verification_expires FROM users WHERE whatsapp_verification_token = ?', [hashToken(token)]);
+    if (!user) return res.status(400).json({ message: 'This WhatsApp verification link is invalid or already used.' });
+    if (expiryPassed(user.whatsapp_verification_expires)) return res.status(400).json({ message: 'This WhatsApp verification link has expired. Request a new one.' });
+    await db.update('UPDATE users SET whatsapp_phone_verified = 1, whatsapp_verification_token = NULL, whatsapp_verification_expires = NULL WHERE id = ?', [user.id]);
+    return res.json({ message: 'WhatsApp number verified. You can now sign in.', email: user.email });
+  } catch (error) {
+    console.error('[Auth] WhatsApp verification failed:', error.message);
+    return res.status(500).json({ message: 'Could not verify this WhatsApp number.' });
+  }
+});
+
 router.post('/forgot-password', async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const generic = { message: 'If an account exists for that email, a password reset link is on its way.' };
@@ -409,6 +450,17 @@ function sendSession(res, user, status, message, extra = {}) {
       picture: extra.picture || user.picture || null,
     },
   });
+}
+
+async function sendWhatsappVerification(userId, phone) {
+  const token = issueToken();
+  await db.update('UPDATE users SET whatsapp_verification_token = ?, whatsapp_verification_expires = ? WHERE id = ?', [hashToken(token), tokenExpiry(30), userId]);
+  const url = `${appBaseUrl()}/verify-whatsapp?token=${encodeURIComponent(token)}`;
+  try { return await whatsapp.sendVerification(phone, url); }
+  catch (error) {
+    console.error('[Auth] WhatsApp verification delivery failed:', error.message);
+    return { delivered: false, status: 'failed', error: error.message };
+  }
 }
 
 async function createWelcomeNotification(userId) {
