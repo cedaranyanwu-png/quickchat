@@ -253,7 +253,8 @@ router.get('/discover', asyncRoute(async (req, res) => {
       WHERE category IS NOT NULL AND category <> '' GROUP BY category ORDER BY post_count DESC LIMIT 6`,
   );
   const trendingRows = await db.query(
-    `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname,
+    `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.source_link, p.media, p.video_id, p.created_at,
+            u.fullname, u.username, u.avatar_url, u.picture, u.verified,
             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
