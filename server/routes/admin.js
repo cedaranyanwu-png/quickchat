@@ -445,8 +445,9 @@ router.post('/reports', asyncRoute(async (req, res) => {
   if (!['user', 'post', 'comment', 'community', 'message'].includes(entityType) || !entityId || !category) {
     return res.status(400).json({ message: 'Choose a valid item to report and a report category.' });
   }
+  const recentDateExpression = db.type === 'sqlite' ? 'datetime(created_at) >= datetime(?)' : 'created_at >= ?';
   const recent = await db.getOne(
-    "SELECT id FROM moderation_reports WHERE reporter_id = ? AND entity_type = ? AND entity_id = ? AND status IN ('pending', 'under_review', 'escalated') AND created_at >= ?",
+    `SELECT id FROM moderation_reports WHERE reporter_id = ? AND entity_type = ? AND entity_id = ? AND status IN ('pending', 'under_review', 'escalated') AND ${recentDateExpression}`,
     [req.user.id, entityType, entityId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()],
   );
   if (recent) return res.status(409).json({ message: 'You have already submitted a report for this item.' });
