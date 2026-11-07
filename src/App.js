@@ -119,7 +119,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   // The administration console is an independent portal and must be reachable
   // without creating or signing into a QuickChat member account.
-  if (location.pathname.replace(/\\/+$/, '') === '/admin') {
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
     return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
   }
 
