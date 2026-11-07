@@ -565,7 +565,7 @@ router.get('/posts/:postId/replies', asyncRoute(async (req, res) => {
   if (!postId) return res.status(400).json({ message: 'Invalid post ID.' });
   if (!await canViewPost(postId, req.user.id)) return res.status(403).json({ message: 'Unlock this post to view replies.' });
   const replies = await db.query(
-    `SELECT r.id, r.post_id, r.body, r.created_at, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.is_synthetic
+    `SELECT r.id, r.post_id, r.body, r.created_at, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.verified, u.is_synthetic
        FROM post_replies r JOIN users u ON u.id = r.author_id
       WHERE r.post_id = ? ORDER BY r.created_at ASC LIMIT ?`,
     [postId, clampLimit(req.query.limit, 50, 100)],
