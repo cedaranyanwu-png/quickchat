@@ -26,7 +26,7 @@ const PERMISSIONS = [
 const DEFAULT_ROLES = [
   { name: 'Super Administrator', key: 'super_admin', permissions: ['*'] },
   { name: 'Administrator', key: 'admin', permissions: PERMISSIONS.filter((p) => !['roles.create', 'roles.delete', 'permissions.assign', 'admins.manage', 'settings.manage'].includes(p)) },
-  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'posts.restore', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
+  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
   { name: 'Verification Officer', key: 'verification_officer', permissions: ['dashboard.view', 'users.view', 'users.verify', 'communities.view', 'communities.verify', 'verification.review', 'badges.assign', 'badges.revoke'] },
   { name: 'Community Manager', key: 'community_manager', permissions: ['dashboard.view', 'communities.view', 'communities.edit', 'communities.suspend', 'communities.verify', 'reports.view', 'reports.resolve'] },
   { name: 'Support Agent', key: 'support_agent', permissions: ['dashboard.view', 'users.view', 'reports.view', 'reports.resolve'] },
@@ -484,7 +484,6 @@ router.post('/admin/verifications/:id/decision', requirePermission('verification
   }
   const application = await db.getOne('SELECT * FROM verification_applications WHERE id = ?', [id]);
   if (!application || application.status !== 'pending') return res.status(404).json({ message: 'Pending application not found.' });
-  if (decision === 'approved' && !(await hasPaidVerificationFee(application.user_id))) return res.status(402).json({ message: 'This applicant has not completed the verification fee. The badge cannot be awarded yet.' });
   await db.update(
     'UPDATE verification_applications SET status = ?, reviewer_id = ?, review_note = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?',
     [decision, req.user.id, note, id],

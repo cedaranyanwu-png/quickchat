@@ -23,7 +23,7 @@ function toPost(row) {
   const visibility = fields.visibility || 'public';
   const canView = fields.can_view === undefined ? true : Boolean(Number(fields.can_view));
   const isPaywalled = visibility !== 'public' && !canView;
-  if (contentSafety.isUnavailable || visibility === 'moderated_removed') {
+  if (contentSafety.isUnavailable) {
     return {
       id: fields.id,
       text: '',

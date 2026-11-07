@@ -43,7 +43,6 @@ import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
 import Admin from './pages/Admin';
-import AdminModeration from './pages/AdminModeration';
 import Menu from './pages/Menu';
 import AccountBooster from './pages/AccountBooster';
 import VideoModal from './components/VideoModal';
@@ -122,8 +121,8 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   // The administration console is an independent portal and must be reachable
   // without creating or signing into a QuickChat member account.
-  if (location.pathname.replace(/\/+$/, '').startsWith('/admin')) {
-    return <Routes><Route path="/admin" element={<Admin />} /><Route path="/admin/moderation" element={<AdminModeration />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
   }
 
   if (isAuthPage) {
