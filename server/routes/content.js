@@ -702,32 +702,22 @@ router.post('/videos/:videoId/comments', asyncRoute(async (req, res) => {
 // before the unified publishing flow was introduced. New uploads are synced
 // during publishing; this keeps older records visible without duplicating them.
 async function syncVideoLibrary() {
-  const legacyVideos = await db.query(
-    `SELECT v.id, v.user_id, v.title, v.description, v.video_url, v.thumbnail_url
-       FROM videos v
-      WHERE NOT EXISTS (SELECT 1 FROM posts p WHERE p.video_id = v.id)
-      ORDER BY v.created_at DESC LIMIT 200`,
-  );
-  for (const video of legacyVideos) {
-    const media = [{ type: 'video', url: video.video_url, ...(video.thumbnail_url ? { thumbnailUrl: video.thumbnail_url } : {}) }];
-    await db.insert(
-      'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [video.user_id, String(video.description || video.title || 'Video').slice(0, 5000), 'video', null, '[]', '[]', null, JSON.stringify(media), Number(video.id), 'public', null, null, '[]', '[]', '[]'],
-    );
-  }
-
   const existingPosts = await db.query(
     `SELECT p.id, p.author_id, p.body, p.media, p.video_id
        FROM posts p
       WHERE p.visibility = 'public' AND p.community_id IS NULL
         AND p.media IS NOT NULL AND p.media <> '' AND p.media <> '[]'
-      ORDER BY p.created_at DESC, p.id DESC LIMIT 300`,
+      ORDER BY p.created_at DESC, p.id DESC LIMIT 1000`,
   );
+  const postVideoKeys = new Set();
+
   for (const post of existingPosts) {
     const attachments = normalizeMedia(parseJSON(post.media, []))
       .filter((item) => item.type === 'video');
     let firstVideoId = positiveId(post.video_id);
     for (const item of attachments) {
+      const key = `${post.author_id}:${item.url}`;
+      postVideoKeys.add(key);
       let existing = await db.getOne(
         'SELECT id FROM videos WHERE user_id = ? AND video_url = ? ORDER BY id DESC LIMIT 1',
         [post.author_id, item.url],
@@ -744,6 +734,25 @@ async function syncVideoLibrary() {
     if (!post.video_id && firstVideoId) {
       await db.update('UPDATE posts SET video_id = ? WHERE id = ? AND video_id IS NULL', [firstVideoId, post.id]);
     }
+  }
+
+  // Older uploads made directly from the Videos page have a videos row but
+  // no matching feed post. Add one only when the URL is not already in a post.
+  const legacyVideos = await db.query(
+    `SELECT v.id, v.user_id, v.title, v.description, v.video_url, v.thumbnail_url
+       FROM videos v ORDER BY v.created_at DESC LIMIT 1000`,
+  );
+  for (const video of legacyVideos) {
+    const key = `${video.user_id}:${video.video_url}`;
+    if (postVideoKeys.has(key)) continue;
+    const linkedPost = await db.getOne('SELECT id FROM posts WHERE video_id = ? LIMIT 1', [video.id]);
+    if (linkedPost) continue;
+    const media = [{ type: 'video', url: video.video_url, ...(video.thumbnail_url ? { thumbnailUrl: video.thumbnail_url } : {}) }];
+    await db.insert(
+      'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [video.user_id, String(video.description || video.title || 'Video').slice(0, 5000), 'video', null, '[]', '[]', null, JSON.stringify(media), Number(video.id), 'public', null, null, '[]', '[]', '[]'],
+    );
+    postVideoKeys.add(key);
   }
 }
 
