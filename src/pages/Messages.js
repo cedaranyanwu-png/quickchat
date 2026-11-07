@@ -36,6 +36,7 @@ export default function Messages() {
   const fileInputRef = useRef(null);
   const recorderRef = useRef(null);
   const recordingStreamRef = useRef(null);
+  const discardRecordingRef = useRef(false);
   const callRef = useRef(null);
   const callPcRef = useRef(null);
   const callLocalStreamRef = useRef(null);
@@ -208,6 +209,7 @@ export default function Messages() {
       const chunks = [];
       recordingStreamRef.current = stream;
       recorderRef.current = recorder;
+      discardRecordingRef.current = false;
       recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: recorder.mimeType || (mode === 'voice' ? 'audio/webm' : 'video/webm') });
@@ -215,7 +217,7 @@ export default function Messages() {
         recordingStreamRef.current = null;
         recorderRef.current = null;
         setRecordingMode('');
-        if (blob.size) void sendAttachment(new File([blob], `${mode}-${Date.now()}.webm`, { type: blob.type }));
+        if (!discardRecordingRef.current && blob.size) void sendAttachment(new File([blob], `${mode}-${Date.now()}.webm`, { type: blob.type }));
       };
       recorder.start(500);
       setRecordingMode(mode);
@@ -389,8 +391,13 @@ export default function Messages() {
   }, [conversations]);
 
   useEffect(() => () => {
+    discardRecordingRef.current = true;
     if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
     recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    const activeCall = callRef.current;
+    if (activeCall?.callId && activeCall?.peerId) {
+      apiRequest(`/messages/calls/${activeCall.callId}/signals`, { method: 'POST', body: { to: activeCall.peerId, kind: 'end' } }).catch(() => {});
+    }
     try { callPcRef.current?.close(); } catch (_error) {}
     callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
   }, []);
