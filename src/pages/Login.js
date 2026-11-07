@@ -10,6 +10,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const [notice, setNotice] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [whatsappUnverified, setWhatsappUnverified] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -20,6 +21,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
     setNotice('');
     setPreviewUrl('');
     setUnverifiedEmail('');
+    setWhatsappUnverified(false);
     setIsLoading(true);
 
     try {
@@ -33,6 +35,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         const requestError = new Error(data.message || 'Login failed');
         requestError.code = data.code;
         requestError.email = data.email;
+        requestError.whatsapp = data.code === 'WHATSAPP_NOT_VERIFIED';
         throw requestError;
       }
 
@@ -41,7 +44,11 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       onAuthenticated?.();
       navigate('/home');
     } catch (err) {
-      if (err.code === 'EMAIL_NOT_VERIFIED') {
+      if (err.code === 'WHATSAPP_NOT_VERIFIED') {
+        setUnverifiedEmail(err.email || formData.email);
+        setWhatsappUnverified(true);
+        setNotice(err.message);
+      } else if (err.code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(err.email || formData.email);
         setNotice(err.message);
       } else {
@@ -50,6 +57,16 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resendWhatsAppLink = async () => {
+    setError(''); setNotice('Requesting a WhatsApp verification link…');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/whatsapp/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: unverifiedEmail }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not send the WhatsApp link.');
+      setNotice(data.message || 'WhatsApp verification link requested.');
+    } catch (requestError) { setError(requestError.message); }
   };
 
   const resendVerification = async () => {
@@ -91,7 +108,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         {notice && (
           <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800" role="status">
             <p>{notice}</p>
-            {unverifiedEmail && <button type="button" onClick={resendVerification} className="mt-2 text-xs font-bold text-blue-700 underline">Resend verification email</button>}
+            {unverifiedEmail && (whatsappUnverified ? <button type="button" onClick={resendWhatsAppLink} className="mt-2 text-xs font-bold text-emerald-700 underline">Resend WhatsApp verification link</button> : <button type="button" onClick={resendVerification} className="mt-2 text-xs font-bold text-blue-700 underline">Resend verification email</button>)}
             {previewUrl && <a href={previewUrl} className="ml-3 mt-2 inline-block text-xs font-bold text-blue-700 underline">Open verification link</a>}
           </div>
         )}
