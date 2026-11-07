@@ -88,24 +88,24 @@ export default function Admin() {
         const data = await adminRequest('/admin/overview');
         setOverview(data);
       } else if (key === 'users') {
-        const data = await apiRequest(`/admin/users?page=${page}&limit=25&search=${encodeURIComponent(query)}`);
+        const data = await adminRequest(`/admin/users?page=${page}&limit=25&search=${encodeURIComponent(query)}`);
         setUsers(data.users || []);
         setUserPagination(data.pagination || null);
       } else if (key === 'verification') {
-        const data = await apiRequest('/admin/verifications?status=pending');
+        const data = await adminRequest('/admin/verifications?status=pending');
         setVerifications(data.applications || []);
       } else if (key === 'reports') {
-        const data = await apiRequest('/admin/reports?status=pending');
+        const data = await adminRequest('/admin/reports?status=pending');
         setReports(data.reports || []);
       } else if (key === 'roles') {
-        const data = await apiRequest('/admin/roles');
+        const data = await adminRequest('/admin/roles');
         setRoles(data.roles || []);
         setPermissions(data.permissions || []);
       } else if (key === 'audit') {
-        const data = await apiRequest('/admin/audit-logs?limit=50');
+        const data = await adminRequest('/admin/audit-logs?limit=50');
         setAuditLogs(data.logs || []);
       } else if (key === 'backups') {
-        const data = await apiRequest('/admin/backups');
+        const data = await adminRequest('/admin/backups');
         setBackups(data.backups || []);
         setBackupRunning(Boolean(data.running));
       }
@@ -164,7 +164,7 @@ export default function Admin() {
     if (note === null) return;
     setBusyId(application.id);
     try {
-      await apiRequest(`/admin/verifications/${application.id}/decision`, { method: 'POST', body: { decision, note } });
+      await adminRequest(`/admin/verifications/${application.id}/decision`, { method: 'POST', body: { decision, note } });
       setNotice(`Verification ${decision.replace('_', ' ')}.`);
       await loadSection('verification');
     } catch (err) { setError(err.message); }
@@ -176,7 +176,7 @@ export default function Admin() {
     if (!resolution?.trim()) return;
     setBusyId(report.id);
     try {
-      await apiRequest(`/admin/reports/${report.id}/resolve`, { method: 'POST', body: { status, resolution } });
+      await adminRequest(`/admin/reports/${report.id}/resolve`, { method: 'POST', body: { status, resolution } });
       setNotice(`Report #${report.id} updated.`);
       await loadSection('reports');
     } catch (err) { setError(err.message); }
@@ -193,7 +193,7 @@ export default function Admin() {
     setBusyId(user.id);
     try {
       const endpoint = action === 'delete-request' ? 'deletion-request' : action;
-      await apiRequest(`/admin/users/${user.id}/${endpoint}`, {
+      await adminRequest(`/admin/users/${user.id}/${endpoint}`, {
         method: 'POST',
         body: { reason, ...(durationHours ? { durationHours } : {}) },
       });
@@ -209,7 +209,7 @@ export default function Admin() {
     setError('');
     setNotice('');
     try {
-      const result = await apiRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual backup from admin dashboard' } });
+      const result = await adminRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual backup from admin dashboard' } });
       setNotice(result.message || 'Backup created.');
       await loadSection('backups');
     } catch (err) { setError(err.message || 'Backup creation failed.'); }
@@ -242,7 +242,7 @@ export default function Admin() {
     if (!window.confirm(`Permanently delete backup ${backup.filename}? This cannot be undone.`)) return;
     setBackupBusy(true);
     try {
-      await apiRequest(`/admin/backups/${encodeURIComponent(backup.filename)}`, { method: 'DELETE' });
+      await adminRequest(`/admin/backups/${encodeURIComponent(backup.filename)}`, { method: 'DELETE' });
       setNotice('Backup deleted.');
       await loadSection('backups');
     } catch (err) { setError(err.message); }
@@ -256,7 +256,7 @@ export default function Admin() {
     const selected = window.prompt('Permission keys (comma-separated). Only permissions you already hold can be granted:', '');
     const requested = (selected || '').split(',').map((item) => item.trim()).filter(Boolean);
     try {
-      await apiRequest('/admin/roles', { method: 'POST', body: { name, key, permissions: requested } });
+      await adminRequest('/admin/roles', { method: 'POST', body: { name, key, permissions: requested } });
       setNotice('Role created.');
       await loadSection('roles');
     } catch (err) { setError(err.message); }
