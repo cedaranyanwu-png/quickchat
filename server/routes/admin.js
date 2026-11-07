@@ -159,6 +159,34 @@ async function initializeAdminTables() {
     }
   }
 
+  const defaultBadges = [
+    ['verified_individual', 'Verified Individual', 'Reviewed individual account', 'user'],
+    ['verified_creator', 'Verified Creator', 'Reviewed creator account', 'user'],
+    ['verified_business', 'Verified Business', 'Reviewed business account', 'user'],
+    ['verified_organization', 'Verified Organization', 'Reviewed organization account', 'user'],
+    ['verified_public_figure', 'Verified Public Figure', 'Reviewed public figure account', 'user'],
+  ];
+  for (const [key, name, description, entityType] of defaultBadges) {
+    await db.query(
+      'INSERT INTO verification_badges (badge_key, name, description, entity_type) VALUES (?, ?, ?, ?) ' +
+      (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE name = VALUES(name)' : 'ON CONFLICT(badge_key) DO NOTHING'),
+      [key, name, description, entityType],
+    );
+  }
+  const defaultCommunityBadges = [
+    ['verified_community', 'Verified Community', 'Reviewed community'],
+    ['official_organization_community', 'Official Organization Community', 'Official organization community'],
+    ['educational_community', 'Educational Community', 'Reviewed educational community'],
+    ['business_community', 'Business Community', 'Reviewed business community'],
+  ];
+  for (const [key, name, description] of defaultCommunityBadges) {
+    await db.query(
+      'INSERT INTO community_badges (badge_key, name, description) VALUES (?, ?, ?) ' +
+      (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE name = VALUES(name)' : 'ON CONFLICT(badge_key) DO NOTHING'),
+      [key, name, description],
+    );
+  }
+
   const superAdminEmail = String(process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
   if (superAdminEmail) {
     const owner = await db.getOne('SELECT id FROM users WHERE LOWER(email) = LOWER(?)', [superAdminEmail]);
@@ -390,6 +418,14 @@ router.post('/admin/verifications/:id/decision', requirePermission('verification
   );
   if (decision === 'approved') {
     await db.update('UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = ? WHERE id = ?', ['reviewed', application.user_id]);
+    const category = String(application.account_category || '').toLowerCase();
+    const badgeKey = category.includes('creator') ? 'verified_creator'
+      : category.includes('business') ? 'verified_business'
+        : category.includes('organization') ? 'verified_organization'
+          : category.includes('public') ? 'verified_public_figure' : 'verified_individual';
+    const badge = await db.getOne('SELECT id FROM verification_badges WHERE badge_key = ? AND is_active = 1', [badgeKey]);
+    const activeBadge = badge ? await db.getOne('SELECT id FROM user_badges WHERE user_id = ? AND badge_id = ? AND revoked_at IS NULL', [application.user_id, badge.id]) : null;
+    if (badge && !activeBadge) await db.insert('INSERT INTO user_badges (user_id, badge_id, assigned_by) VALUES (?, ?, ?)', [application.user_id, badge.id, req.user.id]);
   }
   await audit(req, `verification.${decision}`, 'user', application.user_id, note, { status: application.status }, { status: decision });
   res.json({ message: `Verification ${decision.replace('_', ' ')}.` });
