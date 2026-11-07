@@ -767,7 +767,8 @@ function normalizeMedia(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 4).map((item) => {
     const url = validMediaUrl(item?.url);
-    const type = item?.type === 'video' ? 'video' : 'image';
+    const rawType = String(item?.type || item?.mimeType || '').toLowerCase();
+    const type = rawType === 'video' || rawType.startsWith('video/') || /\.(mp4|webm|mov)(?:[?#]|$)/i.test(String(item?.url || '')) ? 'video' : 'image';
     const thumbnailUrl = type === 'video' ? validMediaUrl(item?.thumbnailUrl) : null;
     return url ? { type, url, ...(thumbnailUrl ? { thumbnailUrl } : {}) } : null;
   }).filter(Boolean);
