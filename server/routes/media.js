@@ -115,6 +115,43 @@ async function putObject(config, filename, filePath, mimeType) {
   }
 }
 
+async function storeBufferForUser(ownerId, buffer, mimeType) {
+  const type = fileTypes[String(mimeType || '').toLowerCase()];
+  if (!type || !Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > type.maxBytes) {
+    throw new Error('Generated media is empty, too large, or has an unsupported file type.');
+  }
+  if (!hasExpectedSignature(mimeType, buffer.subarray(0, 32))) {
+    throw new Error('Generated media contents do not match the declared file type.');
+  }
+  const storage = s3Config();
+  if (!storage) throw new Error('Railway media storage is not configured.');
+  const filename = `${crypto.randomUUID()}.${type.extension}`;
+  const filePath = path.join(uploadDirectory, filename);
+  await fsPromises.mkdir(uploadDirectory, { recursive: true });
+  let stored = false;
+  try {
+    await fsPromises.writeFile(filePath, buffer, { flag: 'wx' });
+    await putObject(storage, filename, filePath, mimeType);
+    stored = true;
+    const upload = await db.insert(
+      'INSERT INTO media_uploads (owner_id, filename, mime_type, size_bytes) VALUES (?, ?, ?, ?)',
+      [ownerId, filename, mimeType, buffer.length],
+    );
+    const publicOrigin = String(process.env.PUBLIC_API_ORIGIN || '').replace(/\\/$/, '');
+    if (!upload?.id || !publicOrigin) throw new Error('Media metadata or public API origin is unavailable.');
+    return { id: upload.id, filename, url: `${publicOrigin}/uploads/${filename}`, type: mimeType.startsWith('video/') ? 'video' : mimeType.startsWith('audio/') ? 'audio' : 'image', size: buffer.length };
+  } catch (error) {
+    if (stored) {
+      const url = s3RequestUrl(storage, filename);
+      const headers = signedHeaders(storage, 'DELETE', url, crypto.createHash('sha256').update('').digest('hex'));
+      await fetch(url, { method: 'DELETE', headers }).catch(() => {});
+    }
+    throw error;
+  } finally {
+    await fsPromises.rm(filePath, { force: true }).catch(() => {});
+  }
+}
+
 async function getObject(config, filename, range) {
   const url = s3RequestUrl(config, filename);
   const headers = signedHeaders(config, 'GET', url, crypto.createHash('sha256').update('').digest('hex'));
@@ -264,4 +301,5 @@ function hasExpectedSignature(mimeType, bytes) {
 }
 
 router.servePublicMedia = servePublicMedia;
+router.storeBufferForUser = storeBufferForUser;
 module.exports = router;
