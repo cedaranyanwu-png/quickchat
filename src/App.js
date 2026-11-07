@@ -68,7 +68,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (!presenceSessionId.current) {
     presenceSessionId.current = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const openModal = (src) => setModalImage(src);
+  const openModal = (src, type = 'image') => setModalImage({ src, type });
   const closeModal = () => setModalImage(null);
   const openPostModal = () => setIsPostModalOpen(true);
   const closePostModal = () => setIsPostModalOpen(false);
@@ -179,7 +179,9 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
         {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
           <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
-          <img src={modalImage} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />
+          {modalImage.type === 'video'
+            ? <video src={modalImage.src} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            : <img src={modalImage.src} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />}
         </div>}
       </div>
     </UnreadCountsProvider>
