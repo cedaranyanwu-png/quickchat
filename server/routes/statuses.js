@@ -14,12 +14,9 @@ router.get('/statuses', asyncRoute(async (req, res) => {
        JOIN users u ON u.id = s.user_id
        LEFT JOIN status_views sv ON sv.status_id = s.id AND sv.viewer_id = ?
       WHERE s.expires_at > CURRENT_TIMESTAMP
-        AND (s.user_id = ? OR EXISTS (
-          SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followed_id = s.user_id
-        ))
       ORDER BY CASE WHEN s.user_id = ? THEN 0 ELSE 1 END,
                s.created_at ASC, s.id ASC`,
-    [req.user.id, req.user.id, req.user.id, req.user.id],
+    [req.user.id, req.user.id],
   );
 
   const groups = new Map();
