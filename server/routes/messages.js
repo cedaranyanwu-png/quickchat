@@ -312,7 +312,7 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
   }
   await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [Date.now() - 86400000]);
   await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now(), Date.now() - 60000]);
-  res.json({ signals: rows.map((row) => ({
+  res.json({ iceServers: iceServers(), signals: rows.map((row) => ({
     id: row.id, callId: row.call_id, from: row.from_user_id, kind: row.kind,
     payload: row.payload ? safeParse(row.payload) : null,
     conversationId: row.conversation_id, callerId: row.caller_id, calleeId: row.callee_id,
