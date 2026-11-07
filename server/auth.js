@@ -255,12 +255,6 @@ router.post('/google', async (req, res) => {
       );
       user.email_verified = 1;
     }
-    if (!user.whatsapp_phone) {
-      return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
-    }
-    if (Number(user.whatsapp_phone_verified || 0) !== 1) {
-      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
-    }
     if (createdAccount) await createWelcomeNotification(user.id);
     if (!user.whatsapp_phone) {
       return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
