@@ -6,7 +6,7 @@ import { INTEREST_OPTIONS } from '../interest-options';
 
 const Register = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', whatsappPhone: '', password: '' });
+  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', whatsappPhone: '', password: '', whatsappOptIn: false });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pending, setPending] = useState(null);
@@ -41,7 +41,6 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
           whatsappPhone: formData.whatsappPhone,
           whatsappSent: Boolean(data.whatsappSent),
           previewUrl: data.previewUrl || '',
-          emailSent: data.emailSent !== false,
         });
         return;
       }
@@ -92,16 +91,14 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
   if (pending) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-slate-200 text-center">
-        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-blue-100 text-blue-700"><i className="fa-solid fa-envelope-circle-check text-xl" /></div>
-        <h1 className="text-2xl font-extrabold text-slate-900">Verify your account</h1>
-        <p className="mt-2 text-sm text-slate-600">We sent an email verification link to <strong>{pending.email}</strong> and a WhatsApp verification link to <strong>{pending.whatsappPhone}</strong>. Complete both checks to activate your account.</p>
-        {!pending.emailSent && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">The email provider is not configured yet, so no message was delivered. Use the development link below or ask an admin to configure email delivery.</p>}
-        {pending.previewUrl && <a href={pending.previewUrl} className="mt-4 inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white no-underline hover:bg-blue-800">Open verification link (development preview)</a>}
-        {!pending.whatsappSent && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">WhatsApp delivery is not confirmed. You can request another link after the service is configured.</p>}
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700"><i className="fa-brands fa-whatsapp text-2xl" /></div>
+        <h1 className="text-2xl font-extrabold text-slate-900">Verify your WhatsApp</h1>
+        <p className="mt-2 text-sm text-slate-600">We sent an account activation link to <strong>{pending.whatsappPhone}</strong>. Open the link on WhatsApp to confirm that you control this number. Your account becomes active after verification.</p>
+        {!pending.whatsappSent && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">WhatsApp has not accepted the message. Check the number or try again after WhatsApp delivery is configured.</p>}
+        {pending.previewUrl && <a href={pending.previewUrl} className="mt-4 inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white no-underline hover:bg-blue-800">Open development verification link</a>}
         {resendStatus && <p className="mt-3 text-xs text-emerald-700" role="status">{resendStatus}</p>}
         {error && <p className="mt-3 text-xs text-red-600" role="alert">{error}</p>}
         <div className="mt-5 flex flex-col gap-2">
-          <button type="button" onClick={resendVerification} className="rounded-lg border border-slate-300 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Resend email verification</button>
           <button type="button" onClick={resendWhatsAppVerification} className="rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"><i className="fa-brands fa-whatsapp mr-2" />Resend WhatsApp link</button>
           <Link to="/login" className="text-xs font-bold text-blue-700 hover:underline">Back to sign in</Link>
         </div>
