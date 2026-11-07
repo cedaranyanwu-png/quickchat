@@ -11,6 +11,9 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const [previewUrl, setPreviewUrl] = useState('');
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [whatsappUnverified, setWhatsappUnverified] = useState(false);
+  const [whatsappSetupMode, setWhatsappSetupMode] = useState('');
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [googleCredential, setGoogleCredential] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -22,6 +25,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
     setPreviewUrl('');
     setUnverifiedEmail('');
     setWhatsappUnverified(false);
+    setWhatsappSetupMode('');
     setIsLoading(true);
 
     try {
@@ -36,6 +40,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         requestError.code = data.code;
         requestError.email = data.email;
         requestError.whatsapp = data.code === 'WHATSAPP_NOT_VERIFIED';
+        requestError.phoneRequired = data.code === 'WHATSAPP_PHONE_REQUIRED';
         throw requestError;
       }
 
@@ -44,16 +49,41 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       onAuthenticated?.();
       navigate('/home');
     } catch (err) {
-      if (err.code === 'WHATSAPP_NOT_VERIFIED') {
+      if (err.code === 'WHATSAPP_NOT_VERIFIED' || err.phoneRequired) {
         setUnverifiedEmail(err.email || formData.email);
         setWhatsappUnverified(true);
-        setNotice(err.message);
-      } else if (err.code === 'EMAIL_NOT_VERIFIED') {
-        setUnverifiedEmail(err.email || formData.email);
+        setWhatsappSetupMode(err.phoneRequired ? 'password' : 'resend');
         setNotice(err.message);
       } else {
         setError(err.message);
       }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const submitWhatsAppSetup = async (event) => {
+    event.preventDefault();
+    setError('');
+    setNotice('Starting WhatsApp verification…');
+    setIsLoading(true);
+    try {
+      const isGoogle = whatsappSetupMode === 'google';
+      const response = await fetch(`${API_BASE_URL}${isGoogle ? '/auth/google/whatsapp/start' : '/auth/whatsapp/start'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(isGoogle
+          ? { token: googleCredential, whatsappPhone }
+          : { email: unverifiedEmail, password: formData.password, whatsappPhone }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not start WhatsApp verification.');
+      setWhatsappSetupMode('');
+      setNotice(data.message || 'WhatsApp verification link requested.');
+      setPreviewUrl(data.previewUrl || '');
+    } catch (requestError) {
+      setError(requestError.message);
+      setNotice('');
     } finally {
       setIsLoading(false);
     }
@@ -108,10 +138,17 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         {notice && (
           <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800" role="status">
             <p>{notice}</p>
-            {unverifiedEmail && (whatsappUnverified ? <button type="button" onClick={resendWhatsAppLink} className="mt-2 text-xs font-bold text-emerald-700 underline">Resend WhatsApp verification link</button> : <button type="button" onClick={resendVerification} className="mt-2 text-xs font-bold text-blue-700 underline">Resend verification email</button>)}
-            {previewUrl && <a href={previewUrl} className="ml-3 mt-2 inline-block text-xs font-bold text-blue-700 underline">Open verification link</a>}
+            {unverifiedEmail && whatsappUnverified && whatsappSetupMode === 'resend' && <button type="button" onClick={resendWhatsAppLink} className="mt-2 text-xs font-bold text-emerald-700 underline">Resend WhatsApp verification link</button>}
+            {previewUrl && <a href={previewUrl} className="ml-3 mt-2 inline-block text-xs font-bold text-blue-700 underline">Open development verification link</a>}
           </div>
         )}
+
+        {whatsappSetupMode && <form onSubmit={submitWhatsAppSetup} className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp number</label>
+          <input type="tel" value={whatsappPhone} onChange={(event) => setWhatsappPhone(event.target.value)} required placeholder="+2348012345678" className="w-full rounded-lg border border-emerald-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-emerald-500" />
+          <p className="mt-1 text-[11px] text-slate-600">Use international format, including your country code.</p>
+          <button disabled={isLoading} className="mt-3 w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white disabled:opacity-60">{isLoading ? 'Sending…' : 'Send WhatsApp verification link'}</button>
+        </form>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -167,7 +204,17 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
                   body: JSON.stringify({ token: credentialResponse.credential }),
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.message || 'Google login failed');
+                if (!response.ok) {
+                  if (data.code === 'WHATSAPP_PHONE_REQUIRED' || data.code === 'WHATSAPP_NOT_VERIFIED') {
+                    setGoogleCredential(credentialResponse.credential);
+                    setUnverifiedEmail(data.email || '');
+                    setWhatsappUnverified(true);
+                    setWhatsappSetupMode(data.code === 'WHATSAPP_PHONE_REQUIRED' ? 'google' : 'resend');
+                    setNotice(data.message || 'Verify your WhatsApp number to continue.');
+                    return;
+                  }
+                  throw new Error(data.message || 'Google login failed');
+                }
                 
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
