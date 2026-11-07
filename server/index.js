@@ -26,6 +26,7 @@ const recommendationRoutes = require('./routes/recommendations');
 const adminRoutes = require('./routes/admin');
 const rssRoutes = require('./routes/rss');
 const adminBackupRoutes = require('./routes/admin-backups');
+const adminOwner = require('./admin-owner');
 const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
@@ -299,6 +300,8 @@ async function initializeDB() {
   await ensureUniqueIndexes();
   await initializePageTables();
   await adminRoutes.initializeAdminTables();
+  const ownerBootstrap = await adminOwner.initializeOwnerSecurity();
+  if (ownerBootstrap.bootstrapped) console.log('[Admin] Main platform owner initialized. First login requires a password change.');
   console.log('[Database] Users and administration tables are ready.');
 }
 
