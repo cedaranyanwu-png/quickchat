@@ -235,6 +235,14 @@ router.post('/messages/conversations', asyncRoute(async (req, res) => {
 router.get('/messages/conversations/:conversationId/messages', asyncRoute(async (req, res) => {
   const conversationId = positiveId(req.params.conversationId);
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  const paidCreator = await db.getOne(
+    'SELECT u.id, s.enabled, s.price_points FROM conversation_members cm JOIN users u ON u.id = cm.user_id LEFT JOIN creator_chat_settings s ON s.user_id = u.id WHERE cm.conversation_id = ? AND cm.user_id <> ? LIMIT 1',
+    [conversationId, req.user.id],
+  );
+  if (paidCreator && Number(paidCreator.enabled || 0) === 1 && Number(paidCreator.id) !== Number(req.user.id)) {
+    const unlocked = await db.getOne('SELECT id FROM paid_chat_unlocks WHERE conversation_id = ? AND buyer_id = ? AND creator_id = ?', [conversationId, req.user.id, paidCreator.id]);
+    if (!unlocked) return res.json({ messages: [], locked: true, pricePoints: Number(paidCreator.price_points || 100) });
+  }
 
   const messages = await db.query(
     `SELECT m.id, m.conversation_id, m.sender_id, m.text, m.is_read, m.created_at,
