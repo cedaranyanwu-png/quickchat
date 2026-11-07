@@ -70,6 +70,10 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [userActionTarget, setUserActionTarget] = useState(null);
+  const [userActionKind, setUserActionKind] = useState('suspend');
+  const [userActionReason, setUserActionReason] = useState('');
+  const [userActionDuration, setUserActionDuration] = useState('24');
   const [loginForm, setLoginForm] = useState({ username: 'admin', password: '' });
   const [loginBusy, setLoginBusy] = useState(false);
   const [credentialForm, setCredentialForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirmPassword: '' });
@@ -195,21 +199,35 @@ export default function Admin() {
     finally { setBusyId(null); }
   };
 
-  const actOnUser = async (user, action) => {
-    const reason = window.prompt(`Reason for ${action.replace('-', ' ')} on ${user.username}:`, '');
-    if (!reason?.trim()) return;
+  const openUserAction = (user, action) => {
+    setUserActionTarget(user);
+    setUserActionKind(action);
+    setUserActionReason('');
+    setUserActionDuration('24');
+  };
+
+  const actOnUser = async (user, action, reason, durationValue) => {
+    if (!reason?.trim()) {
+      setError('Enter a reason before confirming this account action.');
+      return;
+    }
     if (action === 'ban' && !window.confirm(`Permanently ban ${user.username}? This blocks authenticated platform access.`)) return;
     if (action === 'delete-request' && !window.confirm(`Schedule a deletion review for ${user.username}? No data will be deleted immediately.`)) return;
-    const durationHours = action === 'suspend' ? Number(window.prompt('Suspension duration in hours (1–8760):', '24')) : undefined;
-    if (action === 'suspend' && (!Number.isFinite(durationHours) || durationHours < 1 || durationHours > 8760)) return;
+    const durationHours = action === 'suspend' ? Number(durationValue) : undefined;
+    if (action === 'suspend' && (!Number.isFinite(durationHours) || durationHours < 1 || durationHours > 8760)) {
+      setError('Suspension duration must be between 1 and 8760 hours.');
+      return;
+    }
     setBusyId(user.id);
+    setError('');
     try {
       const endpoint = action === 'delete-request' ? 'deletion-request' : action;
       await adminRequest(`/admin/users/${user.id}/${endpoint}`, {
         method: 'POST',
-        body: { reason, ...(durationHours ? { durationHours } : {}) },
+        body: { reason: reason.trim(), ...(durationHours ? { durationHours } : {}) },
       });
       setNotice(`Account action completed for ${user.username}.`);
+      setUserActionTarget(null);
       await loadSection('users');
     } catch (err) { setError(err.message); }
     finally { setBusyId(null); }
@@ -392,7 +410,7 @@ export default function Admin() {
 
         {section === 'users' && <section>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">User directory</h2><p className="mt-1 text-sm text-slate-500">Search and review existing QuickChat accounts.</p></div><div className="flex w-full gap-2 sm:w-auto"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadSection('users', 1, search)} placeholder="Search name, username or email" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 sm:w-72" /><button onClick={() => { setUserPage(1); loadSection('users', 1, search); }} className="rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Search</button></div></div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Account</th><th className="px-4 py-4">Joined</th><th className="px-4 py-4">Followers</th><th className="px-4 py-4">Following</th><th className="px-4 py-4">Posts</th><th className="px-4 py-4">Verification</th><th className="px-4 py-4">Account status</th><th className="px-4 py-4">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id} className="hover:bg-slate-50/70"><td className="px-5 py-4"><div className="flex items-center gap-3"><img src={user.avatar_url || user.picture || '/favicon/favicon-32x32.png'} alt="" className="h-9 w-9 rounded-full bg-slate-100 object-cover" /><div><p className="font-bold text-slate-900">{user.fullname || user.username}</p><p className="mt-0.5 text-xs text-slate-500">{user.username} · {user.email}</p></div></div></td><td className="px-4 py-4 text-xs text-slate-500">{formatDate(user.created_at)}</td><td className="px-4 py-4 font-semibold">{Number(user.followers || 0).toLocaleString()}</td><td className="px-4 py-4 font-semibold">{Number(user.following || 0).toLocaleString()}</td><td className="px-4 py-4 font-semibold">{Number(user.posts || 0).toLocaleString()}</td><td className="px-4 py-4">{Number(user.verified) ? <span className="font-bold text-blue-700"><i className="fa-solid fa-circle-check mr-1" />Verified</span> : <span className="text-xs text-slate-400">Not verified</span>}</td><td className="px-4 py-4"><Status value={user.account_status} /></td><td className="px-4 py-4"><div className="flex flex-wrap gap-1.5">{user.account_status !== 'active' && can('users.restore') && <button disabled={busyId === user.id} onClick={() => actOnUser(user, 'restore')} className="rounded-md bg-emerald-50 px-2 py-1.5 text-[10px] font-bold text-emerald-700">Restore</button>}{user.account_status === 'active' && can('users.suspend') && <button disabled={busyId === user.id} onClick={() => actOnUser(user, 'suspend')} className="rounded-md bg-amber-50 px-2 py-1.5 text-[10px] font-bold text-amber-700">Suspend</button>}{user.account_status !== 'banned' && can('users.ban') && <button disabled={busyId === user.id} onClick={() => actOnUser(user, 'ban')} className="rounded-md bg-rose-50 px-2 py-1.5 text-[10px] font-bold text-rose-700">Ban</button>}{can('users.delete') && <button disabled={busyId === user.id} onClick={() => actOnUser(user, 'delete-request')} className="rounded-md bg-slate-100 px-2 py-1.5 text-[10px] font-bold text-slate-600">Deletion review</button>}</div></td></tr>)}</tbody></table></div>
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Account</th><th className="px-4 py-4">Joined</th><th className="px-4 py-4">Followers</th><th className="px-4 py-4">Following</th><th className="px-4 py-4">Posts</th><th className="px-4 py-4">Verification</th><th className="px-4 py-4">Account status</th><th className="px-4 py-4">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{users.map((user) => <tr key={user.id} className="hover:bg-slate-50/70"><td className="px-5 py-4"><div className="flex items-center gap-3"><img src={user.avatar_url || user.picture || '/favicon/favicon-32x32.png'} alt="" className="h-9 w-9 rounded-full bg-slate-100 object-cover" /><div><p className="font-bold text-slate-900">{user.fullname || user.username}</p><p className="mt-0.5 text-xs text-slate-500">{user.username} · {user.email}</p></div></div></td><td className="px-4 py-4 text-xs text-slate-500">{formatDate(user.created_at)}</td><td className="px-4 py-4 font-semibold">{Number(user.followers || 0).toLocaleString()}</td><td className="px-4 py-4 font-semibold">{Number(user.following || 0).toLocaleString()}</td><td className="px-4 py-4 font-semibold">{Number(user.posts || 0).toLocaleString()}</td><td className="px-4 py-4">{Number(user.verified) ? <span className="font-bold text-blue-700"><i className="fa-solid fa-circle-check mr-1" />Verified</span> : <span className="text-xs text-slate-400">Not verified</span>}</td><td className="px-4 py-4"><Status value={user.account_status} /></td><td className="px-4 py-4"><div className="flex flex-wrap gap-1.5">{user.account_status !== 'active' && can('users.restore') && <button disabled={busyId === user.id} onClick={() => openUserAction(user, 'restore')} className="rounded-md bg-emerald-50 px-2 py-1.5 text-[10px] font-bold text-emerald-700">Restore</button>}{user.account_status === 'active' && can('users.suspend') && <button disabled={busyId === user.id} onClick={() => openUserAction(user, 'suspend')} className="rounded-md bg-amber-50 px-2 py-1.5 text-[10px] font-bold text-amber-700">Suspend</button>}{user.account_status !== 'banned' && can('users.ban') && <button disabled={busyId === user.id} onClick={() => openUserAction(user, 'ban')} className="rounded-md bg-rose-50 px-2 py-1.5 text-[10px] font-bold text-rose-700">Ban</button>}{can('users.delete') && <button disabled={busyId === user.id} onClick={() => openUserAction(user, 'delete-request')} className="rounded-md bg-slate-100 px-2 py-1.5 text-[10px] font-bold text-slate-600">Deletion review</button>}</div></td></tr>)}</tbody></table></div>
             {!users.length && !loading && <p className="p-8 text-center text-sm text-slate-400">No matching users found.</p>}
             <div className="flex items-center justify-between border-t border-slate-100 px-5 py-4 text-xs text-slate-500"><span>{userPagination ? `Page ${userPagination.page} of ${Math.max(1, userPagination.pages)} · ${userPagination.total} users` : '—'}</span><div className="flex gap-2"><button disabled={!userPagination || userPage <= 1} onClick={() => { const next = userPage - 1; setUserPage(next); loadSection('users', next, search); }} className="rounded-lg border border-slate-200 px-3 py-2 font-bold disabled:opacity-40">Previous</button><button disabled={!userPagination || userPage >= userPagination.pages} onClick={() => { const next = userPage + 1; setUserPage(next); loadSection('users', next, search); }} className="rounded-lg border border-slate-200 px-3 py-2 font-bold disabled:opacity-40">Next</button></div></div>
           </div>
