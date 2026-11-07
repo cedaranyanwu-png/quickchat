@@ -11,14 +11,14 @@ export default function AdminConfiguration() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   useEffect(() => {
-    adminRequest('/admin/configuration').then((result) => { setData(result); setFee(String(result.verificationFeePoints)); }).catch((err) => setError(err.message));
+    adminRequest('/admin/configuration').then((result) => { setData(result); setFee(String(result.verificationFeeNaira)); }).catch((err) => setError(err.message));
   }, []);
   const saveFee = async (event) => {
     event.preventDefault(); setBusy(true); setError(''); setNotice('');
     try {
-      const result = await adminRequest('/admin/configuration/verification-fee', { method: 'PUT', body: { points: Number(fee) } });
-      setFee(String(result.verificationFeePoints)); setNotice(result.message);
-      setData((current) => ({ ...(current || {}), verificationFeePoints: result.verificationFeePoints }));
+      const result = await adminRequest('/admin/configuration/verification-fee', { method: 'PUT', body: { amountNaira: Number(fee) } });
+      setFee(String(result.verificationFeeNaira)); setNotice(result.message);
+      setData((current) => ({ ...(current || {}), verificationFeeNaira: result.verificationFeeNaira }));
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
   };
@@ -38,8 +38,8 @@ export default function AdminConfiguration() {
     {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
     <form onSubmit={saveFee} className="rounded-2xl border border-slate-200 bg-white p-5">
       <h2 className="font-extrabold text-slate-900">Account verification price</h2><p className="mt-1 text-xs leading-5 text-slate-500">The user pays this amount in QuickChat points. Point top-ups continue to use Flutterwave.</p>
-      <div className="mt-4 flex flex-wrap items-end gap-3"><label className="block flex-1 text-xs font-bold text-slate-700">Price (points)<input type="number" min="100" max="1000000" step="1" value={fee} onChange={(e) => setFee(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><button disabled={busy || !fee} className="rounded-xl bg-blue-700 px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save price'}</button></div>
-      <p className="mt-2 text-[11px] text-slate-400">Initial price: 2,000 points. Allowed range: 100–1,000,000 points.</p>
+      <div className="mt-4 flex flex-wrap items-end gap-3"><label className="block flex-1 text-xs font-bold text-slate-700">Price (NGN)<input type="number" min="100" max="1000000" step="1" value={fee} onChange={(e) => setFee(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label><button disabled={busy || !fee} className="rounded-xl bg-blue-700 px-5 py-3 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save price'}</button></div>
+      <p className="mt-2 text-[11px] text-slate-400">Initial price: ₦2,000. Allowed range: ₦100–₦1,000,000.</p>
     </form>
     <form onSubmit={saveCredentials} className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-extrabold text-slate-900">Flutterwave · Platform payment gateway</h2><p className="mt-1 text-xs text-slate-500">These credentials power platform payments, including wallet top-ups.</p></div><State ok={Boolean(data?.flutterwave?.secretKeyConfigured && data?.flutterwave?.webhookHashConfigured && data?.flutterwave?.webhookUrlConfigured && data?.flutterwave?.publicUrlConfigured)} /></div>
