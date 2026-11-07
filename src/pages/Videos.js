@@ -23,15 +23,65 @@ export default function Videos({ openVideo }) {
   const feedRef = useRef(null);
   const viewedIdsRef = useRef(new Set());
 
-  // The same backend feed drives both layouts, so every card/reel is a saved database row.
+  // Prefer the dedicated video library, but also read public feed attachments.
+  // This keeps a post video visible even if an older/migrated row is missing in videos.
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const result = await apiRequest('/videos');
-      setVideos(result.videos || []);
+      const [libraryResult, feedResult] = await Promise.allSettled([
+        apiRequest('/videos?limit=100'),
+        apiRequest('/explore?limit=100'),
+      ]);
+
+      const libraryVideos = libraryResult.status === 'fulfilled'
+        ? (libraryResult.value.videos || [])
+        : [];
+      const feedPosts = feedResult.status === 'fulfilled'
+        ? (feedResult.value.posts || [])
+        : [];
+
+      const knownUrls = new Set(libraryVideos.map((video) => String(video.videoUrl || '').trim()).filter(Boolean));
+      const feedVideos = [];
+      feedPosts.forEach((post) => {
+        if (post.visibility !== 'public' || post.communityId) return;
+        const attachments = Array.isArray(post.media) ? post.media : [];
+        attachments.forEach((attachment, index) => {
+          const url = String(attachment?.url || '').trim();
+          const mediaType = String(attachment?.type || '').toLowerCase();
+          const isVideo = mediaType.startsWith('video') || /\\.(mp4|webm|mov)(?:[?#]|$)/i.test(url);
+          if (!isVideo || !url || knownUrls.has(url)) return;
+          knownUrls.add(url);
+          feedVideos.push({
+            id: `feed-${post.id}-${index}`,
+            postId: post.id,
+            isFeedFallback: true,
+            title: String(post.text || 'Video').slice(0, 180),
+            description: post.text || '',
+            videoUrl: url,
+            thumbnail: attachment.thumbnailUrl || null,
+            duration: '',
+            views: 0,
+            likes: 0,
+            liked: false,
+            creatorId: post.authorId,
+            creator: post.name || 'QuickChat user',
+            username: post.username || '',
+            handle: post.handle || '',
+            picture: post.picture || null,
+            createdAt: post.createdAt,
+          });
+        });
+      });
+
+      if (libraryResult.status === 'rejected' && feedResult.status === 'rejected') {
+        throw libraryResult.reason || feedResult.reason;
+      }
+      setVideos([...libraryVideos, ...feedVideos]);
+      if (libraryResult.status === 'rejected') setError('Some saved videos could not be loaded. Showing videos found in the feed.');
     } catch (requestError) {
-      setError(requestError.message);
+      setError(requestError.message || 'Unable to load videos.');
+      setVideos([]);
     } finally {
       setLoading(false);
     }
@@ -41,6 +91,8 @@ export default function Videos({ openVideo }) {
 
   // Count a view once per visit, and keep the visible count in sync with the API response.
   const recordView = useCallback(async (id) => {
+    const currentVideo = videos.find((video) => String(video.id) === String(id));
+    if (!currentVideo || currentVideo.isFeedFallback) return;
     const key = String(id);
     if (viewedIdsRef.current.has(key)) return;
     viewedIdsRef.current.add(key);
@@ -52,7 +104,7 @@ export default function Videos({ openVideo }) {
     } catch (_) {
       // A view counter should never interrupt video playback if the network is unavailable.
     }
-  }, []);
+  }, [videos]);
 
   // Only the reel mostly visible in the mobile scroller plays; all other videos are paused.
   useEffect(() => {
@@ -106,6 +158,8 @@ export default function Videos({ openVideo }) {
   };
 
   const showComments = async (videoId) => {
+    const selectedVideo = videos.find((video) => String(video.id) === String(videoId));
+    if (selectedVideo?.isFeedFallback) return;
     setCommentsVideoId(videoId);
     setComments([]);
     setCommentDraft('');
@@ -140,7 +194,7 @@ export default function Videos({ openVideo }) {
 
   const toggleLike = async (videoId) => {
     const current = videos.find((video) => String(video.id) === String(videoId));
-    if (!current) return;
+    if (!current || current.isFeedFallback) return;
     try {
       const result = await apiRequest(`/videos/${videoId}/likes`, { method: current.liked ? 'DELETE' : 'POST' });
       setVideos((rows) => rows.map((video) => String(video.id) === String(videoId)
@@ -195,13 +249,15 @@ export default function Videos({ openVideo }) {
           <span className="videos-reel-views"><i className="fa-solid fa-eye" /> {video.views} views</span>
         </div>
         <div className="videos-reel-actions">
-          <button type="button" aria-label={video.liked ? 'Unlike video' : 'Like video'} onClick={(event) => { event.stopPropagation(); toggleLike(video.id); }}>
-            <i className={`fa-heart ${video.liked ? 'fa-solid text-red-400' : 'fa-regular'}`} /><span>{video.likes || 0}</span>
-          </button>
-          <button type="button" aria-label="View comments" onClick={(event) => { event.stopPropagation(); showComments(video.id); }}>
-            <i className="fa-regular fa-comment" /><span>Comments</span>
-          </button>
-          <ShareMenu path={`/share/video/${video.id}`} title={video.title} text={video.description || video.title} downloads={[{ url: video.videoUrl, type: 'video', label: 'Download video' }]} downloadTextLabel="Download video details" buttonClassName="text-white hover:bg-white/10 hover:text-white" />
+          {!video.isFeedFallback && <>
+            <button type="button" aria-label={video.liked ? 'Unlike video' : 'Like video'} onClick={(event) => { event.stopPropagation(); toggleLike(video.id); }}>
+              <i className={`fa-heart ${video.liked ? 'fa-solid text-red-400' : 'fa-regular'}`} /><span>{video.likes || 0}</span>
+            </button>
+            <button type="button" aria-label="View comments" onClick={(event) => { event.stopPropagation(); showComments(video.id); }}>
+              <i className="fa-regular fa-comment" /><span>Comments</span>
+            </button>
+          </>}
+          <ShareMenu path={video.isFeedFallback ? `/share/post/${video.postId}` : `/share/video/${video.id}`} title={video.title} text={video.description || video.title} downloads={[{ url: video.videoUrl, type: 'video', label: 'Download video' }]} downloadTextLabel="Download video details" buttonClassName="text-white hover:bg-white/10 hover:text-white" />
           <span><i className="fa-solid fa-eye" /><small>{video.views}</small></span>
         </div>
         {autoplayBlockedId === String(video.id) && <button type="button" className="videos-reel-play" aria-label="Play video" onClick={(event) => { event.stopPropagation(); const player = event.currentTarget.parentElement.querySelector('video'); player.muted = true; player.play().then(() => setAutoplayBlockedId(null)).catch(() => {}); }}><i className="fa-solid fa-play" /></button>}
@@ -223,11 +279,16 @@ export default function Videos({ openVideo }) {
       <div className="videos-desktop-heading"><h2>Videos</h2><button type="button" onClick={() => setFormOpen((open) => !open)}>{formOpen ? 'Cancel' : 'Upload video'}</button></div>
       {error && <p className="videos-error">{error}</p>}
       <div className="videos-desktop-grid">{videos.map((video) => <div key={video.id} className="videos-card-wrap">
-        <button type="button" onClick={() => openVideo(video.id)} className="videos-card">
-          <div className="videos-card-preview">{video.thumbnail && <img src={video.thumbnail} alt="" />}<span><i className="fa-solid fa-play" /></span></div>
+        <button type="button" onClick={() => (video.isFeedFallback ? null : openVideo(video.id))} className="videos-card">
+          <div className="videos-card-preview">
+            {video.thumbnail
+              ? <img src={video.thumbnail} alt="" />
+              : <video src={video.videoUrl} muted playsInline preload="metadata" />}
+            <span><i className="fa-solid fa-play" /></span>
+          </div>
           <div className="videos-card-meta"><Avatar name={video.creator} picture={video.picture} size={34} /><span><strong>{video.title}</strong><small>{video.creator} · {video.views} views</small></span></div>
         </button>
-        <div className="videos-card-share"><ShareMenu path={`/share/video/${video.id}`} title={video.title} text={video.description || video.title} downloads={[{ url: video.videoUrl, type: 'video', label: 'Download video' }]} downloadTextLabel="Download video details" /></div>
+        <div className="videos-card-share"><ShareMenu path={video.isFeedFallback ? `/share/post/${video.postId}` : `/share/video/${video.id}`} title={video.title} text={video.description || video.title} downloads={[{ url: video.videoUrl, type: 'video', label: 'Download video' }]} downloadTextLabel="Download video details" /></div>
       </div>)}</div>
       {!videos.length && !loading && !error && <p className="videos-desktop-empty">Videos uploaded by users will appear here.</p>}
     </div>
