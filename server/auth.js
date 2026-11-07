@@ -395,8 +395,9 @@ async function createGoogleUsername(fullName, email) {
   throw new Error('Could not create a unique username for this Google account.');
 }
 
-function sendSession(res, user, status, message, extra = {}) {
+async function sendSession(res, user, status, message, extra = {}) {
   const token = createToken(user);
+  const ownerSecurity = await db.getOne('SELECT must_change_password FROM admin_owner_security WHERE user_id = ?', [user.id]).catch(() => null);
   return res.status(status).json({
     message,
     token,
@@ -407,6 +408,7 @@ function sendSession(res, user, status, message, extra = {}) {
       email: user.email,
       emailVerified: true,
       picture: extra.picture || user.picture || null,
+      mustChangePassword: Number(ownerSecurity?.must_change_password || 0) === 1,
     },
   });
 }
