@@ -163,7 +163,6 @@ export default function StatusStrip() {
 }
 
 function StatusAvatar({ group, onClick }) {
-  const segments = group.statuses.map((status) => status.viewed ? '#cbd5e1 0deg' : '#123b8a 0deg');
   const count = Math.max(1, segments.length);
   const slice = 360 / count;
   const stops = group.statuses.map((status, index) => {
