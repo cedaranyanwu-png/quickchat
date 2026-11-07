@@ -329,7 +329,7 @@ export default function Messages() {
   }, [call?.callId, call?.mediaType]);
 
   useEffect(() => {
-    if (!call?.callId || !['outgoing', 'connecting', 'active'].includes(call.status)) return undefined;
+    if (!call?.callId || !['connecting', 'active'].includes(call.status)) return undefined;
     const beat = () => apiRequest(`/messages/calls/${call.callId}/heartbeat`, { method: 'POST' }).catch(() => {});
     beat();
     const timer = setInterval(beat, 15000);
