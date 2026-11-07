@@ -216,11 +216,14 @@ async function syncSource(sourceId, { force = false } = {}) {
 
 async function syncEnabledSources({ force = false } = {}) {
   const sources = await db.query(
-    'SELECT id FROM rss_sources WHERE enabled = 1 AND (? = 1 OR auto_sync = 1) ORDER BY last_sync_at ASC, id ASC',
+    'SELECT id, last_sync_at, sync_interval_minutes FROM rss_sources WHERE enabled = 1 AND (? = 1 OR auto_sync = 1) ORDER BY last_sync_at ASC, id ASC',
     [force ? 1 : 0],
   );
   const results = [];
   for (const source of sources) {
+    const lastSync = source.last_sync_at ? new Date(source.last_sync_at).getTime() : 0;
+    const intervalMs = Math.max(10, Number(source.sync_interval_minutes) || 15) * 60 * 1000;
+    if (!force && lastSync && Date.now() - lastSync < intervalMs) continue;
     try { results.push({ success: true, ...(await syncSource(source.id, { force })) }); }
     catch (error) { results.push({ success: false, sourceId: source.id, error: String(error.message || error) }); }
   }
