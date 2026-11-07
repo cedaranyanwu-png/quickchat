@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiRequest } from '../api';
+import { apiRequest, uploadMedia } from '../api';
 import Avatar from '../components/Avatar';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function Messages() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,11 +23,30 @@ export default function Messages() {
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyMenuId, setReplyMenuId] = useState(null);
   const [swipedMessageId, setSwipedMessageId] = useState(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [recordingMode, setRecordingMode] = useState('');
+  const [call, setCall] = useState(null);
+  const [callError, setCallError] = useState('');
+  const [callMuted, setCallMuted] = useState(false);
+  const [callCameraOff, setCallCameraOff] = useState(false);
   const touchStartRef = useRef(null);
   const endOfMessagesRef = useRef(null);
   const openedUserRef = useRef('');
   const typingTimeoutRef = useRef(null);
   const lastTypingSentAtRef = useRef(0);
+  const fileInputRef = useRef(null);
+  const recorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const discardRecordingRef = useRef(false);
+  const callRef = useRef(null);
+  const callPcRef = useRef(null);
+  const callLocalStreamRef = useRef(null);
+  const callRemoteStreamRef = useRef(null);
+  const callCursorRef = useRef(0);
+  const pendingCallIceRef = useRef([]);
+  const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const localVideoRef = useRef(null);
 
   const reportTyping = useCallback((conversationId, typing) => {
     if (!conversationId) return;
@@ -156,6 +176,233 @@ export default function Messages() {
     startConversation({ id: requestedUserId }).catch(() => {});
   }, [requestedUserId, startConversation]);
 
+  const sendAttachment = async (file) => {
+    if (!activeId || !file || uploadingMedia) return;
+    setUploadingMedia(true);
+    setError('');
+    try {
+      const uploaded = await uploadMedia(file);
+      await apiRequest(`/messages/conversations/${activeId}/messages`, { method: 'POST', body: { mediaUploadId: uploaded.id, text: '', replyToMessageId: replyingTo?.id || null } });
+      setReplyingTo(null);
+      await Promise.all([loadMessages(activeId), loadConversations()]);
+    } catch (uploadError) {
+      setError(uploadError.message || 'The attachment could not be sent.');
+    } finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageSelected = (event) => {
+    const file = event.target.files?.[0];
+    if (file) void sendAttachment(file);
+  };
+
+  const startRecording = async (mode) => {
+    if (!activeId || recordingMode || typeof MediaRecorder === 'undefined') return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(mode === 'voice'
+        ? { audio: { echoCancellation: true, noiseSuppression: true } }
+        : { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } });
+      const candidates = mode === 'voice' ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'] : ['video/webm;codecs=vp8,opus', 'video/webm'];
+      const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const chunks = [];
+      recordingStreamRef.current = stream;
+      recorderRef.current = recorder;
+      discardRecordingRef.current = false;
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || (mode === 'voice' ? 'audio/webm' : 'video/webm') });
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        setRecordingMode('');
+        if (!discardRecordingRef.current && blob.size) void sendAttachment(new File([blob], `${mode}-${Date.now()}.webm`, { type: blob.type }));
+      };
+      recorder.start(500);
+      setRecordingMode(mode);
+    } catch (recordError) {
+      setError(recordError?.name === 'NotAllowedError' ? 'Allow microphone and camera access to record a message.' : 'Recording is unavailable on this device or browser.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
+  };
+
+  const updateCall = (next) => { callRef.current = next; setCall(next); };
+
+  const sendCallSignal = async (data, kind, payload = null) => {
+    if (!data?.callId || !data?.peerId) return;
+    await apiRequest(`/messages/calls/${data.callId}/signals`, { method: 'POST', body: { to: data.peerId, kind, payload } });
+  };
+
+  const closeDirectCall = () => {
+    try { callPcRef.current?.close(); } catch (_error) {}
+    callPcRef.current = null;
+    callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+    callLocalStreamRef.current = null;
+    callRemoteStreamRef.current = null;
+    pendingCallIceRef.current = [];
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    updateCall(null);
+    setCallMuted(false);
+    setCallCameraOff(false);
+  };
+
+  const createDirectPeer = async (data, initiator) => {
+    const pc = new RTCPeerConnection({ iceServers: data.iceServers || [] });
+    callPcRef.current = pc;
+    callLocalStreamRef.current?.getTracks().forEach((track) => pc.addTrack(track, callLocalStreamRef.current));
+    pc.onicecandidate = (event) => { if (event.candidate) void sendCallSignal(data, 'ice', event.candidate.toJSON()).catch(() => {}); };
+    pc.ontrack = (event) => {
+      const stream = event.streams?.[0] || new MediaStream([event.track]);
+      callRemoteStreamRef.current = stream;
+      if (remoteVideoRef.current) { remoteVideoRef.current.srcObject = stream; remoteVideoRef.current.play().catch(() => {}); }
+      if (remoteAudioRef.current) { remoteAudioRef.current.srcObject = stream; remoteAudioRef.current.play().catch(() => {}); }
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') setCallError('The call connection failed. Check your network and try again.');
+    };
+    if (initiator) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendCallSignal(data, 'offer', { type: 'offer', sdp: pc.localDescription.sdp });
+    }
+    return pc;
+  };
+
+  const startCall = async (mediaType) => {
+    if (!activeId || !activeConversation || callRef.current) return;
+    setCallError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(mediaType === 'video'
+        ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+        : { audio: true });
+      callLocalStreamRef.current = stream;
+      const result = await apiRequest('/messages/calls/start', { method: 'POST', body: { conversationId: activeId, mediaType } });
+      const data = { callId: result.callId, conversationId: activeId, peerId: result.to, mediaType, status: 'outgoing', peerName: activeConversation.name, iceServers: result.iceServers || [], initiator: true };
+      updateCall(data);
+      if (localVideoRef.current && mediaType === 'video') localVideoRef.current.srcObject = stream;
+    } catch (callStartError) {
+      callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+      callLocalStreamRef.current = null;
+      setCallError(callStartError?.name === 'NotAllowedError' ? 'Allow microphone and camera access before starting a call.' : callStartError.message || 'Could not start the call.');
+    }
+  };
+
+  const answerCall = async () => {
+    const current = callRef.current;
+    if (!current || current.status !== 'incoming') return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(current.mediaType === 'video'
+        ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+        : { audio: true });
+      callLocalStreamRef.current = stream;
+      const accepted = { ...current, status: 'connecting', initiator: false };
+      updateCall(accepted);
+      if (localVideoRef.current && current.mediaType === 'video') localVideoRef.current.srcObject = stream;
+      await sendCallSignal(accepted, 'accept');
+    } catch (callAcceptError) {
+      setCallError(callAcceptError?.name === 'NotAllowedError' ? 'Allow microphone and camera access to answer this call.' : callAcceptError.message || 'Could not answer the call.');
+    }
+  };
+
+  const rejectCall = async () => {
+    const current = callRef.current;
+    if (current) await sendCallSignal(current, 'reject').catch(() => {});
+    closeDirectCall();
+  };
+
+  const endCall = async () => {
+    const current = callRef.current;
+    if (current) await sendCallSignal(current, 'end').catch(() => {});
+    closeDirectCall();
+  };
+
+  useEffect(() => {
+    if (!call?.mediaType || !callLocalStreamRef.current) return;
+    if (call.mediaType === 'video' && localVideoRef.current) {
+      localVideoRef.current.srcObject = callLocalStreamRef.current;
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [call?.callId, call?.mediaType]);
+
+  useEffect(() => {
+    if (!call?.callId || !['connecting', 'active'].includes(call.status)) return undefined;
+    const beat = () => apiRequest(`/messages/calls/${call.callId}/heartbeat`, { method: 'POST' }).catch(() => {});
+    beat();
+    const timer = setInterval(beat, 15000);
+    return () => clearInterval(timer);
+  }, [call?.callId, call?.status]);
+
+  useEffect(() => {
+    let active = true;
+    let timer;
+    const pollCalls = async () => {
+      try {
+        const result = await apiRequest('/messages/calls/poll', { method: 'POST', body: { afterId: callCursorRef.current } });
+        for (const signal of result.signals || []) {
+          callCursorRef.current = Math.max(callCursorRef.current, Number(signal.id));
+          let current = callRef.current;
+          if (signal.kind === 'invite' && !current) {
+            const convo = conversations.find((item) => Number(item.id) === Number(signal.conversationId));
+            current = { callId: signal.callId, conversationId: signal.conversationId, peerId: Number(signal.from), peerName: signal.payload?.callerName || convo?.name || 'QuickChat member', mediaType: signal.mediaType, status: 'incoming', iceServers: result.iceServers || [], initiator: false };
+            updateCall(current);
+            setActiveId(signal.conversationId);
+          } else if (!current || current.callId !== signal.callId) continue;
+          else if (signal.kind === 'accept' && current.initiator) {
+            updateCall({ ...current, status: 'connecting' });
+            await createDirectPeer(current, true);
+          } else if (signal.kind === 'offer' && !current.initiator) {
+            const pc = callPcRef.current || await createDirectPeer(current, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await sendCallSignal(current, 'answer', { type: 'answer', sdp: pc.localDescription.sdp });
+            for (const candidate of pendingCallIceRef.current) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            pendingCallIceRef.current = [];
+            updateCall({ ...current, status: 'active' });
+          } else if (signal.kind === 'answer' && current.initiator && callPcRef.current) {
+            await callPcRef.current.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            updateCall({ ...current, status: 'active' });
+            for (const candidate of pendingCallIceRef.current) await callPcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            pendingCallIceRef.current = [];
+          } else if (signal.kind === 'ice' && signal.payload) {
+            if (callPcRef.current?.remoteDescription) await callPcRef.current.addIceCandidate(new RTCIceCandidate(signal.payload)).catch(() => {});
+            else pendingCallIceRef.current.push(signal.payload);
+          } else if (signal.kind === 'reject') {
+            setCallError('The other person declined your call.');
+            closeDirectCall();
+          } else if (signal.kind === 'missed') {
+            setCallError('There was no answer to your call.');
+            closeDirectCall();
+          } else if (signal.kind === 'end') closeDirectCall();
+        }
+      } catch (_error) { /* polling retries after a short delay */ }
+      finally { if (active) timer = setTimeout(pollCalls, 900); }
+    };
+    pollCalls();
+    return () => { active = false; clearTimeout(timer); };
+    // The call handlers intentionally use the latest refs and state snapshot while polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations]);
+
+  useEffect(() => () => {
+    discardRecordingRef.current = true;
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    const activeCall = callRef.current;
+    if (activeCall?.callId && activeCall?.peerId) {
+      apiRequest(`/messages/calls/${activeCall.callId}/signals`, { method: 'POST', body: { to: activeCall.peerId, kind: 'end' } }).catch(() => {});
+    }
+    try { callPcRef.current?.close(); } catch (_error) {}
+    callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
+
   const sendMessage = async (event) => {
     event.preventDefault();
     const text = messageInput.trim();
@@ -267,7 +514,7 @@ export default function Messages() {
             <h3 className="px-4 pb-2 pt-5 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Followers &amp; following</h3>
             {contacts.map((contact) => <button key={`contact-${contact.id}`} onClick={() => startConversation(contact)} disabled={startingConversation} className="flex w-full items-center gap-3 border-b border-slate-100 p-3 text-left hover:bg-slate-50 disabled:opacity-60">
               <span className="relative h-[38px] w-[38px] shrink-0"><Avatar name={contact.name} picture={contact.picture} size={38} />{contact.online && <span aria-label="Online" title="Online" className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</span>
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{contact.name}</strong><span className="text-xs text-slate-500">{contact.online ? 'Online · ' : ''}{contact.handle}</span></span>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{contact.name} <VerifiedBadge verified={contact.verified} /></strong><span className="text-xs text-slate-500">{contact.online ? 'Online · ' : ''}{contact.handle}</span></span>
               <span className="text-[10px] text-blue-700">{contact.following && contact.follower ? 'Follows you' : contact.following ? 'Following' : 'Follower'}</span>
             </button>)}
             {contacts.length === 0 && <p className="px-4 py-2 text-xs text-slate-400">People you follow or who follow you will appear here.</p>}
@@ -277,7 +524,7 @@ export default function Messages() {
             <h3 className="px-4 pb-2 pt-5 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">People</h3>
             {additionalUsers.map((user) => <button key={`person-${user.id}`} onClick={() => startConversation(user)} disabled={startingConversation} className="flex w-full items-center gap-3 border-b border-slate-100 p-3 text-left hover:bg-slate-50 disabled:opacity-60">
               <Avatar name={user.name} picture={user.picture} size={38} />
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{user.name}</strong><span className="text-xs text-slate-500">{user.handle}</span></span>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{user.name} <VerifiedBadge verified={user.verified} /></strong><span className="text-xs text-slate-500">{user.handle}</span></span>
               <span className="text-xs text-blue-700">Message</span>
             </button>)}
           </section>}
@@ -289,7 +536,11 @@ export default function Messages() {
           <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white p-3">
             <button type="button" onClick={() => setActiveId(null)} aria-label="Back to conversations" className="text-slate-500 lg:hidden"><i className="fa-solid fa-arrow-left" /></button>
             <span className="relative h-9 w-9 shrink-0"><Avatar name={activeConversation.name} picture={activeConversation.picture} size={36} />{activeUserOnline && <span aria-label="Online" title="Online" className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</span>
-            <div className="min-w-0"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name}</h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
+            <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name} <VerifiedBadge verified={activeConversation.verified} /></h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button type="button" onClick={() => startCall('audio')} disabled={Boolean(call)} title="Voice call" aria-label="Start voice call" className="grid h-9 w-9 place-items-center rounded-full text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"><i className="fa-solid fa-phone" /></button>
+              <button type="button" onClick={() => startCall('video')} disabled={Boolean(call)} title="Video call" aria-label="Start video call" className="grid h-9 w-9 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-solid fa-video" /></button>
+            </div>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-24 lg:pb-24">
             {messages.map((message) => {
@@ -352,7 +603,10 @@ export default function Messages() {
                           <span className="block truncate">{message.replyTo.text}</span>
                         </button>
                       )}
-                      <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>
+                      {message.mediaType === 'image' && message.mediaUrl && <img src={message.mediaUrl} alt="Shared image" loading="lazy" className="mb-2 max-h-72 max-w-full rounded-xl object-contain" />}
+                      {message.mediaType === 'video' && message.mediaUrl && <video src={message.mediaUrl} controls playsInline preload="metadata" className="mb-2 max-h-80 max-w-full rounded-xl bg-black" />}
+                      {message.mediaType === 'audio' && message.mediaUrl && <div className="mb-2 flex min-w-[220px] items-center gap-2"><i className={`fa-solid fa-microphone ${isMine ? 'text-white' : 'text-blue-700'}`} /><audio src={message.mediaUrl} controls preload="metadata" className="h-9 max-w-full" /></div>}
+                      {message.text && <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>}
                       <div className="mt-1 flex items-center justify-end gap-2">
                         <small className="opacity-70">{message.time}</small>
                         <button
@@ -382,7 +636,13 @@ export default function Messages() {
           </div>
         </> : <div className="grid flex-1 place-items-center pb-24 text-sm text-slate-500">Choose a conversation or message someone you follow.</div>}
 
-        <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
+        <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-1.5 border-t border-slate-200 bg-white px-2 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageSelected} className="hidden" />
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!activeId || uploadingMedia || Boolean(recordingMode)} title="Send image" aria-label="Send image" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-regular fa-image text-lg" /></button>
+          <button type="button" onClick={() => recordingMode === 'voice' ? stopRecording() : startRecording('voice')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'voice')} title={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} aria-label={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'voice' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'voice' ? 'fa-stop' : 'fa-microphone'}`} /></button>
+          <button type="button" onClick={() => recordingMode === 'video' ? stopRecording() : startRecording('video')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'video')} title={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} aria-label={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'video' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'video' ? 'fa-stop' : 'fa-video'}`} /></button>
+          {recordingMode && <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-red-600"><span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />REC</span>}
+          {uploadingMedia && <span className="shrink-0 text-[10px] font-semibold text-blue-700">Uploading…</span>}
           <div className="absolute inset-x-0 bottom-full border-t border-slate-100 bg-white px-3 py-2 shadow-sm">
           {replyingTo && (
             <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
@@ -412,7 +672,29 @@ export default function Messages() {
           </button>
         </form>
       </section>
-      {error && <div role="alert" className="fixed bottom-20 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 p-3 text-xs text-red-700 shadow">{error}</div>}
+      {call && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-3">
+        <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="bg-slate-950 px-6 py-7 text-center text-white">
+            <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full border-2 border-white/30 bg-slate-800"><Avatar name={call.peerName} picture={activeConversation?.picture} size={64} /></div>
+            <h3 className="text-lg font-extrabold">{call.peerName || 'QuickChat member'}</h3>
+            <p className="mt-1 text-xs text-slate-300">{call.status === 'incoming' ? `Incoming ${call.mediaType === 'video' ? 'video' : 'voice'} call` : call.status === 'outgoing' ? 'Calling…' : call.status === 'connecting' ? 'Connecting…' : 'Call connected'}</p>
+          </div>
+          {call.mediaType === 'video' && <div className="relative aspect-video bg-black"><video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" /><video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-3 right-3 h-20 w-28 rounded-xl border border-white/70 bg-slate-800 object-cover" /></div>}
+          {call.mediaType === 'audio' && <audio ref={remoteAudioRef} autoPlay className="hidden" />}
+          {callError && <p role="alert" className="px-4 pt-3 text-center text-xs text-rose-600">{callError}</p>}
+          <div className="flex items-center justify-center gap-5 px-5 py-6">
+            {call.status === 'incoming' ? <>
+              <button type="button" onClick={rejectCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-rose-600 text-xl text-white"><i className="fa-solid fa-phone-slash" /></span>Reject</button>
+              <button type="button" onClick={answerCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-600 text-xl text-white"><i className="fa-solid fa-phone" /></span>Answer</button>
+            </> : <>
+              <button type="button" onClick={() => { callLocalStreamRef.current?.getAudioTracks().forEach((track) => { track.enabled = callMuted; }); setCallMuted((value) => !value); }} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg"><i className={`fa-solid ${callMuted ? 'fa-microphone-slash' : 'fa-microphone'}`} /></span>{callMuted ? 'Unmute' : 'Mute'}</button>
+              {call.mediaType === 'video' && <button type="button" onClick={() => { callLocalStreamRef.current?.getVideoTracks().forEach((track) => { track.enabled = callCameraOff; }); setCallCameraOff((value) => !value); }} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg"><i className={`fa-solid ${callCameraOff ? 'fa-video-slash' : 'fa-video'}`} /></span>Camera</button>}
+              <button type="button" onClick={endCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-rose-600 text-xl text-white"><i className="fa-solid fa-phone-slash" /></span>End call</button>
+            </>}
+          </div>
+        </div>
+      </div>}
+      {(error || callError) && <div role="alert" className="fixed bottom-20 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 p-3 text-xs text-red-700 shadow">{error || callError}</div>}
     </div>
   );
 }

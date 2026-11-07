@@ -30,7 +30,7 @@ const COMMUNITY_POST_SELECT = `
 router.get('/notifications', asyncRoute(async (req, res) => {
   const notifications = await db.query(
     `SELECT n.id, n.type, n.text, n.is_read, n.created_at, n.post_id, n.live_session_id,
-            a.id AS actor_id, a.fullname AS actor_name, a.username AS actor_username, a.avatar_url AS actor_avatar,
+            a.id AS actor_id, a.fullname AS actor_name, a.username AS actor_username, a.avatar_url AS actor_avatar, a.verified AS actor_verified,
             a.is_synthetic AS actor_is_synthetic
        FROM notifications n LEFT JOIN users a ON a.id = n.actor_id
       WHERE n.user_id = ? ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
@@ -52,6 +52,7 @@ router.get('/notifications', asyncRoute(async (req, res) => {
         username: item.actor_username,
         handle: item.actor_username?.startsWith('@') ? item.actor_username : `@${item.actor_username || ''}`,
         picture: item.actor_avatar || null,
+        verified: Boolean(Number(item.actor_verified || 0)),
         isAutomated: Boolean(Number(item.actor_is_synthetic || 0)),
       } : null,
     })),

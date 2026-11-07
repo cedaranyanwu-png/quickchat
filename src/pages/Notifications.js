@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import Avatar from '../components/Avatar';
+import VerifiedBadge from '../components/VerifiedBadge';
 import { useUnreadCounts } from '../components/UnreadCountsProvider';
 
 const iconFor = (type) => ({
@@ -104,7 +105,7 @@ export default function Notifications() {
           ? <span className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white"><i className="fa-solid fa-comment-dots text-sm" /></span>
           : <span className={`w-9 h-9 rounded-full ${background} flex items-center justify-center ${color}`}><i className={`fa-solid ${icon}`} /></span>}
         {notification.actor && <Avatar name={notification.actor.name} picture={notification.actor.picture} size={36} />}
-        <span className="flex-1 text-sm text-slate-700"><strong className="text-slate-900">{isSystem ? 'QuickChat' : notification.actor?.name || 'A user'}</strong> {notification.text}<span className="block text-xs text-slate-400 mt-1">{notification.time}</span></span>
+        <span className="flex-1 text-sm text-slate-700"><strong className="text-slate-900">{isSystem ? 'QuickChat' : notification.actor?.name || 'A user'} {!isSystem && <VerifiedBadge verified={notification.actor?.verified} />}</strong> {notification.text}<span className="block text-xs text-slate-400 mt-1">{notification.time}</span></span>
         {!notification.read && <span className="h-2.5 w-2.5 rounded-full bg-blue-700" aria-label="Unread" />}
       </button>;
     })}

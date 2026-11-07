@@ -1,5 +1,7 @@
 const express = require('express');
 const db = require('../database');
+const whatsapp = require('../whatsapp');
+const { getVerificationFeeNaira } = require('../platform-config');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -18,7 +20,7 @@ const PERMISSIONS = [
   'roles.view', 'roles.create', 'roles.edit', 'roles.delete', 'permissions.assign',
   'audit_logs.view', 'rss.manage', 'ads.manage', 'analytics.view', 'settings.manage',
   'verification.review', 'moderation.manage', 'admins.manage',
-  'backups.view', 'backups.create', 'backups.download', 'backups.delete',
+  'backups.view', 'backups.create', 'backups.download', 'backups.delete', 'notifications.send',
 ];
 
 const DEFAULT_ROLES = [
@@ -59,6 +61,12 @@ async function initializeAdminTables() {
       permission_id INTEGER NOT NULL REFERENCES admin_permissions(id) ON DELETE CASCADE,
       allowed INTEGER NOT NULL, assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, permission_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS whatsapp_notification_logs (
+      id ${idColumn}, admin_user_id INTEGER NOT NULL, recipient_user_id INTEGER,
+      recipient_phone VARCHAR(24), title VARCHAR(160) NOT NULL, message TEXT NOT NULL,
+      status VARCHAR(24) NOT NULL, provider_message_id VARCHAR(180), error TEXT,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS admin_audit_logs (
       id ${idColumn}, admin_user_id INTEGER NOT NULL, action VARCHAR(120) NOT NULL,
@@ -283,6 +291,38 @@ async function audit(req, action, targetType, targetId, reason, previousState, n
   );
 }
 
+
+router.get('/admin/whatsapp/messages', requirePermission('notifications.send'), asyncRoute(async (_req, res) => {
+  const logs = await db.query('SELECT id, recipient_user_id, recipient_phone, title, message, status, error, created_at FROM whatsapp_notification_logs ORDER BY id DESC LIMIT 100');
+  res.json({ configured: whatsapp.isConfigured(), logs });
+}));
+
+router.post('/admin/whatsapp/messages', requirePermission('notifications.send'), asyncRoute(async (req, res) => {
+  const title = String(req.body?.title || '').trim().slice(0, 160);
+  const message = String(req.body?.message || '').trim().slice(0, 900);
+  const target = String(req.body?.target || 'all');
+  const selectedIds = Array.isArray(req.body?.userIds) ? req.body.userIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, 500) : [];
+  const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.body?.offset, 10) || 0));
+  if (!title || !message) return res.status(400).json({ message: 'Enter both a notification title and message.' });
+  if (!whatsapp.isConfigured()) return res.status(503).json({ message: 'WhatsApp Cloud API is not configured on the server.' });
+  if (target === 'selected' && !selectedIds.length) return res.status(400).json({ message: 'Select at least one recipient.' });
+  const recipients = target === 'selected'
+    ? await db.query(`SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 AND id IN (${selectedIds.map(() => '?').join(',')}) ORDER BY id LIMIT 500`, selectedIds)
+    : await db.query("SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 ORDER BY id LIMIT 250 OFFSET ?", [offset]);
+  let sent = 0; let failed = 0;
+  for (const user of recipients) {
+    const result = await whatsapp.sendAdminNotification(user.whatsapp_phone, title, message);
+    const status = result.delivered ? 'accepted' : result.status || 'failed';
+    await db.insert(
+      'INSERT INTO whatsapp_notification_logs (admin_user_id, recipient_user_id, recipient_phone, title, message, status, provider_message_id, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.id, user.id, user.whatsapp_phone, title, message, status, result.providerMessageId || null, result.error || null],
+    );
+    if (result.delivered) sent += 1; else failed += 1;
+  }
+  await audit(req, 'whatsapp.broadcast_sent', 'whatsapp', null, `WhatsApp notification: ${title}`, null, { target, recipients: recipients.length, accepted: sent, failed });
+  res.json({ message: 'WhatsApp notification batch processed.', total: recipients.length, accepted: sent, failed, offset, nextOffset: offset + recipients.length, hasMore: target !== 'selected' && recipients.length === 250 });
+}));
+
 router.get('/admin/me', asyncRoute(async (req, res) => {
   const permissions = await getPermissions(req.user.id);
   if (!permissions.length) return res.status(403).json({ message: 'Administrative access is required.' });
@@ -395,6 +435,33 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
     [limit],
   );
   res.json({ logs: rows });
+}));
+
+
+async function hasPaidVerificationFee(userId) {
+  const fee = await getVerificationFeeNaira();
+  const payments = await db.query(
+    "SELECT amount FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' ORDER BY id DESC",
+    [userId],
+  );
+  return payments.some((payment) => Number(payment.amount) >= fee);
+}
+
+router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const note = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !note) return res.status(400).json({ message: 'A verification note is required.' });
+  const target = await db.getOne('SELECT id, verified FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  if (Number(target.verified)) return res.status(409).json({ message: 'This account is already verified.' });
+  await db.update("UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = 'admin_review' WHERE id = ?", [userId]);
+  const badge = await db.getOne("SELECT id FROM verification_badges WHERE badge_key = 'verified_individual' AND is_active = 1");
+  if (badge) {
+    const existing = await db.getOne('SELECT id FROM user_badges WHERE user_id = ? AND badge_id = ? AND revoked_at IS NULL', [userId, badge.id]);
+    if (!existing) await db.insert('INSERT INTO user_badges (user_id, badge_id, assigned_by) VALUES (?, ?, ?)', [userId, badge.id, req.user.id]);
+  }
+  await audit(req, 'user.verified_by_admin', 'user', userId, note, { verified: 0 }, { verified: 1, method: 'admin_review' });
+  res.json({ message: 'User verified directly by QuickChat administration.' });
 }));
 
 router.get('/admin/verifications', requirePermission('verification.review'), asyncRoute(async (req, res) => {

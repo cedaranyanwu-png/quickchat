@@ -4,6 +4,8 @@ import { API_BASE_URL, adminRequest } from '../api';
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
+  { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
+  { key: 'moderation', label: 'Post moderation', icon: 'fa-shield-halved', permission: 'posts.view' },
   { key: 'verification', label: 'User verification', icon: 'fa-circle-check', permission: 'verification.review' },
   { key: 'reports', label: 'Reports & complaints', icon: 'fa-flag', permission: 'reports.view' },
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
@@ -56,6 +58,12 @@ export default function Admin() {
   const [permissions, setPermissions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [backups, setBackups] = useState([]);
+  const [whatsappConfig, setWhatsappConfig] = useState(false);
+  const [whatsappLogs, setWhatsappLogs] = useState([]);
+  const [whatsappForm, setWhatsappForm] = useState({ title: '', message: '' });
+  const [whatsappBusy, setWhatsappBusy] = useState(false);
+  const [whatsappOffset, setWhatsappOffset] = useState(0);
+  const [whatsappHasMore, setWhatsappHasMore] = useState(false);
   const [backupRunning, setBackupRunning] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -108,6 +116,10 @@ export default function Admin() {
         const data = await adminRequest('/admin/backups');
         setBackups(data.backups || []);
         setBackupRunning(Boolean(data.running));
+      } else if (key === 'whatsapp') {
+        const data = await adminRequest('/admin/whatsapp/messages');
+        setWhatsappConfig(Boolean(data.configured));
+        setWhatsappLogs(data.logs || []);
       }
     } catch (err) {
       setError(err.message || 'Unable to load this administration section.');
@@ -201,6 +213,29 @@ export default function Admin() {
       await loadSection('users');
     } catch (err) { setError(err.message); }
     finally { setBusyId(null); }
+  };
+
+  const sendWhatsAppBroadcast = async (event) => {
+    event.preventDefault();
+    if (!whatsappForm.title.trim() || !whatsappForm.message.trim()) return;
+    if (!window.confirm(whatsappOffset > 0 ? 'Send the next batch of this WhatsApp notification?' : 'Send this WhatsApp notification to verified users who opted in to QuickChat WhatsApp notifications?')) return;
+    setWhatsappBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await adminRequest('/admin/whatsapp/messages', {
+        method: 'POST',
+        body: { target: 'all', offset: whatsappOffset, title: whatsappForm.title.trim(), message: whatsappForm.message.trim() },
+      });
+      setNotice(`Batch processed: ${result.accepted || 0} accepted by Meta, ${result.failed || 0} failed, ${result.total || 0} recipients.`);
+      setWhatsappOffset(result.nextOffset || 0);
+      setWhatsappHasMore(Boolean(result.hasMore));
+      await loadSection('whatsapp');
+    } catch (err) {
+      setError(err.message || 'WhatsApp notification could not be sent.');
+    } finally {
+      setWhatsappBusy(false);
+    }
   };
 
   const createPlatformBackup = async () => {
@@ -315,6 +350,26 @@ export default function Admin() {
         {notice && <div role="status" className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"><i className="fa-solid fa-circle-check" />{notice}<button className="ml-auto" onClick={() => setNotice('')}><i className="fa-solid fa-xmark" /></button></div>}
         {loading && <div className="mb-4 h-1 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" /></div>}
 
+        {section === 'whatsapp' && <section>
+          <div className="mb-5"><h2 className="text-lg font-black text-slate-900">WhatsApp notifications</h2><p className="mt-1 text-sm text-slate-500">Send service updates and incident notices outside the QuickChat website.</p></div>
+          <div className="mb-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">WhatsApp Cloud API</p><p className={`mt-2 text-sm font-extrabold ${whatsappConfig ? 'text-emerald-700' : 'text-rose-700'}`}>{whatsappConfig ? 'Configured' : 'Not configured'}</p><p className="mt-1 text-xs leading-5 text-slate-500">Requires WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN on the server.</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Recipient policy</p><p className="mt-2 text-sm font-extrabold text-slate-900">Verified + opted in</p><p className="mt-1 text-xs leading-5 text-slate-500">Only users with a verified WhatsApp number and notification consent receive broadcasts.</p></div>
+          </div>
+          <form onSubmit={sendWhatsAppBroadcast} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+            <div className="mb-5"><h3 className="font-extrabold text-slate-900">Compose service notification</h3><p className="mt-1 text-xs leading-5 text-slate-500">Use this for maintenance windows, outages, incident updates and service restoration notices.</p></div>
+            <label className="mb-4 block text-sm font-bold text-slate-700">Notification title<input value={whatsappForm.title} onChange={(event) => setWhatsappForm((form) => ({ ...form, title: event.target.value }))} maxLength={160} required placeholder="QuickChat service update" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" /></label>
+            <label className="mb-4 block text-sm font-bold text-slate-700">Message<textarea value={whatsappForm.message} onChange={(event) => setWhatsappForm((form) => ({ ...form, message: event.target.value }))} maxLength={900} rows={5} required placeholder="We are investigating a temporary service interruption. Your account and content remain safe. We will send another update when service is restored." className="mt-2 w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" /></label>
+            <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">{whatsappForm.message.length}/900 characters · 250 recipients per batch · Approved Meta template required.</p><div className="flex flex-wrap gap-2">{whatsappOffset > 0 && <button type="button" onClick={() => { setWhatsappOffset(0); setWhatsappHasMore(false); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600">Reset batch</button>}<button disabled={whatsappBusy || !whatsappConfig || !whatsappForm.title.trim() || !whatsappForm.message.trim()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><i className="fa-brands fa-whatsapp mr-2" />{whatsappBusy ? 'Processing…' : whatsappOffset > 0 ? 'Send next batch' : 'Send first batch'}</button></div></div>
+            {whatsappHasMore && <p className="mt-3 text-xs font-semibold text-amber-700">More opted-in recipients remain. Send the next batch to continue this notification.</p>}
+          </form>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">Recent WhatsApp activity</h3><p className="mt-1 text-xs text-slate-500">“Accepted” means Meta accepted the API request; it is not a delivery receipt.</p></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Recipient</th><th className="px-4 py-3">Notification</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Time</th></tr></thead><tbody className="divide-y divide-slate-100">{whatsappLogs.map((log) => <tr key={log.id}><td className="px-5 py-3"><p className="font-semibold text-slate-800">{log.recipient_phone || '—'}</p><p className="text-[10px] text-slate-400">User #{log.recipient_user_id || '—'}</p></td><td className="px-4 py-3"><p className="font-bold text-slate-800">{log.title}</p><p className="max-w-md truncate text-xs text-slate-500">{log.message}</p>{log.error && <p className="mt-1 max-w-md text-[10px] text-rose-600">{log.error}</p>}</td><td className="px-4 py-3"><Status value={log.status} /></td><td className="px-4 py-3 text-xs text-slate-500">{formatDate(log.created_at)}</td></tr>)}</tbody></table></div>
+            {!whatsappLogs.length && <p className="p-8 text-center text-sm text-slate-400">No WhatsApp notifications have been sent yet.</p>}
+          </div>
+        </section>}
+
         {section === 'settings' && <section className="max-w-2xl">
           <div className="mb-5"><h2 className="text-lg font-black text-slate-900">Administrator credentials</h2><p className="mt-1 text-sm text-slate-500">Manage the independent username and password used only by this administration portal.</p></div>
           {identity.admin?.mustChangePassword && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Initial setup required.</strong> Change the bootstrap password before using the administration dashboard.</div>}
@@ -343,6 +398,7 @@ export default function Admin() {
           </div>
         </section>}
 
+        {section === 'users' && userActionTarget && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/50 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setUserActionTarget(null); }}><section role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-[10px] font-extrabold uppercase tracking-widest text-blue-700">Account actions</p><h3 className="mt-1 text-lg font-black text-slate-900">{userActionTarget.fullname || userActionTarget.username}</h3><p className="text-xs text-slate-500">{userActionTarget.username} · {userActionTarget.email}</p></div><button onClick={() => setUserActionTarget(null)} className="grid h-8 w-8 place-items-center rounded-full bg-slate-100"><i className="fa-solid fa-xmark" /></button></div><form className="mt-5 space-y-4" onSubmit={(event) => { event.preventDefault(); actOnUser(userActionTarget, userActionKind, userActionReason, userActionDuration); }}><label className="block text-xs font-bold text-slate-700">Action<select value={userActionKind} onChange={(event) => setUserActionKind(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 p-3 text-sm">{can('users.suspend') && userActionTarget.account_status === 'active' && <option value="suspend">Suspend account</option>}{can('users.restore') && userActionTarget.account_status !== 'active' && <option value="restore">Restore account</option>}{can('users.ban') && userActionTarget.account_status !== 'banned' && <option value="ban">Permanently ban account</option>}{can('users.delete') && <option value="delete-request">Request deletion review</option>}{can('users.verify') && !Number(userActionTarget.verified) && <option value="verify">Verify account (admin-granted)</option>}</select></label>{userActionKind === 'suspend' && <label className="block text-xs font-bold text-slate-700">Duration (hours)<input type="number" min="1" max="8760" value={userActionDuration} onChange={(event) => setUserActionDuration(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 p-3 text-sm" /></label>}<label className="block text-xs font-bold text-slate-700">Reason / internal note<textarea required maxLength={2000} rows={3} value={userActionReason} onChange={(event) => setUserActionReason(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 p-3 text-sm" placeholder="Document the reason for this action…" /></label><p className="text-[11px] leading-5 text-slate-500">{userActionKind === 'verify' ? 'Admin verification is granted directly by QuickChat administration and does not require a user payment or paid application. This is separate from the paid verification application in the Verification section.' : 'Every administrative action is recorded in the audit log.'}</p><div className="flex justify-end gap-2"><button type="button" onClick={() => setUserActionTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-bold">Cancel</button><button disabled={busyId === userActionTarget.id || !userActionReason.trim()} className="rounded-lg bg-blue-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{busyId === userActionTarget.id ? 'Processing…' : 'Confirm action'}</button></div></form></section></div>}
         {section === 'verification' && <section><div className="mb-5"><h2 className="text-lg font-black text-slate-900">Verification review queue</h2><p className="mt-1 text-sm text-slate-500">Review applications before awarding the QuickChat verification badge.</p></div><div className="space-y-3">{verifications.map((app) => <article key={app.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-start gap-3"><img src={app.avatar_url || app.picture || '/favicon/favicon-32x32.png'} alt="" className="h-11 w-11 rounded-full bg-slate-100 object-cover" /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="font-extrabold text-slate-900">{app.fullname || app.username}</h3><Status value={app.status} /></div><p className="mt-1 text-xs text-slate-500">{app.username} · {app.account_category} · Submitted {formatDate(app.created_at)}</p></div></div><p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{app.reason}</p><div className="mt-4 flex flex-wrap gap-2">{(() => { try { return JSON.parse(app.supporting_links || '[]'); } catch { return []; } })().map((link) => <a key={link} href={link} target="_blank" rel="noreferrer" className="text-xs font-semibold text-blue-700">{link}</a>)}</div><div className="mt-5 flex flex-wrap gap-2"><button disabled={busyId === app.id} onClick={() => reviewVerification(app, 'approved')} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">Approve</button><button disabled={busyId === app.id} onClick={() => reviewVerification(app, 'needs_information')} className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-bold text-amber-800 disabled:opacity-50">Request information</button><button disabled={busyId === app.id} onClick={() => reviewVerification(app, 'rejected')} className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700 disabled:opacity-50">Reject</button></div></article>)}{!verifications.length && !loading && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center"><i className="fa-solid fa-certificate text-2xl text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-500">No pending verification applications.</p></div>}</div></section>}
 
         {section === 'reports' && <section><div className="mb-5"><h2 className="text-lg font-black text-slate-900">Reports & complaints</h2><p className="mt-1 text-sm text-slate-500">Prioritized moderation reports awaiting review.</p></div><div className="space-y-3">{reports.map((report) => <article key={report.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex flex-wrap items-center gap-2"><span className="text-xs font-black text-slate-400">#{report.id}</span><Status value={report.status} /><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold capitalize text-slate-600">{report.priority} priority</span><span className="ml-auto text-[11px] text-slate-400">{formatDate(report.created_at)}</span></div><h3 className="mt-3 font-extrabold text-slate-900">{report.category} · {report.entity_type} {report.entity_id}</h3><p className="mt-1 text-xs text-slate-500">Reported by {report.reporter_username || 'Unknown user'}{report.assignee_username ? ` · Assigned to ${report.assignee_username}` : ''}</p><p className="mt-3 text-sm leading-6 text-slate-700">{report.description || 'No additional description supplied.'}</p><div className="mt-4 flex flex-wrap gap-2"><button disabled={busyId === report.id} onClick={() => resolveReport(report, 'resolved')} className="rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white">Mark resolved</button><button disabled={busyId === report.id} onClick={() => resolveReport(report, 'dismissed')} className="rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-600">Dismiss report</button><button disabled={busyId === report.id} onClick={() => resolveReport(report, 'escalated')} className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 text-xs font-bold text-rose-700">Escalate</button></div></article>)}{!reports.length && !loading && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">No pending reports.</div>}</div></section>}
