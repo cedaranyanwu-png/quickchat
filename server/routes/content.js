@@ -735,7 +735,7 @@ async function syncVideoLibrary() {
       if (!existing) {
         const inserted = await db.insert(
           'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
-          [post.body ? String(post.body).slice(0, 180) : 'Video', post.body || '', item.url, item.thumbnailUrl || null, ''],
+          [post.author_id, post.body ? String(post.body).slice(0, 180) : 'Video', post.body || '', item.url, item.thumbnailUrl || null, ''],
         );
         existing = inserted?.id ? { id: inserted.id } : null;
       }
