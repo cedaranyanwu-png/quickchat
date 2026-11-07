@@ -63,7 +63,7 @@ router.post('/media', asyncRoute(async (req, res) => {
     await pipeline(req, meter, fs.createWriteStream(filePath, { flags: 'wx' }));
     if (tooLarge) {
       await fsPromises.rm(filePath, { force: true });
-      return res.status(413).json({ message: `This file exceeds the ${mimeType.startsWith('video/') ? '500 MB' : '15 MB'} upload limit.` });
+      return res.status(413).json({ message: `This file exceeds the ${mimeType.startsWith('video/') ? '500 MB' : mimeType.startsWith('audio/') ? '30 MB' : '15 MB'} upload limit.` });
     }
     if (bytes === 0) {
       await fsPromises.rm(filePath, { force: true });
