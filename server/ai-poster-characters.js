@@ -225,7 +225,7 @@ async function generateCharacterSelfies(database, options = {}) {
     if (!account) continue;
     try {
       const currentUrl = account.avatar_url || account.picture || '';
-      const existingFilename = currentUrl.match(/\\/uploads\\/([a-f0-9-]{36}\\.(?:jpg|png|webp))$/i)?.[1];
+      const existingFilename = currentUrl.match(/\/uploads\/([a-f0-9-]{36}\.(?:jpg|png|webp))$/i)?.[1];
       if (existingFilename && await database.getOne(
         'SELECT id FROM media_uploads WHERE filename = ? AND owner_id = ?',
         [existingFilename, account.id],
