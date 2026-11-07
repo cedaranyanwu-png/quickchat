@@ -110,6 +110,26 @@ export default function ProfilePage({ username, openModal, openVideo }) {
   if (loading && !profile) return <p className="p-8 text-center text-sm text-slate-500">Loading profile…</p>;
   return <div className="max-w-4xl mx-auto pb-20 lg:pb-0">
     <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-200 z-10 px-4 py-2 flex items-center gap-4"><button onClick={() => navigate(-1)} className="w-8 h-8 rounded-full hover:bg-slate-100"><i className="fa-solid fa-arrow-left"/></button><div><h2 className="text-base font-extrabold text-slate-900">{profile?.fullName || 'Profile'}</h2><p className="text-[10px] text-slate-500">{profile?.postCount || 0} posts</p></div></div>
+    <button
+      type="button"
+      onClick={() => profile?.coverImage && openModal?.(profile.coverImage)}
+      disabled={!profile?.coverImage}
+      aria-label={profile?.coverImage ? 'View full cover image' : 'No cover image'}
+      className="group relative block h-36 w-full border-0 bg-slate-200 bg-cover bg-center p-0 text-left disabled:cursor-default"
+      style={{ backgroundImage: profile?.coverImage ? `url(${profile.coverImage})` : undefined }}
+    >
+      {profile?.coverImage && <span className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100"><i className="fa-solid fa-expand" /></span>}
+    </button>
+    <section className="px-4 pb-4 border-b border-slate-200"><div className="flex justify-between items-end -mt-9 mb-2">
+        <button
+          type="button"
+          onClick={() => profile?.picture && openModal?.(profile.picture)}
+          disabled={!profile?.picture}
+          aria-label={profile?.picture ? 'View full profile image' : 'No profile image'}
+          className="rounded-full border-0 bg-transparent p-0 disabled:cursor-default"
+        >
+          <Avatar name={profile?.fullName} picture={profile?.picture} size={84} className="border-4 border-white transition-transform hover:scale-[1.02]"/>
+        </button>{isOwnProfile ? <div className="flex flex-wrap justify-end gap-2"><button onClick={() => navigate('/profile/edit')} className="px-4 py-2 border border-slate-300 rounded-full font-bold text-xs hover:bg-slate-50">Edit profile</button><button onClick={() => navigate('/verification')} className="px-4 py-2 border border-blue-200 text-blue-700 rounded-full font-bold text-xs hover:bg-blue-50">{profile?.verified ? 'Verification' : 'Verify account'}</button></div> : <div className="flex flex-wrap justify-end gap-2"><button onClick={toggleFollow} className={`px-4 py-2 rounded-full font-bold text-xs ${profile?.isFollowing ? 'bg-slate-200 text-slate-900' : 'bg-blue-700 text-white'}`}>{profile?.isFollowing ? 'Following' : 'Follow'}</button><button onClick={() => navigate(`/messages?userId=${encodeURIComponent(profile.id)}`)} className="px-4 py-2 border border-blue-200 text-blue-700 rounded-full font-bold text-xs hover:bg-blue-50"><i className="fa-solid fa-envelope mr-1.5"/>Message</button></div>}</div>
     <button type="button" disabled={!profile?.coverImage} onClick={() => profile?.coverImage && openModal?.(profile.coverImage)} className="group relative block h-36 w-full overflow-hidden border-0 bg-slate-200 bg-cover bg-center text-left disabled:cursor-default" style={{ backgroundImage: profile?.coverImage ? `url(${profile.coverImage})` : undefined }} aria-label={profile?.coverImage ? 'View cover image' : undefined}>
       {profile?.coverImage && <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100"><span className="rounded-full bg-black/55 px-3 py-2 text-xs font-bold"><i className="fa-solid fa-expand mr-1.5" />View image</span></span>}
     </button>

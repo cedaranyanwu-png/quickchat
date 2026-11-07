@@ -659,6 +659,8 @@ router.post('/videos/:videoId/views', asyncRoute(async (req, res) => {
 
 router.post('/videos/:videoId/likes', asyncRoute(async (req, res) => {
   const videoId = positiveId(req.params.videoId);
+  if (!videoId) return res.status(400).json({ message: 'Invalid video ID.' });
+  const video = await db.getOne('SELECT id, user_id FROM videos WHERE id = ?', [videoId]);
   const video = videoId ? await db.getOne('SELECT id, user_id FROM videos WHERE id = ?', [videoId]) : null;
   if (!video) return notFound(res, 'Video not found.');
   const existing = await db.getOne('SELECT user_id FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
@@ -668,6 +670,8 @@ router.post('/videos/:videoId/likes', asyncRoute(async (req, res) => {
       await notifyUser({ userId: video.user_id, actorId: req.user.id, type: 'video_like', text: 'liked your video' });
     }
   }
+  const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
+  res.json({ liked: true, likes });
   res.json({ liked: true, likes: await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]) });
 }));
 
@@ -677,6 +681,8 @@ router.delete('/videos/:videoId/likes', asyncRoute(async (req, res) => {
   const video = await db.getOne('SELECT id FROM videos WHERE id = ?', [videoId]);
   if (!video) return notFound(res, 'Video not found.');
   await db.delete('DELETE FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
+  const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
+  res.json({ liked: false, likes });
   res.json({ liked: false, likes: await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]) });
 }));
 

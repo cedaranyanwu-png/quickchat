@@ -71,7 +71,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (!presenceSessionId.current) {
     presenceSessionId.current = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const openModal = (src) => setModalImage(src);
+  const openModal = (src, type = 'image') => setModalImage({ src, type });
   const closeModal = () => setModalImage(null);
   const openPostModal = () => setIsPostModalOpen(true);
   const closePostModal = () => setIsPostModalOpen(false);
@@ -170,6 +170,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/profile/edit" element={<EditProfile />} />
             <Route path="/settings" element={<SettingsHub onLogout={() => {
               apiRequest('/messages/presence', { method: 'DELETE', body: { sessionId: presenceSessionId.current }, keepalive: true }).catch(() => {});
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              onAuthenticated(false);
+            }} />} />
+            <Route path="/menu" element={<Menu onLogout={() => onAuthenticated(false)} />} />
               onAuthenticated(false);
             }} />} />
             <Route path="/settings/wallet" element={<Wallet />} />
@@ -186,6 +191,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         {!isVideosPage && !isMessagesPage && <div className="fixed bottom-20 right-4 z-40 lg:hidden"><FAB onOpenPost={openPostModal} /></div>}
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
+        {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
+          <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
+          {modalImage.type === 'video'
+            ? <video src={modalImage.src} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            : <img src={modalImage.src} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />}
         {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 sm:p-6" onClick={closeModal}>
           <button className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/50 text-xl text-white" onClick={closeModal} aria-label="Close media"><i className="fa-solid fa-xmark" /></button>
           {typeof modalImage === 'string'
