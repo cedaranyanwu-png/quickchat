@@ -163,7 +163,7 @@ export default function StatusStrip() {
 }
 
 function StatusAvatar({ group, onClick }) {
-  const count = Math.max(1, segments.length);
+  const count = Math.max(1, group.statuses.length);
   const slice = 360 / count;
   const stops = group.statuses.map((status, index) => {
     const color = status.viewed ? '#cbd5e1' : '#123b8a';
