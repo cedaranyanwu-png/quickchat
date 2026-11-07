@@ -260,7 +260,7 @@ router.post('/google', async (req, res) => {
       return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
     }
     if (Number(user.whatsapp_phone_verified || 0) !== 1) {
-      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
+      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email, whatsappPhone: user.whatsapp_phone });
     }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
