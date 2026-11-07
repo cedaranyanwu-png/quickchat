@@ -2,8 +2,89 @@ const crypto = require('node:crypto');
 const express = require('express');
 const { db, asyncRoute, clampLimit, notFound, uniqueConstraint } = require('./utils');
 const { notifyUser } = require('../notify');
+const { currentBalance, spendPoints, creditPoints } = require('../wallet');
 
 const router = express.Router();
+
+const DAILY_CHAT_PASS_POINTS = 1000;
+const MAX_CHAT_PRICE_POINTS = 100000;
+
+router.get('/messages/monetization', asyncRoute(async (req, res) => {
+  const settings = await db.getOne('SELECT enabled, price_points FROM creator_chat_settings WHERE user_id = ?', [req.user.id]);
+  res.json({ enabled: Boolean(Number(settings?.enabled || 0)), pricePoints: Number(settings?.price_points || 100), balance: await currentBalance(req.user.id) });
+}));
+
+router.patch('/messages/monetization', asyncRoute(async (req, res) => {
+  const user = await db.getOne('SELECT id, is_synthetic FROM users WHERE id = ?', [req.user.id]);
+  if (!user || Number(user.is_synthetic || 0) === 1) return res.status(403).json({ message: 'This account cannot monetize incoming chats.' });
+  const enabled = req.body?.enabled === true;
+  const pricePoints = Math.trunc(Number(req.body?.pricePoints));
+  if (enabled && (!Number.isSafeInteger(pricePoints) || pricePoints < 1 || pricePoints > MAX_CHAT_PRICE_POINTS)) {
+    return res.status(400).json({ message: 'Choose a chat price from 1 to 100,000 points.' });
+  }
+  const existing = await db.getOne('SELECT user_id FROM creator_chat_settings WHERE user_id = ?', [req.user.id]);
+  if (existing) {
+    await db.update('UPDATE creator_chat_settings SET enabled = ?, price_points = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', [enabled ? 1 : 0, enabled ? pricePoints : Math.max(1, pricePoints || 100), req.user.id]);
+  } else {
+    await db.insert('INSERT INTO creator_chat_settings (user_id, enabled, price_points) VALUES (?, ?, ?)', [req.user.id, enabled ? 1 : 0, enabled ? pricePoints : Math.max(1, pricePoints || 100)]);
+  }
+  res.json({ enabled, pricePoints: enabled ? pricePoints : Math.max(1, pricePoints || 100) });
+}));
+
+router.get('/messages/access', asyncRoute(async (req, res) => {
+  const pass = await db.getOne('SELECT expires_at_ms FROM chat_day_passes WHERE user_id = ?', [req.user.id]);
+  const expiresAt = Number(pass?.expires_at_ms || 0);
+  res.json({ balance: await currentBalance(req.user.id), dailyPassPoints: DAILY_CHAT_PASS_POINTS, active: expiresAt > Date.now(), expiresAt: expiresAt > Date.now() ? expiresAt : null });
+}));
+
+router.post('/messages/access/day-pass', asyncRoute(async (req, res) => {
+  const now = Date.now();
+  const current = await db.getOne('SELECT expires_at_ms FROM chat_day_passes WHERE user_id = ?', [req.user.id]);
+  if (Number(current?.expires_at_ms || 0) > now) {
+    return res.json({ active: true, expiresAt: Number(current.expires_at_ms), balance: await currentBalance(req.user.id) });
+  }
+  const reference = `chat_day_pass_${req.user.id}_${now}_${crypto.randomUUID()}`;
+  const spent = await spendPoints(req.user.id, DAILY_CHAT_PASS_POINTS, { kind: 'chat_day_pass', reference });
+  if (!spent.ok) return res.status(402).json({ message: 'You need 1,000 points to activate a 24-hour advanced chat pass.', balance: spent.balance });
+  const expiresAt = now + 24 * 60 * 60 * 1000;
+  try {
+    if (current) await db.update('UPDATE chat_day_passes SET expires_at_ms = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', [expiresAt, req.user.id]);
+    else await db.insert('INSERT INTO chat_day_passes (user_id, expires_at_ms) VALUES (?, ?)', [req.user.id, expiresAt]);
+  } catch (error) {
+    await creditPoints(req.user.id, DAILY_CHAT_PASS_POINTS, { kind: 'chat_day_pass_refund', reference: `${reference}_refund` });
+    throw error;
+  }
+  res.status(201).json({ active: true, expiresAt, balance: await currentBalance(req.user.id) });
+}));
+
+router.post('/messages/conversations/:conversationId/unlock', asyncRoute(async (req, res) => {
+  const conversationId = positiveId(req.params.conversationId);
+  if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  const creator = await db.getOne(
+    `SELECT u.id, u.is_synthetic, s.enabled, s.price_points
+       FROM conversation_members cm JOIN users u ON u.id = cm.user_id
+       JOIN creator_chat_settings s ON s.user_id = u.id
+      WHERE cm.conversation_id = ? AND cm.user_id <> ? LIMIT 1`,
+    [conversationId, req.user.id],
+  );
+  if (!creator || Number(creator.enabled) !== 1) return res.status(400).json({ message: 'This creator has not enabled paid chat.' });
+  if (Number(creator.is_synthetic || 0) === 1) return res.status(403).json({ message: 'Paid chat is unavailable for automated accounts.' });
+  const existing = await db.getOne('SELECT id FROM paid_chat_unlocks WHERE conversation_id = ? AND buyer_id = ? AND creator_id = ?', [conversationId, req.user.id, creator.id]);
+  if (existing) return res.json({ unlocked: true, alreadyUnlocked: true, balance: await currentBalance(req.user.id) });
+  const points = Math.max(1, Math.min(MAX_CHAT_PRICE_POINTS, Math.trunc(Number(creator.price_points) || 100)));
+  const reference = `paid_chat_${conversationId}_${req.user.id}_${creator.id}`;
+  const spent = await spendPoints(req.user.id, points, { kind: 'paid_chat_unlock', reference });
+  if (!spent.ok) return res.status(402).json({ message: `You need ${points.toLocaleString('en-NG')} points to unlock this chat.`, pricePoints: points, balance: spent.balance });
+  try {
+    await creditPoints(creator.id, points, { kind: 'paid_chat_earning', reference: `${reference}_creator` });
+    await db.insert('INSERT INTO paid_chat_unlocks (conversation_id, buyer_id, creator_id, points) VALUES (?, ?, ?, ?)', [conversationId, req.user.id, creator.id, points]);
+  } catch (error) {
+    await creditPoints(req.user.id, points, { kind: 'paid_chat_refund', reference: `${reference}_refund` });
+    throw error;
+  }
+  res.status(201).json({ unlocked: true, pricePoints: points, balance: await currentBalance(req.user.id) });
+}));
+
 const PRESENCE_TTL_MS = 45_000;
 const TYPING_TTL_MS = 5_000;
 const onlineSessions = new Map();
@@ -215,6 +296,17 @@ router.post('/messages/conversations/:conversationId/messages', asyncRoute(async
   const mediaUploadId = positiveId(req.body?.mediaUploadId);
   const replyToMessageId = positiveId(req.body?.replyToMessageId);
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  const chatCreator = await db.getOne(
+    'SELECT u.id, s.enabled FROM conversation_members cm JOIN users u ON u.id = cm.user_id LEFT JOIN creator_chat_settings s ON s.user_id = u.id WHERE cm.conversation_id = ? AND cm.user_id <> ? LIMIT 1',
+    [conversationId, req.user.id],
+  );
+  if (chatCreator && Number(chatCreator.enabled || 0) === 1 && Number(chatCreator.id) !== Number(req.user.id)) {
+    const unlocked = await db.getOne('SELECT id FROM paid_chat_unlocks WHERE conversation_id = ? AND buyer_id = ? AND creator_id = ?', [conversationId, req.user.id, chatCreator.id]);
+    if (!unlocked) {
+      const settings = await db.getOne('SELECT price_points FROM creator_chat_settings WHERE user_id = ?', [chatCreator.id]);
+      return res.status(402).json({ message: 'Unlock this creator’s chat before sending your first message.', requiresPayment: true, pricePoints: Number(settings?.price_points || 100) });
+    }
+  }
   if (text.length > 5000 || (!text && !mediaUploadId)) return res.status(400).json({ message: 'Add a message or attach a supported media file.' });
 
   let upload = null;
@@ -257,6 +349,8 @@ router.post('/messages/calls/start', asyncRoute(async (req, res) => {
   const conversationId = positiveId(req.body?.conversationId);
   const mediaType = req.body?.mediaType === 'video' ? 'video' : req.body?.mediaType === 'audio' ? 'audio' : null;
   if (!conversationId || !mediaType || !await isMember(conversationId, req.user.id)) return res.status(400).json({ message: 'A valid conversation and call type are required.' });
+  const dayPass = await db.getOne('SELECT expires_at_ms FROM chat_day_passes WHERE user_id = ?', [req.user.id]);
+  if (Number(dayPass?.expires_at_ms || 0) <= Date.now()) return res.status(402).json({ message: 'A 24-hour advanced chat pass costs 1,000 points.', requiresDayPass: true, pricePoints: DAILY_CHAT_PASS_POINTS, balance: await currentBalance(req.user.id) });
   const other = await db.getOne(
     'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?',
     [conversationId, req.user.id],
@@ -342,7 +436,8 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
     const maxId = Math.max(...rows.map((row) => Number(row.id)));
     await db.delete('DELETE FROM message_call_signals WHERE to_user_id = ? AND id <= ?', [req.user.id, maxId]);
   }
-  await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [now - 86400000]);
+  // SDP/ICE signaling is transient only; never retain call signaling payloads beyond two minutes.
+  await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [now - 120000]);
   await db.delete('DELETE FROM message_calls WHERE created_at_ms < ?', [now - 1209600000]);
   res.json({ iceServers: iceServers(), signals: rows.map((row) => ({
     id: row.id, callId: row.call_id, from: row.from_user_id, kind: row.kind,
