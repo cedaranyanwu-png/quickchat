@@ -13,6 +13,15 @@ const epochType = db.type === 'sqlite' ? 'INTEGER' : 'BIGINT';
 
 async function initializePageTables() {
   const statements = [
+    `CREATE TABLE IF NOT EXISTS statuses (
+      id ${idColumn}, user_id INTEGER NOT NULL, status_type VARCHAR(12) NOT NULL DEFAULT 'text',
+      text VARCHAR(700), media_url TEXT, background_color VARCHAR(7) NOT NULL DEFAULT '#123b8a',
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, expires_at ${dateType} NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS status_views (
+      status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (status_id, viewer_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS posts (
       id ${idColumn}, author_id INTEGER NOT NULL, body TEXT NOT NULL,
       kind VARCHAR(20) NOT NULL DEFAULT 'text', category VARCHAR(80), media TEXT, video_id INTEGER,
@@ -390,6 +399,8 @@ async function addMissingPostColumns() {
 
 async function ensureIndexes() {
   const indexes = [
+    ['statuses_user_expiry_idx', 'statuses (user_id, expires_at)', false],
+    ['status_views_viewer_idx', 'status_views (viewer_id, status_id)', false],
     ['posts_source_link_unique_idx', 'posts (source_link)', true],
     ['payment_transactions_checkout_unique_idx', 'payment_transactions (checkout_id)', true],
     ['payment_checkouts_flutterwave_ref_unique_idx', 'payment_checkouts (flutterwave_tx_ref)', true],
