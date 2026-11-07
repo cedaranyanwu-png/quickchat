@@ -90,6 +90,7 @@ app.get('/api/ads/click/:campaignId', adsRoutes);
 app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
   try {
     const pointsPurchase = String(req.query.tx_ref || '').startsWith('qcpts_');
+    const verificationPurchase = String(req.query.tx_ref || '').startsWith('qcverify_');
     const paid = await verifyAndProcessPayment({
       transactionId: req.query.transaction_id,
       txRef: req.query.tx_ref,
@@ -98,7 +99,9 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
     // Points buyers return to the live hub, where the wallet balance is shown.
     res.redirect(pointsPurchase
       ? `${publicAppUrl()}/live?points=${result}`
-      : `${publicAppUrl()}/home?payment=${result}`);
+      : verificationPurchase
+        ? `${publicAppUrl()}/verification?payment=${result}`
+        : `${publicAppUrl()}/home?payment=${result}`);
   } catch (error) {
     next(error);
   }
