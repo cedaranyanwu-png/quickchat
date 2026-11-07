@@ -725,6 +725,25 @@ router.post('/admin/security/change-password', asyncRoute(async (req, res) => {
   res.json({ message: 'Password updated. Your administrator account is now ready.' });
 }));
 
+router.put('/admin/security/password', asyncRoute(async (req, res) => {
+  if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can change this administrator password.' });
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  const confirmPassword = String(req.body?.confirmPassword || '');
+  if (!currentPassword || newPassword.length < 12 || newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'Enter your current password and matching new passwords of at least 12 characters.' });
+  }
+  const account = await db.getOne('SELECT password FROM users WHERE id = ?', [req.user.id]);
+  if (!account?.password || !(await bcrypt.compare(currentPassword, account.password))) {
+    return res.status(401).json({ message: 'The current password is incorrect.' });
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.update('UPDATE users SET password = ? WHERE id = ?', [passwordHash, req.user.id]);
+  await db.update('UPDATE admin_owner_security SET must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP WHERE user_id = ?', [req.user.id]);
+  await audit(req, 'admin.owner_password_changed', 'user', req.user.id, 'Main owner password changed');
+  res.json({ message: 'Administrator password updated.' });
+}));
+
 router.put('/admin/security/username', asyncRoute(async (req, res) => {
   if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can change this administrator username.' });
   const currentPassword = String(req.body?.currentPassword || '');
