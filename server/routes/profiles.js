@@ -6,7 +6,7 @@ const {
 const { normalizeSelectedInterests } = require('../algorithm');
 const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
-const { getVerificationFeePoints } = require('../platform-config');
+const { getVerificationFeeNaira } = require('../platform-config');
 const { flutterwaveRequest, isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured, publicAppUrl, flutterwaveWebhookUrl } = require('../flutterwave');
 
 const router = express.Router();
@@ -109,7 +109,7 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
     [req.user.id],
   );
   if (!row) return notFound(res, 'User not found.');
-  const verificationPoints = await getVerificationFeePoints();
+  const verificationPrice = await getVerificationFeeNaira();
   const payment = await db.getOne(
     'SELECT status, amount, currency, paid_at, created_at FROM verification_fee_payments WHERE user_id = ? ORDER BY id DESC LIMIT 1',
     [req.user.id],
@@ -118,8 +118,8 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
     verified: Boolean(Number(row.verified || 0)),
     verifiedAt: row.verified_at || null,
     verificationMethod: row.verification_method || null,
-    planPrice: String(verificationPoints),
-    planPoints: verificationPoints,
+    planPrice: String(verificationPrice),
+    
     currency: 'NGN',
     paymentStatus: payment?.status || 'unpaid',
     payment,
@@ -133,7 +133,7 @@ router.post('/verification/checkout', asyncRoute(async (req, res) => {
   if (!isFlutterwaveSecretConfigured() || !isFlutterwaveWebhookSecretConfigured()) {
     return res.status(503).json({ message: 'Flutterwave is not fully configured. Please contact QuickChat support.' });
   }
-  const fee = await getVerificationFeePoints();
+  const fee = await getVerificationFeeNaira();
   const pending = await db.getOne("SELECT checkout_url, tx_ref FROM verification_fee_payments WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", [req.user.id]);
   if (pending?.checkout_url && pending.tx_ref) return res.json({ checkoutUrl: pending.checkout_url, txRef: pending.tx_ref });
   const txRef = `qcverify_${req.user.id}_${crypto.randomUUID()}`;
