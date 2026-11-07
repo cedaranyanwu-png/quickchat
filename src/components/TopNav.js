@@ -32,6 +32,9 @@ const TopNav = () => {
           <i className="fa-regular fa-bell text-slate-700 text-sm"></i>
           <UnreadBadge count={unreadCounts.notifications} className="absolute -right-2 -top-2" />
         </button>
+        <button onClick={() => navigate('/menu')} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors" aria-label="Menu">
+          <i className="fa-solid fa-bars text-slate-700 text-sm" />
+        </button>
       </div>
     </div>
   );
