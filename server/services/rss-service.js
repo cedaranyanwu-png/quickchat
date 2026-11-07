@@ -122,7 +122,20 @@ function validExternalUrl(value, allowHttp = true) {
   } catch { return null; }
 }
 
-function itemImage(item) {
+async function isPublicExternalUrl(value) {
+  let url;
+  try { url = new URL(value); } catch { return false; }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return false;
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname.endsWith('.local') || hostname.endsWith('.internal')) return false;
+  if (net.isIP(hostname)) return !isPrivateAddress(hostname);
+  try {
+    const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    return addresses.length > 0 && addresses.every((entry) => !isPrivateAddress(entry.address));
+  } catch { return false; }
+}
+
+async function itemImage(item) {
   const candidates = [
     item.enclosure && item.enclosure.url, item.image && item.image.url,
     item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url,
@@ -133,7 +146,11 @@ function itemImage(item) {
   const html = String(item.contentEncoded || item.content || item.description || '');
   const match = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
   if (match) candidates.push(match[1]);
-  return candidates.map((candidate) => validExternalUrl(candidate, false)).find(Boolean) || null;
+  for (const candidate of candidates) {
+    const safeUrl = validExternalUrl(candidate, false);
+    if (safeUrl && await isPublicExternalUrl(safeUrl)) return safeUrl;
+  }
+  return null;
 }
 
 function normalizedUrlForHash(value) {
@@ -191,12 +208,12 @@ async function syncSource(sourceId, { force = false } = {}) {
     for (const item of result.items) {
       const articleUrl = validExternalUrl(item.link || item.url);
       const title = String(item.title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
-      if (!articleUrl || !title) continue;
+      if (!articleUrl || !title || !(await isPublicExternalUrl(articleUrl))) continue;
       const guid = normalizedGuid(item, articleUrl);
       const guidHash = crypto.createHash('sha256').update(guid).digest('hex');
       const urlHash = crypto.createHash('sha256').update(normalizedUrlForHash(articleUrl)).digest('hex');
       const excerpt = plainExcerpt(item.contentSnippet || item.contentEncoded || item.content || item.description);
-      const imageUrl = itemImage(item);
+      const imageUrl = await itemImage(item);
       const category = String(item.categories && item.categories[0] || sourceCategories[0] || 'News').slice(0, 80);
       const keywords = [...new Set([...(item.categories || []), ...title.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3)])].slice(0, 24);
       try {
