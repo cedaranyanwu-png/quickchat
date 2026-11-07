@@ -1,4 +1,5 @@
 const dns = require('node:dns').promises;
+const crypto = require('node:crypto');
 const net = require('node:net');
 const http = require('node:http');
 const https = require('node:https');
@@ -43,6 +44,7 @@ function isPrivateAddress(address) {
 async function validateFeedUrl(value) {
   let url;
   try { url = new URL(String(value || '').trim()); } catch { throw new Error('Enter a valid RSS feed URL.'); }
+  if (url.toString().length > 512) throw new Error('RSS feed URL must be 512 characters or fewer.');
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
     throw new Error('RSS feeds must use HTTP or HTTPS and cannot contain credentials.');
   }
@@ -182,14 +184,16 @@ async function syncSource(sourceId, { force = false } = {}) {
       const title = String(item.title || '').replace(/\s+/g, ' ').trim().slice(0, 300);
       if (!articleUrl || !title) continue;
       const guid = normalizedGuid(item, articleUrl);
+      const guidHash = crypto.createHash('sha256').update(guid).digest('hex');
+      const urlHash = crypto.createHash('sha256').update(articleUrl.toLowerCase()).digest('hex');
       const excerpt = plainExcerpt(item.contentSnippet || item.contentEncoded || item.content || item.description);
       const imageUrl = itemImage(item);
       const category = String(item.categories && item.categories[0] || sourceCategories[0] || 'News').slice(0, 80);
       const keywords = [...new Set([...(item.categories || []), ...title.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3)])].slice(0, 24);
       try {
         await db.insert(
-          'INSERT INTO rss_articles (source_id, publisher, guid, article_url, title, excerpt, image_url, category, keywords, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [sourceId, publisher, guid, articleUrl, title, excerpt || null, imageUrl, category, JSON.stringify(keywords), parsePublishedAt(item)],
+          'INSERT INTO rss_articles (source_id, publisher, guid, guid_hash, url_hash, article_url, title, excerpt, image_url, category, keywords, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [sourceId, publisher, guid, guidHash, urlHash, articleUrl, title, excerpt || null, imageUrl, category, JSON.stringify(keywords), parsePublishedAt(item)],
         );
         counts.imported += 1;
       } catch (error) {
