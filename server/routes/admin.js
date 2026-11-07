@@ -195,7 +195,9 @@ async function initializeAdminTables() {
     if (owner && role) {
       await db.query(
         'INSERT INTO admin_user_roles (user_id, role_id, assigned_by, is_active) VALUES (?, ?, ?, 1) ' +
-        (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE user_id = user_id' : 'ON CONFLICT(user_id, role_id) DO NOTHING'),
+        (db.type === 'mysql'
+          ? 'ON DUPLICATE KEY UPDATE assigned_by = VALUES(assigned_by), is_active = 1'
+          : 'ON CONFLICT(user_id, role_id) DO UPDATE SET assigned_by = excluded.assigned_by, is_active = 1'),
         [owner.id, role.id, owner.id],
       );
     }
