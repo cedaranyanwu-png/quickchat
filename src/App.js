@@ -136,6 +136,12 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
   }
 
+  // The administration console is an independent portal and must be reachable
+  // without creating or signing into a QuickChat member account.
+  if (location.pathname.replace(/\\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  }
+
   if (isLiveWatchPage) {
     return <Routes><Route path="/live/:sessionId" element={<Live />} /><Route path="*" element={<Navigate to="/live" replace />} /></Routes>;
   }
