@@ -52,7 +52,7 @@ function formatDate(value) {
   return Number.isNaN(date.getTime()) ? 'Recently published' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-export default function Discover({ openModal, openVideo }) {
+export default function Discover({ openModal, openVideo, embedded = false }) {
   const navigate = useNavigate();
   const [category, setCategory] = useState('For You');
   const [articles, setArticles] = useState([]);
@@ -148,19 +148,19 @@ export default function Discover({ openModal, openVideo }) {
   };
 
   return (
-    <div className="mx-auto min-h-screen max-w-5xl bg-slate-50 pb-24 lg:pb-12">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md">
+    <div className={embedded ? "mx-auto min-h-0 max-w-none bg-transparent pb-6" : "mx-auto min-h-screen max-w-5xl bg-slate-50 pb-24 lg:pb-12"}>
+      <header className={`${embedded ? "relative" : "sticky top-0"} z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md`}>
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-700">QuickChat</div>
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">Discover</h1>
-            <p className="mt-0.5 text-xs text-slate-500">Ideas, people and conversations worth your time.</p>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-900">RSS Feed</h1>
+            <p className="mt-0.5 text-xs text-slate-500">Publisher articles selected around your interests.</p>
           </div>
           <button type="button" onClick={() => load({ nextPage: 1 })} className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-100" aria-label="Refresh recommendations">
             <i className="fa-solid fa-rotate" />
           </button>
         </div>
-        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar" aria-label="Discover categories">
+        <nav className="mt-3 flex gap-2 overflow-x-auto pb-1 no-scrollbar" aria-label="RSS feed categories">
           {CATEGORIES.map((item) => (
             <button key={item} type="button" onClick={() => setCategory(item)} className={'whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-bold transition ' + (category === item ? 'bg-blue-700 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:text-blue-700')}>
               {item}
