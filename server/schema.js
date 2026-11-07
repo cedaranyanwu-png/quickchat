@@ -410,6 +410,7 @@ async function ensureIndexes() {
     ['boosted_promotions_post_idx', 'boosted_promotions (post_id, status)', false],
     ['recommendation_feedback_user_idx', 'recommendation_feedback (user_id, item_type, action)', false],
     ['rss_sources_enabled_idx', 'rss_sources (enabled, auto_sync, last_sync_at)', false],
+    ['rss_sources_feed_url_unique_idx', 'rss_sources (feed_url)', true],
     ['rss_articles_source_guid_unique_idx', 'rss_articles (source_id, guid_hash)', true],
     ['rss_articles_url_hash_unique_idx', 'rss_articles (url_hash)', true],
     ['rss_articles_category_date_idx', 'rss_articles (category, published_at)', false],
