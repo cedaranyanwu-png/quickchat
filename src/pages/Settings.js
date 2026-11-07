@@ -33,7 +33,6 @@ const ASSISTANCE_OPTIONS = [
 ];
 
 export default function Settings({ onLogout }) {
-  const navigate = useSearchParams()[0];
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'general');
 
@@ -288,9 +287,22 @@ export default function Settings({ onLogout }) {
           <h1 className="text-base font-extrabold text-slate-900">Settings</h1>
           <p className="text-[11px] text-slate-500">Account, business profiles, bots, and preferences</p>
         </div>
-        <Link to="/profile/edit" className="ml-auto rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
-          <i className="fa-solid fa-user-pen mr-1.5" />Edit profile
-        </Link>
+        <div className="ml-auto flex items-center gap-2">
+          <Link to="/profile/edit" className="rounded-full border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+            <i className="fa-solid fa-user-pen mr-1.5" />Edit profile
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              onLogout?.();
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+            }}
+            className="rounded-full border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50"
+          >
+            <i className="fa-solid fa-right-from-bracket mr-1.5" />Log out
+          </button>
+        </div>
       </header>
 
       {/* Tabs */}
