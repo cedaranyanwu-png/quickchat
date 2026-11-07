@@ -7,7 +7,7 @@ const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
 
 // One-time price of the verified badge, paid from the user's points wallet.
-const VERIFICATION_POINTS = 5000;
+const VERIFICATION_POINTS = Math.max(100, Math.min(1000000, Number.parseInt(process.env.VERIFICATION_POINTS || '2000', 10) || 2000));
 
 const router = express.Router();
 
