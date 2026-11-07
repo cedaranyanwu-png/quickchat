@@ -17,7 +17,7 @@ async function initializePageTables() {
       id ${idColumn}, author_id INTEGER NOT NULL, body TEXT NOT NULL,
       kind VARCHAR(20) NOT NULL DEFAULT 'text', category VARCHAR(80), media TEXT, video_id INTEGER,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, reach_mode VARCHAR(20) NOT NULL DEFAULT 'interest',
-      hashtags TEXT, target_interests TEXT, community_id INTEGER, source_link ${sourceLinkType},
+      hashtags TEXT, target_interests TEXT, community_id INTEGER, source_link ${sourceLinkType}, rss_article_id INTEGER,
       visibility VARCHAR(20) NOT NULL DEFAULT 'public', price_amount VARCHAR(32), price_currency VARCHAR(3)
     )`,
     `CREATE TABLE IF NOT EXISTS communities (
@@ -368,6 +368,7 @@ async function addMissingPostColumns() {
     topics: 'TEXT',
     keywords: 'TEXT',
     audience_signals: 'TEXT',
+    rss_article_id: 'INTEGER',
   };
   for (const [column, type] of Object.entries(columnTypes)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE posts ADD COLUMN ${column} ${type}`);
