@@ -292,7 +292,7 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
       WHERE ur.user_id = ? AND ur.is_active = 1 AND r.is_active = 1 ORDER BY r.name`,
     [req.user.id],
   );
-  res.json({ userId: req.user.id, roles, permissions });
+  res.json({ userId: req.user.id, roles, permissions, admin: { id: req.adminAccount.id, username: req.adminAccount.username, mustChangePassword: Boolean(Number(req.adminAccount.must_change_password)) } });
 }));
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {
