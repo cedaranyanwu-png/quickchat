@@ -74,8 +74,10 @@ async function tableDefinitions() {
   return rows.map((row) => ({ name: row.name }));
 }
 
+function quoteIdentifier(name) { const tick = String.fromCharCode(96); return db.type === 'mysql' ? tick + name.split(tick).join(tick + tick) + tick : '"' + name.replace(/"/g, '""') + '"'; }
+
 async function columnsFor(table) {
-  if (db.type === 'sqlite') return db.query('PRAGMA table_info("' + table.name.replace(/"/g, '""') + '")');
+  if (db.type === 'sqlite') return db.query('PRAGMA table_info(' + quoteIdentifier(table.name) + ')');
   if (db.type === 'postgres') return db.query(
     'SELECT column_name AS name, data_type AS type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ? ORDER BY ordinal_position',
     [table.name],
@@ -104,7 +106,7 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
     for (const table of tables) {
       if (!/^[a-zA-Z0-9_]+$/.test(table.name)) continue;
       const columns = await columnsFor(table);
-      const rows = await db.query('SELECT * FROM "' + table.name.replace(/"/g, '""') + '"');
+      const rows = await db.query('SELECT * FROM ' + quoteIdentifier(table.name));
       totalRows += rows.length;
       const file = 'database/tables/' + table.name + '.json';
       entries.push({ name: file, data: JSON.stringify(rows) });
@@ -158,6 +160,20 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
   }
 }
 
+async function cleanupExpiredBackups(retentionDays = 30) {
+  const days = Math.max(1, Math.min(3650, Number.parseInt(retentionDays, 10) || 30));
+  const cutoff = Date.now() - days * 86400000;
+  const backups = await listBackups();
+  let deleted = 0;
+  for (const backup of backups) {
+    if (new Date(backup.createdAt).getTime() < cutoff) {
+      const fullPath = getBackupPath(backup.filename);
+      if (fullPath) { await fsp.unlink(fullPath).catch(() => {}); deleted += 1; }
+    }
+  }
+  return deleted;
+}
+
 async function listBackups() {
   await fsp.mkdir(backupDirectory, { recursive: true, mode: 0o700 });
   const names = await fsp.readdir(backupDirectory);
@@ -177,4 +193,4 @@ function getBackupPath(filename) {
   return path.join(backupDirectory, filename);
 }
 
-module.exports = { createBackup, listBackups, getBackupPath, backupDirectory, isRunning: () => running };
+module.exports = { createBackup, listBackups, getBackupPath, cleanupExpiredBackups, backupDirectory, isRunning: () => running };
