@@ -51,8 +51,10 @@ function signingKey(secret, date, region) {
 }
 
 function s3RequestUrl(config, filename) {
+  // Railway Object Storage exposes virtual-host-style S3 endpoints.
   const url = new URL(config.endpoint);
-  url.pathname = `${url.pathname.replace(/\/$/, '')}/${config.bucket}/${encodeURIComponent(filename)}`;
+  url.hostname = `${config.bucket}.${url.hostname}`;
+  url.pathname = `${url.pathname.replace(/\/$/, '')}/${encodeURIComponent(filename)}`;
   url.search = '';
   return url;
 }
@@ -146,7 +148,10 @@ router.post('/media', asyncRoute(async (req, res) => {
     if (!hasExpectedSignature(mimeType, header)) return res.status(415).json({ message: 'The file contents do not match the selected image or video type.' });
 
     const storage = s3Config();
-    if (storage) await putObject(storage, filename, filePath, mimeType);
+    if (!storage) {
+      return res.status(503).json({ message: 'Media storage is not configured yet. Please try again shortly.' });
+    }
+    await putObject(storage, filename, filePath, mimeType);
 
     const upload = await db.insert(
       'INSERT INTO media_uploads (owner_id, filename, mime_type, size_bytes) VALUES (?, ?, ?, ?)',
