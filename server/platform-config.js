@@ -57,14 +57,14 @@ async function initializePlatformConfig() {
 
 async function getVerificationFeeNaira() {
   const saved = await db.getOne("SELECT setting_value FROM admin_platform_settings WHERE setting_key = 'verification_fee_ngn'");
-  const value = Number.parseInt(saved?.setting_value || process.env.VERIFICATION_POINTS || String(DEFAULT_VERIFICATION_FEE), 10);
+  const value = Number.parseInt(saved?.setting_value || process.env.VERIFICATION_FEE_NGN || String(DEFAULT_VERIFICATION_FEE), 10);
   return Number.isSafeInteger(value) && value >= 100 && value <= 1000000 ? value : DEFAULT_VERIFICATION_FEE;
 }
 
 async function setVerificationFeeNaira(value, adminId) {
   const amount = Number(value);
   if (!Number.isSafeInteger(amount) || amount < 100 || amount > 1000000) {
-    const error = new Error('Verification price must be between 100 and 1,000,000 points.');
+    const error = new Error('Verification price must be between ₦100 and ₦1,000,000.');
     error.status = 400;
     throw error;
   }
