@@ -39,6 +39,7 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
@@ -145,6 +146,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/explore" element={<Explore openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/messages" element={<Messages />} />
+            <Route path="/menu" element={<Menu />} />
             <Route path="/nova" element={<NovaAI />} />
             <Route path="/live" element={<Live />} />
             <Route path="/follow" element={<Follow />} />
