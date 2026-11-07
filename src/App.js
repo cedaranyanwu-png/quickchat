@@ -42,6 +42,7 @@ import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
 import Admin from './pages/Admin';
+import AdminFirstLogin from './pages/AdminFirstLogin';
 import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
@@ -127,6 +128,16 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  let sessionUser = {};
+  try { sessionUser = JSON.parse(localStorage.getItem('user') || '{}'); } catch (_error) { sessionUser = {}; }
+  if (sessionUser.mustChangePassword && location.pathname !== '/admin/first-login') {
+    return <Navigate to="/admin/first-login" replace />;
+  }
+  if (location.pathname === '/admin/first-login') {
+    if (!sessionUser.mustChangePassword) return <Navigate to="/admin" replace />;
+    return <Routes><Route path="/admin/first-login" element={<AdminFirstLogin />} /><Route path="*" element={<Navigate to="/admin/first-login" replace />} /></Routes>;
+  }
 
   // Keep the governance dashboard separate without shadowing the RSS admin route.
   if (location.pathname.replace(/\/+$/, '') === '/admin') {
