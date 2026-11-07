@@ -452,7 +452,7 @@ router.post('/posts', asyncRoute(async (req, res) => {
   // attached through the regular composer is also registered in the videos
   // table, which powers video likes, comments, views, and the Videos page.
   const attachedVideos = media.filter((item) => item.type === 'video');
-  if (visibility === 'public' && attachedVideos.length) {
+  if (visibility === 'public' && !communityId && !videoId && attachedVideos.length) {
     for (const item of attachedVideos) {
       const insertedVideo = await db.insert(
         'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
