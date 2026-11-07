@@ -195,7 +195,10 @@ router.post('/rss/articles/:articleId/discuss', asyncRoute(async (req, res) => {
   } catch (error) {
     if (!uniqueConstraint(error)) throw error;
     const raced = await db.getOne('SELECT post_id FROM rss_article_discussions WHERE article_id = ? AND user_id = ?', [articleId, req.user.id]);
-    if (raced) return res.json({ postId: Number(raced.post_id), alreadyDiscussed: true });
+    if (raced) {
+      await db.delete('DELETE FROM posts WHERE id = ? AND author_id = ?', [post.id, req.user.id]);
+      return res.json({ postId: Number(raced.post_id), alreadyDiscussed: true });
+    }
     throw error;
   }
   res.status(201).json({
