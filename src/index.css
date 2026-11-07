@@ -128,3 +128,8 @@ section.relative.min-h-0.min-w-0.flex-1.flex-col.overflow-hidden > form {
     animation-iteration-count: 1;
   }
 }
+
+/* --- WhatsApp-style status tray ---------------------------------------- */
+.qc-status-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+.qc-status-scroll::-webkit-scrollbar { display: none; }
+.qc-status-ring { transition: box-shadow 180ms ease, background 180ms ease; }

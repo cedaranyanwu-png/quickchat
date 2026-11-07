@@ -10,6 +10,7 @@ const authRoutes = require('./auth');
 const { authenticate } = require('./middleware/authenticate');
 const { initializePageTables } = require('./schema');
 const contentRoutes = require('./routes/content');
+const statusRoutes = require('./routes/statuses');
 const profileRoutes = require('./routes/profiles');
 const socialRoutes = require('./routes/social');
 const messageRoutes = require('./routes/messages');
@@ -217,6 +218,7 @@ function escapeHtml(value) {
 // Page APIs require the bearer token returned by the login and registration routes.
 app.use('/api', authenticate);
 app.use('/api', contentRoutes);
+app.use('/api', statusRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', socialRoutes);
 app.use('/api', paymentRoutes);

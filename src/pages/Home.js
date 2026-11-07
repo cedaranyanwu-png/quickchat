@@ -5,6 +5,7 @@ import AdFeedSlot from '../components/AdFeedSlot';
 import Avatar from '../components/Avatar';
 import FeedDiscovery from '../components/FeedDiscovery';
 import LiveNowStrip from '../components/LiveNowStrip';
+import StatusStrip from '../components/StatusStrip';
 import PostCard from '../components/PostCard';
 import { INTEREST_OPTIONS } from '../interest-options';
 
@@ -87,6 +88,8 @@ export default function Home({ refreshKey, openModal, onOpenPost, openVideo }) {
           {feedTabs.map((tab) => <button key={tab.value} onClick={() => setActiveTab(tab.value)} className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${activeTab === tab.value ? 'bg-blue-700 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{tab.label}</button>)}
         </div>
       </div>
+
+      <StatusStrip />
 
       <LiveNowStrip />
 

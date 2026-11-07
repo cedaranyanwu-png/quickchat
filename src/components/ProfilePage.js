@@ -114,7 +114,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
       <button type="button" disabled={!profile?.coverImage} onClick={() => profile?.coverImage && openModal?.(profile.coverImage)} className="group relative block h-36 w-full overflow-hidden border-0 bg-slate-200 bg-cover bg-center text-left disabled:cursor-default" style={{ backgroundImage: profile?.coverImage ? `url(${profile.coverImage})` : undefined }} aria-label={profile?.coverImage ? 'View cover image' : undefined}>
         {profile?.coverImage && <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100"><span className="rounded-full bg-black/55 px-3 py-2 text-xs font-bold"><i className="fa-solid fa-expand mr-1.5" />View image</span></span>}
       </button>
-      <button type="button" onClick={() => profile?.picture && openModal?.(profile.picture)} className="absolute bottom-0 right-4 z-20 translate-y-1/2 rounded-full border-4 border-white bg-white p-0 shadow-md" aria-label={profile?.picture ? 'View profile image' : undefined}>
+      <button type="button" onClick={() => profile?.picture && openModal?.(profile.picture)} className="absolute bottom-0 left-4 z-20 translate-y-1/2 rounded-full border-4 border-white bg-white p-0 shadow-md" aria-label={profile?.picture ? 'View profile image' : undefined}>
         <Avatar name={profile?.fullName} picture={profile?.picture} size={84}/>
       </button>
     </div>
