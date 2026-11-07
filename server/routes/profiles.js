@@ -5,7 +5,6 @@ const {
 } = require('./utils');
 const { normalizeSelectedInterests } = require('../algorithm');
 const { notifyUser } = require('../notify');
-const { creditPoints, currentBalance, spendPoints } = require('../wallet');
 const { getVerificationFeeNaira } = require('../platform-config');
 const { flutterwaveRequest, isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured, publicAppUrl, flutterwaveWebhookUrl } = require('../flutterwave');
 
