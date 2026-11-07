@@ -5,6 +5,7 @@ import Avatar from './Avatar';
 import ShareMenu from './ShareMenu';
 import BoostModal from './BoostModal';
 import AdultContentGate, { useAdultContentConsent } from './AdultContent';
+import VerifiedBadge from './VerifiedBadge';
 
 const FRESH_META_MS = 60_000;
 
@@ -175,7 +176,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1 flex-wrap">
               <span className="font-bold text-sm text-slate-900">{item.advertiser?.name || 'Sponsored'}</span>
-              {item.advertiser?.verified && <i className="fa-solid fa-circle-check text-blue-700 text-xs" />}
+              {item.advertiser?.verified && <VerifiedBadge className="text-[11px]" />}
               <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-blue-800">Sponsored</span>
             </div>
             <div className="relative">
@@ -295,7 +296,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 flex-wrap">
             <button onClick={() => !readOnly && username && navigate(`/profile/${username}`)} className="font-bold text-sm text-slate-900 border-0 bg-transparent p-0 hover:underline">{item.name || 'User'}</button>
-            {item.verified && <i className="fa-solid fa-circle-check text-blue-700 text-xs"></i>}
+            <VerifiedBadge verified={item.verified} className="text-xs" />
             <span className="text-slate-500 text-xs">{item.handle || (username ? `@${username}` : '')} · {item.time}</span>
             {item.isPromoted && (
               <span className="rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-800">
