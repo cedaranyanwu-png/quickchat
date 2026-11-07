@@ -141,8 +141,12 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
 
   const messages = await db.query(
-    `SELECT id, conversation_id, sender_id, text, is_read, created_at
-       FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?`,
+    `SELECT m.id, m.conversation_id, m.sender_id, m.text, m.is_read, m.created_at,
+            m.reply_to_message_id,
+            replied.id AS replied_id, replied.sender_id AS replied_sender_id, replied.text AS replied_text
+       FROM messages m
+       LEFT JOIN messages replied ON replied.id = m.reply_to_message_id
+      WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT ?`,
     [conversationId, clampLimit(req.query.limit, 100, 200)],
   );
   await db.update(
@@ -157,6 +161,12 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
       text: message.text,
       time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: message.created_at,
+      replyTo: message.replied_id ? {
+        id: message.replied_id,
+        senderId: message.replied_sender_id,
+        sender: Number(message.replied_sender_id) === req.user.id ? 'me' : 'them',
+        text: message.replied_text,
+      } : null,
     })),
   });
 }));
@@ -197,12 +207,21 @@ router.post('/messages/conversations/:conversationId/typing', asyncRoute(async (
 router.post('/messages/conversations/:conversationId/messages', asyncRoute(async (req, res) => {
   const conversationId = positiveId(req.params.conversationId);
   const text = String(req.body?.text || '').trim();
+  const replyToMessageId = positiveId(req.body?.replyToMessageId);
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
   if (!text || text.length > 5000) return res.status(400).json({ message: 'Messages must be 1 to 5,000 characters.' });
 
+  if (replyToMessageId) {
+    const repliedMessage = await db.getOne(
+      'SELECT id FROM messages WHERE id = ? AND conversation_id = ?',
+      [replyToMessageId, conversationId],
+    );
+    if (!repliedMessage) return res.status(400).json({ message: 'The message you are replying to is no longer available.' });
+  }
+
   const message = await db.insert(
-    'INSERT INTO messages (conversation_id, sender_id, text) VALUES (?, ?, ?)',
-    [conversationId, req.user.id, text],
+    'INSERT INTO messages (conversation_id, sender_id, text, reply_to_message_id) VALUES (?, ?, ?, ?)',
+    [conversationId, req.user.id, text, replyToMessageId],
   );
   const recipients = await db.query(
     'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?',
