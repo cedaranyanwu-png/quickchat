@@ -317,6 +317,23 @@ router.post('/messages/calls/:callId/heartbeat', asyncRoute(async (req, res) => 
 
 router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
   const afterId = Math.max(0, Number.parseInt(req.body?.afterId, 10) || 0);
+  const now = Date.now();
+  const expiredCalls = await db.query("SELECT id, caller_id, callee_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [now - 60000]);
+  for (const expired of expiredCalls) {
+    await db.insert(
+      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+      [expired.id, 0, expired.caller_id, 'missed', null, now],
+    );
+    await db.insert(
+      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+      [expired.id, 0, expired.callee_id, 'missed', null, now],
+    );
+    await db.delete("DELETE FROM message_call_signals WHERE call_id = ? AND to_user_id = ? AND kind = 'invite'", [expired.id, expired.callee_id]);
+  }
+  if (expiredCalls.length) {
+    await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [now, now - 60000]);
+  }
+
   const rows = await db.query(
     'SELECT s.id, s.call_id, s.from_user_id, s.kind, s.payload, c.conversation_id, c.caller_id, c.callee_id, c.media_type, c.status FROM message_call_signals s JOIN message_calls c ON c.id = s.call_id WHERE s.to_user_id = ? AND s.id > ? ORDER BY s.id ASC LIMIT 100',
     [req.user.id, afterId],
@@ -325,18 +342,8 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
     const maxId = Math.max(...rows.map((row) => Number(row.id)));
     await db.delete('DELETE FROM message_call_signals WHERE to_user_id = ? AND id <= ?', [req.user.id, maxId]);
   }
-  await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [Date.now() - 86400000]);
-  await db.delete('DELETE FROM message_calls WHERE created_at_ms < ?', [Date.now() - 1209600000]);
-  const expiredCalls = await db.query("SELECT id, caller_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now() - 60000]);
-  for (const expired of expiredCalls) {
-    await db.insert(
-      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
-      [expired.id, 0, expired.caller_id, 'missed', null, Date.now()],
-    );
-  }
-  if (expiredCalls.length) {
-    await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now(), Date.now() - 60000]);
-  }
+  await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [now - 86400000]);
+  await db.delete('DELETE FROM message_calls WHERE created_at_ms < ?', [now - 1209600000]);
   res.json({ iceServers: iceServers(), signals: rows.map((row) => ({
     id: row.id, callId: row.call_id, from: row.from_user_id, kind: row.kind,
     payload: row.payload ? safeParse(row.payload) : null,
