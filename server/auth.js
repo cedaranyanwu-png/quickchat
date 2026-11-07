@@ -10,7 +10,6 @@ const { createToken } = require('./middleware/authenticate');
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
 const VERIFICATION_TTL_MINUTES = 24 * 60;
-// Set EMAIL_VERIFICATION=off to skip verification emails (no mail provider configured).
 const RESET_TTL_MINUTES = 60;
 const recentEmailSends = new Map();
 
