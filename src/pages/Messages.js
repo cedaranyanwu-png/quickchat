@@ -321,6 +321,14 @@ export default function Messages() {
   };
 
   useEffect(() => {
+    if (!call?.mediaType || !callLocalStreamRef.current) return;
+    if (call.mediaType === 'video' && localVideoRef.current) {
+      localVideoRef.current.srcObject = callLocalStreamRef.current;
+      localVideoRef.current.play().catch(() => {});
+    }
+  }, [call?.callId, call?.mediaType]);
+
+  useEffect(() => {
     let active = true;
     let timer;
     const pollCalls = async () => {
@@ -331,7 +339,7 @@ export default function Messages() {
           let current = callRef.current;
           if (signal.kind === 'invite' && !current) {
             const convo = conversations.find((item) => Number(item.id) === Number(signal.conversationId));
-            current = { callId: signal.callId, conversationId: signal.conversationId, peerId: Number(signal.from), peerName: signal.payload?.callerName || convo?.name || 'QuickChat member', mediaType: signal.mediaType, status: 'incoming', iceServers: [], initiator: false };
+            current = { callId: signal.callId, conversationId: signal.conversationId, peerId: Number(signal.from), peerName: signal.payload?.callerName || convo?.name || 'QuickChat member', mediaType: signal.mediaType, status: 'incoming', iceServers: result.iceServers || [], initiator: false };
             updateCall(current);
             setActiveId(signal.conversationId);
           } else if (!current || current.callId !== signal.callId) continue;
