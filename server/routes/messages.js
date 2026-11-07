@@ -320,6 +320,8 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
   const now = Date.now();
   const expiredCalls = await db.query("SELECT id, caller_id, callee_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [now - 60000]);
   for (const expired of expiredCalls) {
+    const claimed = await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE id = ? AND status = 'ringing' AND updated_at_ms < ?", [now, expired.id, now - 60000]);
+    if (!claimed) continue;
     await db.insert(
       'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
       [expired.id, 0, expired.caller_id, 'missed', null, now],
@@ -330,10 +332,6 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
     );
     await db.delete("DELETE FROM message_call_signals WHERE call_id = ? AND to_user_id = ? AND kind = 'invite'", [expired.id, expired.callee_id]);
   }
-  if (expiredCalls.length) {
-    await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [now, now - 60000]);
-  }
-
   const rows = await db.query(
     'SELECT s.id, s.call_id, s.from_user_id, s.kind, s.payload, c.conversation_id, c.caller_id, c.callee_id, c.media_type, c.status FROM message_call_signals s JOIN message_calls c ON c.id = s.call_id WHERE s.to_user_id = ? AND s.id > ? ORDER BY s.id ASC LIMIT 100',
     [req.user.id, afterId],
