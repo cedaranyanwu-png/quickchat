@@ -7,6 +7,45 @@ import PostCard from '../components/PostCard';
 const CATEGORIES = ['For You', 'News', 'Technology', 'Business', 'Entertainment', 'Sports', 'Science', 'Education'];
 const categoryValue = (value) => value === 'For You' ? '' : value;
 
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; }
+  catch { return []; }
+}
+
+function normalizeDiscoverPost(row) {
+  return {
+    id: Number(row.id),
+    authorId: Number(row.author_id),
+    text: row.body || '',
+    type: row.kind || 'text',
+    category: row.category || null,
+    sourceLink: row.source_link || null,
+    media: parseJsonArray(row.media),
+    videoId: row.video_id || null,
+    hashtags: parseJsonArray(row.hashtags),
+    targetInterests: parseJsonArray(row.target_interests),
+    name: row.fullname || '',
+    username: row.username || '',
+    handle: '@' + String(row.username || '').replace(/^@/, ''),
+    picture: row.avatar_url || row.picture || null,
+    verified: Boolean(Number(row.verified || 0)),
+    createdAt: row.created_at,
+    time: formatDate(row.created_at),
+    likes: Number(row.like_count || 0),
+    replies: Number(row.reply_count || 0),
+    shares: Number(row.share_count || 0),
+    liked: Boolean(Number(row.liked || 0)),
+    bookmarked: Boolean(Number(row.bookmarked || 0)),
+    reposted: Boolean(Number(row.reposted || 0)),
+    isAdult: Boolean(row.is_adult),
+    isUnavailable: false,
+    isPaywalled: false,
+    isPromoted: false,
+    isSponsored: false,
+  };
+}
+
 function formatDate(value) {
   if (!value) return 'Recently published';
   const date = new Date(value);
@@ -41,7 +80,7 @@ export default function Discover({ openModal, openVideo }) {
       setArticles((current) => append ? [...current, ...(articleResult.articles || [])] : (articleResult.articles || []));
       setHasMore(Boolean(articleResult.hasMore));
       setPage(nextPage);
-      setTrendingPosts(discoverResult.trendingPosts || []);
+      setTrendingPosts((discoverResult.trendingPosts || []).map(normalizeDiscoverPost));
       setPeople(discoverResult.people || []);
     } catch (requestError) {
       setError(requestError.message || 'Discover could not load right now.');
