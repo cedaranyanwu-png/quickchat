@@ -219,6 +219,20 @@ async function initializePageTables() {
       flw_tx_ref VARCHAR(120) UNIQUE, checkout_url TEXT, status VARCHAR(20) NOT NULL DEFAULT 'creating',
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS creator_chat_settings (
+      user_id INTEGER PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0,
+      price_points INTEGER NOT NULL DEFAULT 100, updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS paid_chat_unlocks (
+      id ${idColumn}, conversation_id INTEGER NOT NULL, buyer_id INTEGER NOT NULL,
+      creator_id INTEGER NOT NULL, points INTEGER NOT NULL,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (conversation_id, buyer_id, creator_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS chat_day_passes (
+      user_id INTEGER PRIMARY KEY, expires_at_ms ${epochType} NOT NULL,
+      updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+    )`,
     // --- Web push -------------------------------------------------------
     `CREATE TABLE IF NOT EXISTS push_subscriptions (
       id ${idColumn}, user_id INTEGER NOT NULL, endpoint VARCHAR(500) NOT NULL UNIQUE,
