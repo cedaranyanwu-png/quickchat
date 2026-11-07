@@ -384,6 +384,8 @@ export default function Messages() {
     };
     pollCalls();
     return () => { active = false; clearTimeout(timer); };
+    // The call handlers intentionally use the latest refs and state snapshot while polling.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations]);
 
   useEffect(() => () => {
