@@ -137,7 +137,7 @@ async function storeBufferForUser(ownerId, buffer, mimeType) {
       'INSERT INTO media_uploads (owner_id, filename, mime_type, size_bytes) VALUES (?, ?, ?, ?)',
       [ownerId, filename, mimeType, buffer.length],
     );
-    const publicOrigin = String(process.env.PUBLIC_API_ORIGIN || '').replace(/\\/$/, '');
+    const publicOrigin = String(process.env.PUBLIC_API_ORIGIN || process.env.PUBLIC_APP_URL || '').replace(/\/$/, '');
     if (!upload?.id || !publicOrigin) throw new Error('Media metadata or public API origin is unavailable.');
     return { id: upload.id, filename, url: `${publicOrigin}/uploads/${filename}`, type: mimeType.startsWith('video/') ? 'video' : mimeType.startsWith('audio/') ? 'audio' : 'image', size: buffer.length };
   } catch (error) {
