@@ -123,7 +123,7 @@ router.get('/communities/:communityId/posts', asyncRoute(async (req, res) => {
       [communityId, req.user.id],
     )
     : null;
-  const canAccess = !community.monthly_price || isOwner || Boolean(entitlement);
+  const canAccess = !community.monthly_price || isOwner || isModerator || Boolean(entitlement);
   const communityInfo = {
     id: community.id, name: community.name, slug: community.slug,
     description: community.description || '', category: community.category || '',
@@ -189,6 +189,9 @@ router.post('/communities/:communityId/join', asyncRoute(async (req, res) => {
 router.delete('/communities/:communityId/join', asyncRoute(async (req, res) => {
   const communityId = positiveId(req.params.communityId);
   if (!communityId) return res.status(400).json({ message: 'Invalid community ID.' });
+  const community = await db.getOne('SELECT created_by FROM communities WHERE id = ?', [communityId]);
+  if (!community) return notFound(res, 'Community not found.');
+  if (Number(community.created_by) === Number(req.user.id)) return res.status(409).json({ message: 'The community owner cannot leave their own community.' });
   await db.delete('DELETE FROM community_members WHERE community_id = ? AND user_id = ?', [communityId, req.user.id]);
   res.json({ joined: false });
 }));
