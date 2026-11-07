@@ -353,6 +353,11 @@ async function addMissingColumns() {
     email_verified: 'INTEGER NOT NULL DEFAULT 0',
     email_verification_token: 'TEXT',
     email_verification_expires: db.type === 'sqlite' ? 'TEXT' : 'TIMESTAMP',
+    whatsapp_phone: db.type === 'sqlite' ? 'TEXT' : 'VARCHAR(24)',
+    whatsapp_phone_verified: 'INTEGER NOT NULL DEFAULT 0',
+    whatsapp_notifications_opt_in: 'INTEGER NOT NULL DEFAULT 0',
+    whatsapp_verification_token: 'TEXT',
+    whatsapp_verification_expires: db.type === 'sqlite' ? 'TEXT' : 'TIMESTAMP',
     // Account verification (blue badge). `verified` stays the public flag;
     // `verified_at` records when the badge was granted so it can be shown on profiles.
     verified_at: db.type === 'sqlite' ? 'TEXT' : 'TIMESTAMP',
