@@ -95,7 +95,14 @@ async function hashFile(filePath) {
 
 async function putObject(config, filename, filePath, mimeType) {
   const url = s3RequestUrl(config, filename);
+  const fileStats = await fsPromises.stat(filePath);
   const headers = signedHeaders(config, 'PUT', url, await hashFile(filePath), mimeType);
+
+  // Railway's S3-compatible storage requires a fixed Content-Length for streamed
+  // PUT requests. Node's fetch otherwise sends the stream without one, and the
+  // object API rejects it with HTTP 411 (Length Required).
+  headers['content-length'] = String(fileStats.size);
+
   const response = await fetch(url, {
     method: 'PUT',
     headers,
