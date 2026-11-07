@@ -65,7 +65,7 @@ export default function Verification() {
   };
 
   const isVerified = Boolean(profile?.verified) || Boolean(status?.verified);
-  const planPrice = Number(status?.planPrice) || DEFAULT_PLAN_POINTS;
+  const planPrice = Number(status?.planPrice) || DEFAULT_VERIFICATION_PRICE;
   const paymentStatus = String(status?.paymentStatus || 'unpaid');
 
   return (
