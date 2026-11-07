@@ -18,6 +18,7 @@ const PERMISSIONS = [
   'roles.view', 'roles.create', 'roles.edit', 'roles.delete', 'permissions.assign',
   'audit_logs.view', 'rss.manage', 'ads.manage', 'analytics.view', 'settings.manage',
   'verification.review', 'moderation.manage', 'admins.manage',
+  'backups.view', 'backups.create', 'backups.download', 'backups.delete',
 ];
 
 const DEFAULT_ROLES = [
