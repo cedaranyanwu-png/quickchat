@@ -35,8 +35,20 @@ async function initializePageTables() {
       monthly_price VARCHAR(32), price_currency VARCHAR(3) DEFAULT 'NGN'
     )`,
     `CREATE TABLE IF NOT EXISTS community_members (
-      community_id INTEGER NOT NULL, user_id INTEGER NOT NULL, joined_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      community_id INTEGER NOT NULL, user_id INTEGER NOT NULL, role VARCHAR(20) NOT NULL DEFAULT 'member', joined_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (community_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_reports (
+      id ${idColumn}, community_id INTEGER NOT NULL, reporter_id INTEGER NOT NULL,
+      target_type VARCHAR(20) NOT NULL, target_id INTEGER NOT NULL, reason VARCHAR(500) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending', reviewed_by INTEGER, reviewed_at ${dateType},
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (community_id, reporter_id, target_type, target_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS community_moderation_actions (
+      id ${idColumn}, community_id INTEGER NOT NULL, actor_id INTEGER NOT NULL,
+      target_user_id INTEGER, target_type VARCHAR(20) NOT NULL, target_id INTEGER,
+      action VARCHAR(40) NOT NULL, reason VARCHAR(500), created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS follows (
       follower_id INTEGER NOT NULL, followed_id INTEGER NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
@@ -301,7 +313,31 @@ async function initializePageTables() {
   await addMissingPaymentColumns();
   await addMissingNotificationColumns();
   await addMissingMessageColumns();
+  await addMissingCommunityColumns();
   await ensureIndexes();
+}
+
+async function addMissingCommunityColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(community_members)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query(
+        'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?',
+        ['community_members'],
+      ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM community_members').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+
+  if (!columns.has('role')) {
+    await db.query("ALTER TABLE community_members ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'member'");
+  }
+
+  // Existing creators retain owner permissions after this migration.
+  await db.query(
+    "UPDATE community_members SET role = 'owner' WHERE EXISTS (SELECT 1 FROM communities c WHERE c.id = community_members.community_id AND c.created_by = community_members.user_id)",
+  );
+  await db.query(
+    "INSERT INTO community_members (community_id, user_id, role) SELECT c.id, c.created_by, 'owner' FROM communities c WHERE c.created_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = c.created_by)",
+  );
 }
 
 async function addMissingMessageColumns() {
