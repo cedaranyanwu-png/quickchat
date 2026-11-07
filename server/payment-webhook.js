@@ -121,22 +121,6 @@ async function verifyAndProcessPayment({ transactionId, txRef }) {
     throw error;
   }
 
-  const verificationPayment = await db.getOne('SELECT * FROM verification_fee_payments WHERE tx_ref = ?', [verifiedRef]);
-  if (verificationPayment) {
-    const currency = String(payment.currency || '').toUpperCase();
-    const charged = parseMoney(payment.amount);
-    const expected = parseMoney(verificationPayment.amount);
-    if (currency !== String(verificationPayment.currency || 'NGN').toUpperCase() || !charged || charged !== expected) {
-      const error = new Error('Flutterwave amount or currency did not match the verification fee.');
-      error.status = 400;
-      throw error;
-    }
-    if (verificationPayment.status !== 'paid') {
-      await db.update("UPDATE verification_fee_payments SET status = 'paid', flutterwave_transaction_id = ?, paid_at = CURRENT_TIMESTAMP WHERE id = ?", [String(payment.id), verificationPayment.id]);
-    }
-    return true;
-  }
-
   const checkout = await db.getOne('SELECT * FROM payment_checkouts WHERE flutterwave_tx_ref = ?', [verifiedRef]);
   if (!checkout) {
     // Points top-ups are platform sales, not creator checkouts.
