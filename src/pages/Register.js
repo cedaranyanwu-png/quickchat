@@ -14,7 +14,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
   const [step, setStep] = useState('register'); // 'register' or 'interests'
   const [selectedInterests, setSelectedInterests] = useState([]);
 
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -266,6 +266,8 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all" placeholder="••••••••" />
             </div>
           </div>
+
+          <label className="flex items-start gap-2 text-[11px] leading-5 text-slate-600"><input type="checkbox" name="whatsappOptIn" checked={formData.whatsappOptIn || false} onChange={handleChange} required className="mt-1 rounded border-slate-300 text-blue-700" /><span>I agree to receive important QuickChat service announcements and account notifications on WhatsApp. I can opt out later.</span></label>
 
           <button type="submit" disabled={isLoading}
             className="w-full py-2.5 mt-2 bg-blue-700 text-white rounded-lg text-sm font-bold hover:bg-blue-800 transition-colors disabled:opacity-70 flex items-center justify-center gap-2">
