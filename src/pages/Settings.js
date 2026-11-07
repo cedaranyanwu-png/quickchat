@@ -32,7 +32,7 @@ const ASSISTANCE_OPTIONS = [
   'Logistics & Courier Delivery',
 ];
 
-export default function Settings() {
+export default function Settings({ onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'general');
 
@@ -761,6 +761,21 @@ export default function Settings() {
           )}
         </section>
       )}
+
+      <section className="mx-4 mb-6 mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-white text-red-600 shadow-sm">
+            <i className="fa-solid fa-right-from-bracket" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-bold text-slate-900">Log out</h2>
+            <p className="mt-0.5 text-xs leading-5 text-slate-600">Sign out of this QuickChat account on this device.</p>
+          </div>
+          <button type="button" onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('user'); onLogout?.(); }} className="rounded-full bg-red-600 px-4 py-2 text-xs font-bold text-white hover:bg-red-700">
+            Log out
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

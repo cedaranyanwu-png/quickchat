@@ -39,13 +39,14 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
 
-const SettingsHub = () => <>
+const SettingsHub = ({ onLogout }) => <>
   <div className="mx-auto max-w-3xl px-4 pt-3">
     <Link to="/settings/wallet" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm no-underline hover:border-blue-200 hover:text-blue-700">
       <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><i className="fa-solid fa-wallet" /></span>
@@ -53,7 +54,7 @@ const SettingsHub = () => <>
       <i className="fa-solid fa-chevron-right text-xs" />
     </Link>
   </div>
-  <Settings />
+  <Settings onLogout={onLogout} />
 </>;
 
 const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
@@ -145,6 +146,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/explore" element={<Explore openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/messages" element={<Messages />} />
+            <Route path="/menu" element={<Menu />} />
             <Route path="/nova" element={<NovaAI />} />
             <Route path="/live" element={<Live />} />
             <Route path="/follow" element={<Follow />} />
@@ -155,7 +157,10 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/lists" element={<Lists />} />
             <Route path="/profile" element={<Profile openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/profile/edit" element={<EditProfile />} />
-            <Route path="/settings" element={<SettingsHub />} />
+            <Route path="/settings" element={<SettingsHub onLogout={() => {
+              apiRequest('/messages/presence', { method: 'DELETE', body: { sessionId: presenceSessionId.current }, keepalive: true }).catch(() => {});
+              onAuthenticated(false);
+            }} />} />
             <Route path="/settings/wallet" element={<Wallet />} />
             <Route path="/wallet" element={<Navigate to="/settings/wallet" replace />} />
             <Route path="/verification" element={<Verification />} />
@@ -170,9 +175,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         {!isVideosPage && !isMessagesPage && <div className="fixed bottom-20 right-4 z-40 lg:hidden"><FAB onOpenPost={openPostModal} /></div>}
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
-        {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
-          <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
-          <img src={modalImage} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />
+        {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 sm:p-6" onClick={closeModal}>
+          <button className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/50 text-xl text-white" onClick={closeModal} aria-label="Close media"><i className="fa-solid fa-xmark" /></button>
+          {typeof modalImage === 'string'
+            ? <img src={modalImage} alt="Full view" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            : <video src={modalImage.url} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />}
         </div>}
       </div>
     </UnreadCountsProvider>
