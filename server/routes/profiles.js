@@ -90,6 +90,10 @@ router.patch('/profile/me', asyncRoute(async (req, res) => {
       'UPDATE users SET fullname = ?, name = ?, username = ?, bio = ?, interests = ?, location = ?, website = ?, avatar_url = ?, picture = ?, cover_url = ?, payout_country = ? WHERE id = ?',
       [fullName, fullName, username, bio, JSON.stringify(interests), location, website, avatarUrl, avatarUrl, coverUrl, payoutCountry, req.user.id],
     );
+    await db.delete('DELETE FROM user_interests WHERE user_id = ?', [req.user.id]);
+    for (const interest of interests) {
+      await db.insert('INSERT INTO user_interests (user_id, interest_key) VALUES (?, ?)', [req.user.id, interest]);
+    }
     const row = await db.getOne(`${PROFILE_SELECT} WHERE u.id = ?`, [req.user.id, req.user.id]);
     res.json({ profile: toProfile(row) });
   } catch (error) {
