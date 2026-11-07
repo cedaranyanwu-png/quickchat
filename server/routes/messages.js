@@ -404,6 +404,10 @@ router.post('/messages/calls/:callId/signals', asyncRoute(async (req, res) => {
   const expected = Number(call.caller_id) === Number(req.user.id) ? Number(call.callee_id) : Number(call.caller_id);
   const kind = String(req.body?.kind || '');
   if (to !== expected || !['accept', 'reject', 'offer', 'answer', 'ice', 'end'].includes(kind)) return res.status(400).json({ message: 'Invalid call signal.' });
+  if (kind === 'accept') {
+    const pass = await db.getOne('SELECT expires_at_ms FROM chat_day_passes WHERE user_id = ?', [req.user.id]);
+    if (Number(pass?.expires_at_ms || 0) <= Date.now()) return res.status(402).json({ message: 'A 24-hour advanced chat pass costs 1,000 points.', requiresDayPass: true });
+  }
   if (['accept', 'reject', 'answer'].includes(kind) && Number(req.user.id) !== Number(call.callee_id)) {
     return res.status(403).json({ message: 'Only the receiving participant can answer or reject a call.' });
   }
