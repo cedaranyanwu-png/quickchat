@@ -58,6 +58,28 @@ export async function apiRequest(path, options = {}) {
   return data;
 }
 
+// Independent administration requests use a dedicated token and never read the
+// ordinary QuickChat user's token.
+export async function adminRequest(path, options = {}) {
+  const { headers: suppliedHeaders = {}, body, ...requestOptions } = options;
+  const headers = { ...suppliedHeaders };
+  const token = localStorage.getItem('adminToken');
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+
+  const response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+    ...requestOptions,
+    headers,
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const data = response.status === 204 ? null : await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) localStorage.removeItem('adminToken');
+    throw new Error(data?.message || `Request failed (${response.status}).`);
+  }
+  return data;
+}
+
 // Uploads use the server's raw-file endpoint; the returned URL is saved in the
 // profile or post record so every device can render the same user-uploaded file.
 export function uploadMedia(file) {
