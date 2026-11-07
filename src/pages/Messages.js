@@ -507,7 +507,11 @@ export default function Messages() {
           <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white p-3">
             <button type="button" onClick={() => setActiveId(null)} aria-label="Back to conversations" className="text-slate-500 lg:hidden"><i className="fa-solid fa-arrow-left" /></button>
             <span className="relative h-9 w-9 shrink-0"><Avatar name={activeConversation.name} picture={activeConversation.picture} size={36} />{activeUserOnline && <span aria-label="Online" title="Online" className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</span>
-            <div className="min-w-0"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name}</h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
+            <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name}</h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
+            <div className="flex shrink-0 items-center gap-1">
+              <button type="button" onClick={() => startCall('audio')} disabled={Boolean(call)} title="Voice call" aria-label="Start voice call" className="grid h-9 w-9 place-items-center rounded-full text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"><i className="fa-solid fa-phone" /></button>
+              <button type="button" onClick={() => startCall('video')} disabled={Boolean(call)} title="Video call" aria-label="Start video call" className="grid h-9 w-9 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-solid fa-video" /></button>
+            </div>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-24 lg:pb-24">
             {messages.map((message) => {
@@ -570,7 +574,10 @@ export default function Messages() {
                           <span className="block truncate">{message.replyTo.text}</span>
                         </button>
                       )}
-                      <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>
+                      {message.mediaType === 'image' && message.mediaUrl && <img src={message.mediaUrl} alt="Shared image" loading="lazy" className="mb-2 max-h-72 max-w-full rounded-xl object-contain" />}
+                      {message.mediaType === 'video' && message.mediaUrl && <video src={message.mediaUrl} controls playsInline preload="metadata" className="mb-2 max-h-80 max-w-full rounded-xl bg-black" />}
+                      {message.mediaType === 'audio' && message.mediaUrl && <div className="mb-2 flex min-w-[220px] items-center gap-2"><i className={`fa-solid fa-microphone ${isMine ? 'text-white' : 'text-blue-700'}`} /><audio src={message.mediaUrl} controls preload="metadata" className="h-9 max-w-full" /></div>}
+                      {message.text && <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>}
                       <div className="mt-1 flex items-center justify-end gap-2">
                         <small className="opacity-70">{message.time}</small>
                         <button
@@ -600,7 +607,13 @@ export default function Messages() {
           </div>
         </> : <div className="grid flex-1 place-items-center pb-24 text-sm text-slate-500">Choose a conversation or message someone you follow.</div>}
 
-        <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
+        <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-1.5 border-t border-slate-200 bg-white px-2 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageSelected} className="hidden" />
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!activeId || uploadingMedia || Boolean(recordingMode)} title="Send image" aria-label="Send image" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-regular fa-image text-lg" /></button>
+          <button type="button" onClick={() => recordingMode === 'voice' ? stopRecording() : startRecording('voice')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'voice')} title={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} aria-label={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'voice' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'voice' ? 'fa-stop' : 'fa-microphone'}`} /></button>
+          <button type="button" onClick={() => recordingMode === 'video' ? stopRecording() : startRecording('video')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'video')} title={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} aria-label={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'video' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'video' ? 'fa-stop' : 'fa-video'}`} /></button>
+          {recordingMode && <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-red-600"><span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />REC</span>}
+          {uploadingMedia && <span className="shrink-0 text-[10px] font-semibold text-blue-700">Uploading…</span>}
           <div className="absolute inset-x-0 bottom-full border-t border-slate-100 bg-white px-3 py-2 shadow-sm">
           {replyingTo && (
             <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
@@ -630,6 +643,28 @@ export default function Messages() {
           </button>
         </form>
       </section>
+      {call && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-3">
+        <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
+          <div className="bg-slate-950 px-6 py-7 text-center text-white">
+            <div className="mx-auto mb-3 h-16 w-16 overflow-hidden rounded-full border-2 border-white/30 bg-slate-800"><Avatar name={call.peerName} picture={activeConversation?.picture} size={64} /></div>
+            <h3 className="text-lg font-extrabold">{call.peerName || 'QuickChat member'}</h3>
+            <p className="mt-1 text-xs text-slate-300">{call.status === 'incoming' ? `Incoming ${call.mediaType === 'video' ? 'video' : 'voice'} call` : call.status === 'outgoing' ? 'Calling…' : call.status === 'connecting' ? 'Connecting…' : 'Call connected'}</p>
+          </div>
+          {call.mediaType === 'video' && <div className="relative aspect-video bg-black"><video ref={remoteVideoRef} autoPlay playsInline className="h-full w-full object-cover" /><video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-3 right-3 h-20 w-28 rounded-xl border border-white/70 bg-slate-800 object-cover" /></div>}
+          {call.mediaType === 'audio' && <audio ref={remoteAudioRef} autoPlay className="hidden" />}
+          {callError && <p role="alert" className="px-4 pt-3 text-center text-xs text-rose-600">{callError}</p>}
+          <div className="flex items-center justify-center gap-5 px-5 py-6">
+            {call.status === 'incoming' ? <>
+              <button type="button" onClick={rejectCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-rose-600 text-xl text-white"><i className="fa-solid fa-phone-slash" /></span>Reject</button>
+              <button type="button" onClick={answerCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-600 text-xl text-white"><i className="fa-solid fa-phone" /></span>Answer</button>
+            </> : <>
+              <button type="button" onClick={() => { callLocalStreamRef.current?.getAudioTracks().forEach((track) => { track.enabled = callMuted; }); setCallMuted((value) => !value); }} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg"><i className={`fa-solid ${callMuted ? 'fa-microphone-slash' : 'fa-microphone'}`} /></span>{callMuted ? 'Unmute' : 'Mute'}</button>
+              {call.mediaType === 'video' && <button type="button" onClick={() => { callLocalStreamRef.current?.getVideoTracks().forEach((track) => { track.enabled = callCameraOff; }); setCallCameraOff((value) => !value); }} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-lg"><i className={`fa-solid ${callCameraOff ? 'fa-video-slash' : 'fa-video'}`} /></span>Camera</button>}
+              <button type="button" onClick={endCall} className="flex flex-col items-center gap-2 text-xs font-bold text-slate-600"><span className="grid h-14 w-14 place-items-center rounded-full bg-rose-600 text-xl text-white"><i className="fa-solid fa-phone-slash" /></span>End call</button>
+            </>}
+          </div>
+        </div>
+      </div>}
       {error && <div role="alert" className="fixed bottom-20 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 p-3 text-xs text-red-700 shadow">{error}</div>}
     </div>
   );
