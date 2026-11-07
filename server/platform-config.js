@@ -55,20 +55,20 @@ async function initializePlatformConfig() {
   }
 }
 
-async function getVerificationFeePoints() {
-  const saved = await db.getOne("SELECT setting_value FROM admin_platform_settings WHERE setting_key = 'verification_fee_points'");
+async function getVerificationFeeNaira() {
+  const saved = await db.getOne("SELECT setting_value FROM admin_platform_settings WHERE setting_key = 'verification_fee_ngn'");
   const value = Number.parseInt(saved?.setting_value || process.env.VERIFICATION_POINTS || String(DEFAULT_VERIFICATION_FEE), 10);
   return Number.isSafeInteger(value) && value >= 100 && value <= 1000000 ? value : DEFAULT_VERIFICATION_FEE;
 }
 
-async function setVerificationFeePoints(value, adminId) {
+async function setVerificationFeeNaira(value, adminId) {
   const amount = Number(value);
   if (!Number.isSafeInteger(amount) || amount < 100 || amount > 1000000) {
     const error = new Error('Verification price must be between 100 and 1,000,000 points.');
     error.status = 400;
     throw error;
   }
-  await saveSetting('verification_fee_points', String(amount), adminId);
+  await saveSetting('verification_fee_ngn', String(amount), adminId);
   return amount;
 }
 
@@ -97,4 +97,4 @@ async function saveSecretSettings(values, adminId) {
   return entries.map(([key]) => key);
 }
 
-module.exports = { initializePlatformConfig, getVerificationFeePoints, setVerificationFeePoints, saveSecretSettings, DEFAULT_VERIFICATION_FEE, SECRET_KEYS };
+module.exports = { initializePlatformConfig, getVerificationFeeNaira, setVerificationFeeNaira, saveSecretSettings, DEFAULT_VERIFICATION_FEE, SECRET_KEYS };
