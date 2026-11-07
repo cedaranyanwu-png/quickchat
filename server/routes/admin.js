@@ -1,5 +1,7 @@
 const express = require('express');
 const db = require('../database');
+const bcrypt = require('bcryptjs');
+const { isMainOwner } = require('../admin-owner');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -514,6 +516,7 @@ router.post('/admin/users/:id/suspend', requirePermission('users.suspend'), asyn
   if (!Number.isSafeInteger(userId) || userId < 1 || !reason || !Number.isFinite(durationHours) || durationHours < 1 || durationHours > 8760) {
     return res.status(400).json({ message: 'Provide a user, reason and suspension duration between 1 hour and 365 days.' });
   }
+  if (await isMainOwner(userId)) return res.status(403).json({ message: 'The main platform owner account is protected from suspension.' });
   if (userId === req.user.id && await hasRole(userId, 'super_admin')) return res.status(400).json({ message: 'You cannot suspend your own Super Administrator account.' });
   const target = await db.getOne('SELECT id, username FROM users WHERE id = ?', [userId]);
   if (!target) return res.status(404).json({ message: 'User not found.' });
@@ -534,7 +537,7 @@ router.post('/admin/users/:id/ban', requirePermission('users.ban'), asyncRoute(a
   const userId = Number(req.params.id);
   const reason = String(req.body?.reason || '').trim().slice(0, 2000);
   if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A valid user and ban reason are required.' });
-  if (await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'Super Administrator accounts are protected from bans.' });
+  if (await isMainOwner(userId) || await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'Super Administrator and main owner accounts are protected from bans.' });
   const target = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
   if (!target) return res.status(404).json({ message: 'User not found.' });
   const existing = await db.getOne('SELECT id FROM account_bans WHERE user_id = ? AND revoked_at IS NULL', [userId]);
@@ -563,7 +566,7 @@ router.post('/admin/users/:id/deletion-request', requirePermission('users.delete
   const userId = Number(req.params.id);
   const reason = String(req.body?.reason || '').trim().slice(0, 2000);
   if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A user and deletion reason are required.' });
-  if (await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'The Super Administrator account is protected.' });
+  if (await isMainOwner(userId) || await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'Super Administrator and main owner accounts are protected from deletion.' });
   const target = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
   if (!target) return res.status(404).json({ message: 'User not found.' });
   const pending = await db.getOne("SELECT id FROM account_deletion_requests WHERE user_id = ? AND status = 'pending'", [userId]);
@@ -628,7 +631,8 @@ router.post('/admin/admins/:id/roles', requirePermission('admins.manage'), async
   for (const key of roleKeys) {
     const role = await db.getOne('SELECT id, role_key FROM admin_roles WHERE role_key = ? AND is_active = 1', [key]);
     if (!role) return res.status(400).json({ message: `Unknown or inactive role: ${key}` });
-    if (key === 'super_admin' && !(await hasRole(req.user.id, 'super_admin'))) return res.status(403).json({ message: 'Only a Super Administrator can grant Super Administrator access.' });
+    if (key === 'super_admin' && !(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can transfer Super Administrator ownership.' });
+    if (key === 'super_admin' && !(await isMainOwner(userId))) return res.status(403).json({ message: 'Use the audited ownership transfer workflow to assign the main Super Administrator designation.' });
     const rolePermissions = await db.query(
       'SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?',
       [role.id],
@@ -639,7 +643,9 @@ router.post('/admin/admins/:id/roles', requirePermission('admins.manage'), async
     assignments.push(role);
   }
   const targetIsSuperAdmin = await hasRole(userId, 'super_admin');
+  if (await isMainOwner(userId) && !roleKeys.includes('super_admin')) return res.status(403).json({ message: 'The main platform owner cannot be demoted. Transfer ownership first.' });
   if (targetIsSuperAdmin && !roleKeys.includes('super_admin')) {
+    if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can demote another Super Administrator.' });
     const activeCount = await db.getCount("SELECT COUNT(*) AS count FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE r.role_key = 'super_admin' AND ur.is_active = 1 AND r.is_active = 1");
     if (activeCount <= 1) return res.status(409).json({ message: 'The last active Super Administrator cannot be demoted.' });
     if (userId === req.user.id) return res.status(400).json({ message: 'You cannot remove your own Super Administrator access.' });
@@ -661,8 +667,10 @@ router.post('/admin/admins/:id/deactivate', requirePermission('admins.manage'), 
   const userId = Number(req.params.id);
   const reason = String(req.body?.reason || '').trim().slice(0, 1000);
   if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A valid administrator and reason are required.' });
+  if (await isMainOwner(userId)) return res.status(403).json({ message: 'The main platform owner cannot be deactivated.' });
   const isSuperAdmin = await hasRole(userId, 'super_admin');
   if (isSuperAdmin) {
+    if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can deactivate another Super Administrator.' });
     const activeCount = await db.getCount(
       "SELECT COUNT(*) AS count FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE r.role_key = 'super_admin' AND ur.is_active = 1 AND r.is_active = 1",
     );
@@ -693,6 +701,92 @@ router.post('/admin/admins/:id/reactivate', requirePermission('admins.manage'), 
   }
   await audit(req, 'admin.reactivated', 'user', userId, 'Administrative access reactivated', null, roleKeys);
   res.json({ message: 'Administrative access reactivated.' });
+}));
+
+router.post('/admin/security/change-password', asyncRoute(async (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  const confirmPassword = String(req.body?.confirmPassword || '');
+  if (!currentPassword || newPassword.length < 12 || newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'Enter your current password and matching new passwords of at least 12 characters.' });
+  }
+  const security = await db.getOne('SELECT must_change_password FROM admin_owner_security WHERE user_id = ?', [req.user.id]);
+  if (!security || Number(security.must_change_password) !== 1) {
+    return res.status(409).json({ message: 'A forced password change is not pending for this account.' });
+  }
+  const account = await db.getOne('SELECT password FROM users WHERE id = ?', [req.user.id]);
+  if (!account?.password || !(await bcrypt.compare(currentPassword, account.password))) {
+    return res.status(401).json({ message: 'The current password is incorrect.' });
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.update('UPDATE users SET password = ? WHERE id = ?', [passwordHash, req.user.id]);
+  await db.update('UPDATE admin_owner_security SET must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP WHERE user_id = ?', [req.user.id]);
+  await audit(req, 'admin.owner_password_changed', 'user', req.user.id, 'Required first-login password rotation completed');
+  res.json({ message: 'Password updated. Your administrator account is now ready.' });
+}));
+
+router.put('/admin/security/password', asyncRoute(async (req, res) => {
+  if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can change this administrator password.' });
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  const confirmPassword = String(req.body?.confirmPassword || '');
+  if (!currentPassword || newPassword.length < 12 || newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'Enter your current password and matching new passwords of at least 12 characters.' });
+  }
+  const account = await db.getOne('SELECT password FROM users WHERE id = ?', [req.user.id]);
+  if (!account?.password || !(await bcrypt.compare(currentPassword, account.password))) {
+    return res.status(401).json({ message: 'The current password is incorrect.' });
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.update('UPDATE users SET password = ? WHERE id = ?', [passwordHash, req.user.id]);
+  await db.update('UPDATE admin_owner_security SET must_change_password = 0, password_changed_at = CURRENT_TIMESTAMP WHERE user_id = ?', [req.user.id]);
+  await audit(req, 'admin.owner_password_changed', 'user', req.user.id, 'Main owner password changed');
+  res.json({ message: 'Administrator password updated.' });
+}));
+
+router.put('/admin/security/username', asyncRoute(async (req, res) => {
+  if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the main platform owner can change this administrator username.' });
+  const currentPassword = String(req.body?.currentPassword || '');
+  const username = String(req.body?.username || '').trim();
+  if (!currentPassword || !/^[A-Za-z0-9_]{3,30}$/.test(username)) {
+    return res.status(400).json({ message: 'Enter your current password and a username containing 3–30 letters, numbers or underscores.' });
+  }
+  const account = await db.getOne('SELECT password, username FROM users WHERE id = ?', [req.user.id]);
+  if (!account?.password || !(await bcrypt.compare(currentPassword, account.password))) {
+    return res.status(401).json({ message: 'The current password is incorrect.' });
+  }
+  const conflict = await db.getOne('SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id <> ?', [username, req.user.id]);
+  if (conflict) return res.status(409).json({ message: 'That username is already in use.' });
+  await db.update('UPDATE users SET username = ? WHERE id = ?', [username, req.user.id]);
+  await audit(req, 'admin.owner_username_changed', 'user', req.user.id, 'Main owner username changed', { username: account.username }, { username });
+  res.json({ message: 'Administrator username updated.', username });
+}));
+
+router.post('/admin/ownership/transfer', asyncRoute(async (req, res) => {
+  if (!(await isMainOwner(req.user.id))) return res.status(403).json({ message: 'Only the current main platform owner can transfer ownership.' });
+  const targetUserId = Number(req.body?.targetUserId);
+  const currentPassword = String(req.body?.currentPassword || '');
+  const confirmUsername = String(req.body?.confirmUsername || '').trim();
+  if (!Number.isSafeInteger(targetUserId) || targetUserId < 1 || targetUserId === Number(req.user.id) || !currentPassword) {
+    return res.status(400).json({ message: 'A different target account and current password are required.' });
+  }
+  const owner = await db.getOne('SELECT password FROM users WHERE id = ?', [req.user.id]);
+  if (!owner?.password || !(await bcrypt.compare(currentPassword, owner.password))) {
+    return res.status(401).json({ message: 'The current password is incorrect.' });
+  }
+  const target = await db.getOne('SELECT id, username FROM users WHERE id = ?', [targetUserId]);
+  if (!target) return res.status(404).json({ message: 'The target account was not found.' });
+  if (confirmUsername !== target.username) return res.status(400).json({ message: 'Type the target username exactly to confirm ownership transfer.' });
+  const role = await db.getOne("SELECT id FROM admin_roles WHERE role_key = 'super_admin' AND is_active = 1");
+  if (!role) return res.status(500).json({ message: 'The Super Administrator role is unavailable.' });
+  await db.query(
+    'INSERT INTO admin_user_roles (user_id, role_id, assigned_by, is_active) VALUES (?, ?, ?, 1) ' +
+      (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE assigned_by = VALUES(assigned_by), is_active = 1' : 'ON CONFLICT(user_id, role_id) DO UPDATE SET assigned_by = excluded.assigned_by, is_active = 1'),
+    [targetUserId, role.id, req.user.id],
+  );
+  await db.update('UPDATE platform_ownership SET owner_user_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1', [targetUserId]);
+  await audit(req, 'admin.ownership_transferred', 'user', targetUserId, 'Main platform ownership transferred', { ownerUserId: req.user.id }, { ownerUserId: targetUserId });
+  res.json({ message: 'Main platform ownership transferred.', ownerUserId: targetUserId });
 }));
 
 module.exports = { router, initializeAdminTables, getPermissions, requirePermission, audit };
