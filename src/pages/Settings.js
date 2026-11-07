@@ -471,6 +471,8 @@ export default function Settings({ onLogout }) {
             </div>
           </label>
           <p className="mt-2 text-[11px] text-slate-500">At the current top-up rate, 1,000 points cost ₦100. Points earned from paid chat are credited to your QuickChat wallet.</p>
+          {error && <p role="alert" className="mt-3 text-xs text-red-700">{error}</p>}
+          {message && <p role="status" className="mt-3 text-xs text-emerald-700">{message}</p>}
           <button type="button" onClick={saveChatMonetization} disabled={chatSettingsBusy || (chatMonetization.enabled && (!Number.isInteger(Number(chatMonetization.pricePoints)) || Number(chatMonetization.pricePoints) < 1 || Number(chatMonetization.pricePoints) > 100000))} className="mt-4 rounded-full bg-blue-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50">{chatSettingsBusy ? 'Saving…' : 'Save chat settings'}</button>
         </section>
       )}
