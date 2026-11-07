@@ -25,7 +25,8 @@ async function authenticate(req, res, next) {
     if (!account) return res.status(401).json({ message: 'This account is no longer available. Sign in again.' });
     const activeBan = await db.getOne('SELECT id FROM account_bans WHERE user_id = ? AND revoked_at IS NULL LIMIT 1', [userId]);
     if (activeBan) return res.status(403).json({ message: 'This account has been permanently restricted. Contact QuickChat support if you believe this is an error.' });
-    const activeSuspension = await db.getOne('SELECT id, expires_at FROM account_suspensions WHERE user_id = ? AND lifted_at IS NULL AND expires_at > CURRENT_TIMESTAMP ORDER BY expires_at DESC LIMIT 1', [userId]);
+    const expiryCondition = db.type === 'sqlite' ? 'datetime(expires_at) > CURRENT_TIMESTAMP' : 'expires_at > CURRENT_TIMESTAMP';
+    const activeSuspension = await db.getOne(`SELECT id, expires_at FROM account_suspensions WHERE user_id = ? AND lifted_at IS NULL AND ${expiryCondition} ORDER BY expires_at DESC LIMIT 1`, [userId]);
     if (activeSuspension) return res.status(403).json({ message: 'This account is temporarily suspended until the restriction expires.' });
     req.user = { id: userId, username: session.username };
     return next();
