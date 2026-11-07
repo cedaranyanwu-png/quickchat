@@ -139,7 +139,7 @@ export default function Discover({ openModal, openVideo }) {
               <h2 className="text-sm font-extrabold text-slate-900">Articles picked for you</h2>
               <p className="mt-0.5 text-[11px] text-slate-500">From publishers around Nigeria and the world</p>
             </div>
-            <Link to="/books" className="text-xs font-bold text-blue-700 no-underline hover:underline">Saved items</Link>
+            <Link to="/saved-articles" className="text-xs font-bold text-blue-700 no-underline hover:underline">Saved articles</Link>
           </div>
 
           {loading && articles.length === 0 && (
