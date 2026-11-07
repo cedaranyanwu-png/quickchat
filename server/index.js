@@ -25,6 +25,8 @@ const businessRoutes = require('./routes/business');
 const recommendationRoutes = require('./routes/recommendations');
 const adminRoutes = require('./routes/admin');
 const rssRoutes = require('./routes/rss');
+const adminBackupRoutes = require('./routes/admin-backups');
+const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
 const { emailProvider } = require('./email');
@@ -229,6 +231,7 @@ app.use('/api', businessRoutes);
 app.use('/api', recommendationRoutes);
 app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
+app.use('/api', adminBackupRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -442,10 +445,32 @@ async function ensureUniqueIndexes() {
   }
 }
 
+let backupSchedule = null;
+
+function initializeBackupSchedule() {
+  const enabled = String(process.env.BACKUP_SCHEDULE_ENABLED || 'false').toLowerCase() === 'true';
+  if (!enabled || backupSchedule) return;
+  const schedule = require('node-schedule');
+  const expression = process.env.BACKUP_CRON || '0 2 * * *';
+  backupSchedule = schedule.scheduleJob(expression, async () => {
+    try {
+      const result = await backupEngine.createBackup({ reason: 'Scheduled daily administrator backup' });
+      console.log('[Backup] Scheduled archive created:', result.filename, result.sizeBytes, 'bytes');
+      const removed = await backupEngine.cleanupExpiredBackups(process.env.BACKUP_RETENTION_DAYS || 30);
+      if (removed) console.log('[Backup] Retention cleanup removed', removed, 'expired archives.');
+    } catch (error) {
+      console.error('[Backup] Scheduled backup failed:', error.message);
+    }
+  });
+  if (!backupSchedule) throw new Error('BACKUP_CRON is not a valid node-schedule expression.');
+  console.log('[Backup] Scheduled backups enabled:', expression);
+}
+
 function startServer() {
   const port = Number(process.env.PORT || 5000);
   return initializeDB()
     .then(() => initializePush())
+    .then(() => initializeBackupSchedule())
     .then(
       () => new Promise((resolve) => {
         const server = app.listen(port, () => {
