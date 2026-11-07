@@ -40,6 +40,8 @@ export default function Settings({ onLogout }) {
   const [payments, setPayments] = useState(null);
   const [banks, setBanks] = useState([]);
   const [fanPassPrice, setFanPassPrice] = useState('3000.00');
+  const [chatMonetization, setChatMonetization] = useState({ enabled: false, pricePoints: 100 });
+  const [chatSettingsBusy, setChatSettingsBusy] = useState(false);
   const [bankCode, setBankCode] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [payoutMobile, setPayoutMobile] = useState('');
@@ -116,6 +118,8 @@ export default function Settings({ onLogout }) {
       }
     }).catch((requestError) => setError(requestError.message));
 
+    apiRequest('/messages/monetization').then((data) => setChatMonetization({ enabled: Boolean(data.enabled), pricePoints: Number(data.pricePoints || 100) })).catch(() => {});
+
     apiRequest('/payments/me').then((data) => {
       setPayments(data);
       if (data.creatorMembership?.price) setFanPassPrice(data.creatorMembership.price);
@@ -172,6 +176,16 @@ export default function Settings({ onLogout }) {
       setMessage('Your Flutterwave payout account is connected.');
     } catch (requestError) { setError(requestError.message); }
     finally { setBusy(false); }
+  };
+
+  const saveChatMonetization = async () => {
+    setChatSettingsBusy(true); setMessage(''); setError('');
+    try {
+      const result = await apiRequest('/messages/monetization', { method: 'PATCH', body: chatMonetization });
+      setChatMonetization({ enabled: Boolean(result.enabled), pricePoints: Number(result.pricePoints || 100) });
+      setMessage(result.enabled ? 'Paid chat is enabled. New conversations can unlock your inbox using points.' : 'Paid chat is disabled.');
+    } catch (requestError) { setError(requestError.message); }
+    finally { setChatSettingsBusy(false); }
   };
 
   const saveFanPass = async () => {
@@ -309,6 +323,7 @@ export default function Settings({ onLogout }) {
       <div className="flex border-b border-slate-200 px-4 bg-slate-50/50 overflow-x-auto no-scrollbar">
         {[
           { id: 'general', label: 'Payouts & Membership', icon: 'fa-solid fa-wallet' },
+          { id: 'chat', label: 'Paid Chat', icon: 'fa-solid fa-comments-dollar' },
           { id: 'business', label: 'Business Profile', icon: 'fa-solid fa-briefcase' },
           { id: 'recommendations', label: 'Recommendation Bot', icon: 'fa-solid fa-wand-magic-sparkles' },
           { id: 'notifications', label: 'Notifications', icon: 'fa-solid fa-bell' },
@@ -432,6 +447,31 @@ export default function Settings({ onLogout }) {
           {payments && !canStartPayments && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-[11px] leading-4 text-amber-800">Add {payments.missingConfig?.join(', ') || 'the Flutterwave payment settings'} to <code>server/.env</code>, then restart the API.</p>}
           {error && <p role="alert" className="mt-3 text-xs text-red-700">{error}</p>}
           {message && <p role="status" className="mt-3 text-xs text-slate-600">{message}</p>}
+        </section>
+      )}
+
+      {/* PAID CHAT SETTINGS */}
+      {activeTab === 'chat' && (
+        <section className="m-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700"><i className="fa-solid fa-comments-dollar" /></span>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Monetize your inbox</h2>
+              <p className="mt-1 text-xs leading-5 text-slate-500">Choose whether new people must unlock a conversation with points before they can send you their first message. Replies in an unlocked conversation stay free.</p>
+            </div>
+          </div>
+          <label className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 p-3">
+            <span><strong className="block text-xs text-slate-800">Enable paid chat</strong><span className="text-[11px] text-slate-500">Existing unlocked conversations remain accessible.</span></span>
+            <input type="checkbox" checked={chatMonetization.enabled} onChange={(event) => setChatMonetization((value) => ({ ...value, enabled: event.target.checked }))} className="h-4 w-4 rounded text-blue-700" />
+          </label>
+          <label className="mt-3 block max-w-xs text-xs font-bold text-slate-700">Price per conversation unlock
+            <div className="mt-1 flex items-center rounded-lg border border-slate-300 bg-white">
+              <i className="fa-solid fa-coins px-3 text-amber-500" />
+              <input type="number" min="1" max="100000" step="1" inputMode="numeric" value={chatMonetization.pricePoints} onChange={(event) => setChatMonetization((value) => ({ ...value, pricePoints: event.target.value }))} className="min-w-0 flex-1 rounded-r-lg border-0 px-2 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100" />
+            </div>
+          </label>
+          <p className="mt-2 text-[11px] text-slate-500">At the current top-up rate, 1,000 points cost ₦100. Points earned from paid chat are credited to your QuickChat wallet.</p>
+          <button type="button" onClick={saveChatMonetization} disabled={chatSettingsBusy || (chatMonetization.enabled && (!Number.isInteger(Number(chatMonetization.pricePoints)) || Number(chatMonetization.pricePoints) < 1 || Number(chatMonetization.pricePoints) > 100000))} className="mt-4 rounded-full bg-blue-700 px-5 py-2.5 text-xs font-bold text-white hover:bg-blue-800 disabled:opacity-50">{chatSettingsBusy ? 'Saving…' : 'Save chat settings'}</button>
         </section>
       )}
 
