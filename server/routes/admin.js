@@ -305,8 +305,8 @@ router.post('/admin/whatsapp/messages', requirePermission('notifications.send'),
   if (!whatsapp.isConfigured()) return res.status(503).json({ message: 'WhatsApp Cloud API is not configured on the server.' });
   if (target === 'selected' && !selectedIds.length) return res.status(400).json({ message: 'Select at least one recipient.' });
   const recipients = target === 'selected'
-    ? await db.query(`SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND id IN (${selectedIds.map(() => '?').join(',')})`, selectedIds)
-    : await db.query("SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 ORDER BY id LIMIT 5000");
+    ? await db.query(`SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_notifications_opt_in = 1 AND id IN (${selectedIds.map(() => '?').join(',')})`, selectedIds)
+    : await db.query("SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 ORDER BY id LIMIT 5000");
   let sent = 0; let failed = 0;
   for (const user of recipients) {
     const result = await whatsapp.sendAdminNotification(user.whatsapp_phone, title, message);
