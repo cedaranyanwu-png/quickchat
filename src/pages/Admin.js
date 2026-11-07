@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { API_BASE_URL, apiRequest } from '../api';
+import { API_BASE_URL, adminRequest } from '../api';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
@@ -9,6 +9,7 @@ const NAV = [
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
   { key: 'audit', label: 'Audit logs', icon: 'fa-clock-rotate-left', permission: 'audit_logs.view' },
   { key: 'backups', label: 'Backup & recovery', icon: 'fa-database', permission: 'backups.view' },
+  { key: 'settings', label: 'Admin settings', icon: 'fa-gear', permission: 'settings.manage' },
 ];
 
 const metricCards = [
@@ -61,6 +62,10 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [loginForm, setLoginForm] = useState({ username: 'admin', password: '' });
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [credentialForm, setCredentialForm] = useState({ currentPassword: '', newUsername: '', newPassword: '', confirmPassword: '' });
+  const [credentialBusy, setCredentialBusy] = useState(false);
 
   const metricColors = { blue: 'bg-blue-50 text-blue-600', violet: 'bg-violet-50 text-violet-600', amber: 'bg-amber-50 text-amber-600', rose: 'bg-rose-50 text-rose-600', orange: 'bg-orange-50 text-orange-600', slate: 'bg-slate-100 text-slate-600', emerald: 'bg-emerald-50 text-emerald-600', cyan: 'bg-cyan-50 text-cyan-600' };
   const allowed = useMemo(() => new Set(identity?.permissions || []), [identity]);
@@ -68,8 +73,10 @@ export default function Admin() {
   const visibleNav = NAV.filter((item) => can(item.permission));
 
   const loadIdentity = useCallback(async () => {
-    const data = await apiRequest('/admin/me');
+    const data = await adminRequest('/admin/me');
     setIdentity(data);
+    setCredentialForm((current) => ({ ...current, newUsername: data.admin?.username || '' }));
+    if (data.admin?.mustChangePassword) setSection('settings');
     return data;
   }, []);
 
@@ -78,7 +85,7 @@ export default function Admin() {
     setError('');
     try {
       if (key === 'overview') {
-        const data = await apiRequest('/admin/overview');
+        const data = await adminRequest('/admin/overview');
         setOverview(data);
       } else if (key === 'users') {
         const data = await apiRequest(`/admin/users?page=${page}&limit=25&search=${encodeURIComponent(query)}`);
@@ -110,12 +117,40 @@ export default function Admin() {
   }, [section, userPage, search]);
 
   useEffect(() => {
-    loadIdentity().catch((err) => setError(err.message || 'Administrative access is unavailable.'));
+    if (!localStorage.getItem('adminToken')) { setLoading(false); return; }
+    loadIdentity().catch((err) => { setIdentity(null); setError(err.message || 'Administrative access is unavailable.'); setLoading(false); });
   }, [loadIdentity]);
 
   useEffect(() => {
     if (identity) loadSection(section);
   }, [identity, section, loadSection]);
+
+  const submitAdminLogin = async (event) => {
+    event.preventDefault(); setLoginBusy(true); setError('');
+    try {
+      const result = await adminRequest('/admin/auth/login', { method: 'POST', body: loginForm });
+      localStorage.setItem('adminToken', result.token); setIdentity(null); await loadIdentity();
+      setNotice(result.admin?.mustChangePassword ? 'Initial sign-in successful. Update your username and password to continue.' : 'Administrator sign-in successful.');
+    } catch (err) { setError(err.message || 'Administrator sign-in failed.'); }
+    finally { setLoginBusy(false); setLoading(false); }
+  };
+
+  const submitCredentialChange = async (event) => {
+    event.preventDefault(); setError(''); setNotice('');
+    if (credentialForm.newPassword && credentialForm.newPassword.length < 12) { setError('Use at least 12 characters for the new password.'); return; }
+    if (credentialForm.newPassword !== credentialForm.confirmPassword) { setError('The new password and confirmation do not match.'); return; }
+    if (identity?.admin?.mustChangePassword && !credentialForm.newPassword) { setError('Set a new password before entering the administration centre.'); return; }
+    setCredentialBusy(true);
+    try {
+      const result = await adminRequest('/admin/auth/credentials', { method: 'POST', body: { currentPassword: credentialForm.currentPassword, newUsername: credentialForm.newUsername, newPassword: credentialForm.newPassword } });
+      if (result.token) localStorage.setItem('adminToken', result.token);
+      setCredentialForm({ currentPassword: '', newUsername: result.admin?.username || '', newPassword: '', confirmPassword: '' });
+      await loadIdentity(); setSection('overview'); setNotice(result.message || 'Administrator credentials updated.');
+    } catch (err) { setError(err.message || 'Unable to update administrator credentials.'); }
+    finally { setCredentialBusy(false); }
+  };
+
+  const logoutAdmin = () => { localStorage.removeItem('adminToken'); setIdentity(null); setSection('overview'); setError(''); setNotice(''); };
 
   const changeSection = (key) => {
     setNotice('');
@@ -183,7 +218,7 @@ export default function Admin() {
 
   const downloadPlatformBackup = async (backup) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('adminToken');
       const response = await fetch(`${API_BASE_URL}/admin/backups/${encodeURIComponent(backup.filename)}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -228,7 +263,28 @@ export default function Admin() {
   };
 
   if (!identity && loading) return <div className="grid min-h-screen place-items-center bg-slate-50"><div className="text-center"><div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" /><p className="mt-3 text-sm font-semibold text-slate-500">Checking administrative access…</p></div></div>;
-  if (!identity) return <div className="grid min-h-screen place-items-center bg-slate-50 p-6"><div className="max-w-md rounded-2xl border border-slate-200 bg-white p-7 text-center shadow-sm"><div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-rose-50 text-rose-600"><i className="fa-solid fa-lock text-xl" /></div><h1 className="mt-4 text-xl font-black text-slate-900">Admin access restricted</h1><p className="mt-2 text-sm leading-6 text-slate-500">{error || 'This account does not have administrative permissions.'}</p><a href="/home" className="mt-5 inline-flex rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white no-underline">Return to QuickChat</a></div></div>;
+  if (!identity) return <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0b1426] px-4 py-10">
+    <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-blue-600/20 blur-3xl" />
+    <div className="pointer-events-none absolute -bottom-40 -right-20 h-[28rem] w-[28rem] rounded-full bg-cyan-500/10 blur-3xl" />
+    <section className="relative grid w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-white shadow-2xl lg:grid-cols-[1.05fr_.95fr]">
+      <div className="hidden flex-col justify-between bg-gradient-to-br from-[#14284b] via-[#10203a] to-[#091426] p-12 text-white lg:flex">
+        <div><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-xl"><i className="fa-solid fa-shield-halved" /></div><p className="mt-8 text-xs font-extrabold uppercase tracking-[.24em] text-blue-300">QuickChat / Control</p><h1 className="mt-4 max-w-sm text-4xl font-black leading-tight tracking-tight">Platform administration, in one secure workspace.</h1><p className="mt-5 max-w-sm text-sm leading-7 text-slate-300">Manage accounts, verification, reports, permissions and platform operations from a dedicated administrator portal.</p></div>
+        <div className="flex items-center gap-3 text-xs font-semibold text-slate-400"><span className="h-2 w-2 rounded-full bg-emerald-400" /> Independent administrator authentication</div>
+      </div>
+      <div className="p-7 sm:p-11 lg:p-12">
+        <div className="mb-8 flex items-center gap-3 lg:hidden"><div className="grid h-11 w-11 place-items-center rounded-xl bg-blue-600 text-lg text-white"><i className="fa-solid fa-shield-halved" /></div><div><p className="font-black text-slate-900">QuickChat</p><p className="text-[10px] font-bold uppercase tracking-[.18em] text-blue-600">Administration</p></div></div>
+        <p className="text-xs font-extrabold uppercase tracking-[.2em] text-blue-700">Administrator access</p><h2 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Sign in</h2><p className="mt-2 text-sm leading-6 text-slate-500">Use your administration credentials. QuickChat user accounts are not accepted here.</p>
+        {error && <div role="alert" className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+        <form onSubmit={submitAdminLogin} className="mt-7 space-y-5">
+          <label className="block text-sm font-bold text-slate-700">Administrator username<input autoComplete="username" value={loginForm.username} onChange={(event) => setLoginForm((form) => ({ ...form, username: event.target.value }))} required className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50" /></label>
+          <label className="block text-sm font-bold text-slate-700">Password<input type="password" autoComplete="current-password" value={loginForm.password} onChange={(event) => setLoginForm((form) => ({ ...form, password: event.target.value }))} required className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50" /></label>
+          <button disabled={loginBusy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 px-4 py-3.5 text-sm font-extrabold text-white hover:bg-blue-800 disabled:opacity-60">{loginBusy ? 'Signing in…' : 'Sign in to administration'}</button>
+        </form>
+        <a href="/login" className="mt-7 inline-flex items-center gap-2 text-xs font-bold text-slate-500 no-underline hover:text-blue-700"><i className="fa-solid fa-arrow-left" /> Back to QuickChat</a>
+        <p className="mt-8 border-t border-slate-100 pt-5 text-[11px] leading-5 text-slate-400">Protected administrator portal · Separate from member authentication</p>
+      </div>
+    </section>
+  </main>;
 
   const title = NAV.find((item) => item.key === section)?.label || 'Administration';
 
@@ -251,7 +307,7 @@ export default function Admin() {
     <main className="min-w-0 flex-1">
       <header className="sticky top-0 z-20 flex min-h-[76px] items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-8">
         <div><div className="text-[10px] font-extrabold uppercase tracking-[.18em] text-blue-600">Platform governance</div><h1 className="mt-1 text-xl font-black tracking-tight text-slate-900">{title}</h1></div>
-        <div className="flex items-center gap-2"><span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 sm:inline-flex"><span className="mr-2 mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />Permission checked</span><button onClick={() => loadSection(section)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" title="Refresh"><i className={`fa-solid fa-rotate-right ${loading ? 'animate-spin' : ''}`} /></button></div>
+        <div className="flex items-center gap-2"><span className="hidden rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 sm:inline-flex"><span className="mr-2 mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" />Permission checked</span><button onClick={() => loadSection(section)} className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" title="Refresh"><i className={`fa-solid fa-rotate-right ${loading ? 'animate-spin' : ''}`} /></button><button onClick={logoutAdmin} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-bold text-slate-600 hover:border-rose-200 hover:text-rose-700"><i className="fa-solid fa-right-from-bracket mr-2" />Sign out</button></div>
       </header>
       <div className="border-b border-slate-200 bg-white px-3 py-2 lg:hidden"><div className="flex gap-2 overflow-x-auto">{visibleNav.map((item) => <button key={item.key} onClick={() => changeSection(item.key)} className={`shrink-0 rounded-lg px-3 py-2 text-xs font-bold ${section === item.key ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{item.label}</button>)}</div></div>
       <div className="mx-auto max-w-[1440px] p-4 sm:p-7">
@@ -259,6 +315,18 @@ export default function Admin() {
         {notice && <div role="status" className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"><i className="fa-solid fa-circle-check" />{notice}<button className="ml-auto" onClick={() => setNotice('')}><i className="fa-solid fa-xmark" /></button></div>}
         {loading && <div className="mb-4 h-1 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" /></div>}
 
+        {section === 'settings' && <section className="max-w-2xl">
+          <div className="mb-5"><h2 className="text-lg font-black text-slate-900">Administrator credentials</h2><p className="mt-1 text-sm text-slate-500">Manage the independent username and password used only by this administration portal.</p></div>
+          {identity.admin?.mustChangePassword && <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Initial setup required.</strong> Change the bootstrap password before using the administration dashboard.</div>}
+          <form onSubmit={submitCredentialChange} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+            <label className="block text-sm font-bold text-slate-700">Current password<input type="password" autoComplete="current-password" value={credentialForm.currentPassword} onChange={(event) => setCredentialForm((form) => ({ ...form, currentPassword: event.target.value }))} required className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
+            <label className="block text-sm font-bold text-slate-700">Administrator username<input autoComplete="username" value={credentialForm.newUsername} onChange={(event) => setCredentialForm((form) => ({ ...form, newUsername: event.target.value }))} required minLength={3} maxLength={80} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
+            <label className="block text-sm font-bold text-slate-700">New password {identity.admin?.mustChangePassword ? '(required)' : '(leave blank to keep current)'}<input type="password" autoComplete="new-password" value={credentialForm.newPassword} onChange={(event) => setCredentialForm((form) => ({ ...form, newPassword: event.target.value }))} minLength={12} required={Boolean(identity.admin?.mustChangePassword)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
+            <label className="block text-sm font-bold text-slate-700">Confirm new password<input type="password" autoComplete="new-password" value={credentialForm.confirmPassword} onChange={(event) => setCredentialForm((form) => ({ ...form, confirmPassword: event.target.value }))} minLength={12} required={Boolean(credentialForm.newPassword)} className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500" /></label>
+            <p className="text-xs leading-5 text-slate-500">Passwords must contain at least 12 characters. Credentials are stored as bcrypt hashes and are not shared with QuickChat member accounts.</p>
+            <button disabled={credentialBusy} className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-extrabold text-white hover:bg-blue-800 disabled:opacity-60">{credentialBusy ? 'Saving…' : 'Save administrator credentials'}</button>
+          </form>
+        </section>}
         {section === 'overview' && <section>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Platform at a glance</h2><p className="mt-1 text-sm text-slate-500">Live totals from the QuickChat database.</p></div><span className="text-xs font-semibold text-slate-400">Updated {new Date().toLocaleTimeString()}</span></div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(([key, label, icon, color]) => <div key={key} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_3px_18px_rgba(15,23,42,.035)]"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{label}</span><span className={`grid h-10 w-10 place-items-center rounded-xl ${metricColors[color] || "bg-slate-100 text-slate-600"}`}><i className={`fa-solid ${icon}`} /></span></div><div className="mt-4 text-3xl font-black tracking-tight text-slate-900">{Number(overview?.metrics?.[key] || 0).toLocaleString()}</div></div>)}</div>
