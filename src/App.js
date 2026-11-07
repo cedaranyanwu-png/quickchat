@@ -39,13 +39,14 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
 
-const SettingsHub = () => <>
+const SettingsHub = ({ onLogout }) => <>
   <div className="mx-auto max-w-3xl px-4 pt-3">
     <Link to="/settings/wallet" className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm no-underline hover:border-blue-200 hover:text-blue-700">
       <span className="grid h-9 w-9 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><i className="fa-solid fa-wallet" /></span>
@@ -53,7 +54,7 @@ const SettingsHub = () => <>
       <i className="fa-solid fa-chevron-right text-xs" />
     </Link>
   </div>
-  <Settings />
+  <Settings onLogout={onLogout} />
 </>;
 
 const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
@@ -155,7 +156,13 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/lists" element={<Lists />} />
             <Route path="/profile" element={<Profile openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/profile/edit" element={<EditProfile />} />
-            <Route path="/settings" element={<SettingsHub />} />
+            <Route path="/settings" element={<SettingsHub onLogout={() => {
+              apiRequest('/messages/presence', { method: 'DELETE', body: { sessionId: presenceSessionId.current }, keepalive: true }).catch(() => {});
+              localStorage.removeItem('token');
+              localStorage.removeItem('user');
+              onAuthenticated(false);
+            }} />} />
+            <Route path="/menu" element={<Menu onLogout={() => onAuthenticated(false)} />} />
             <Route path="/settings/wallet" element={<Wallet />} />
             <Route path="/wallet" element={<Navigate to="/settings/wallet" replace />} />
             <Route path="/verification" element={<Verification />} />
