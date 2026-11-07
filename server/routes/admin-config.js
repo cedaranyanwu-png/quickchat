@@ -2,16 +2,16 @@ const express = require('express');
 const db = require('../database');
 const { asyncRoute } = require('./utils');
 const { requirePermission, audit } = require('./admin');
-const { getVerificationFeePoints, setVerificationFeePoints, saveSecretSettings } = require('../platform-config');
+const { getVerificationFeeNaira, setVerificationFeeNaira, saveSecretSettings } = require('../platform-config');
 const { isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured, isFlutterwaveWebhookUrlConfigured, isPublicAppUrlConfigured } = require('../flutterwave');
 
 const router = express.Router();
 
 router.get('/admin/configuration', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
-  const fee = await getVerificationFeePoints();
+  const fee = await getVerificationFeeNaira();
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({
-    verificationFeePoints: fee,
+    verificationFeeNaira: fee,
     flutterwave: {
       secretKeyConfigured: isFlutterwaveSecretConfigured(),
       webhookHashConfigured: isFlutterwaveWebhookSecretConfigured(),
@@ -35,10 +35,10 @@ router.put('/admin/configuration/gateways', requirePermission('settings.manage')
 }));
 
 router.put('/admin/configuration/verification-fee', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const previous = await getVerificationFeePoints();
-  const amount = await setVerificationFeePoints(req.body?.points, req.user.id);
-  await audit(req, 'configuration.verification_fee_updated', 'platform_setting', 'verification_fee_points', 'Verification price changed', { points: previous }, { points: amount });
-  res.json({ message: 'Verification price updated.', verificationFeePoints: amount });
+  const previous = await getVerificationFeeNaira();
+  const amount = await setVerificationFeeNaira(req.body?.amountNaira, req.user.id);
+  await audit(req, 'configuration.verification_fee_updated', 'platform_setting', 'verification_fee_points', 'Verification price changed', { amountNaira: previous }, { amountNaira: amount });
+  res.json({ message: 'Verification price updated.', verificationFeeNaira: amount });
 }));
 
 module.exports = router;
