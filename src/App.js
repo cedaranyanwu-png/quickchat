@@ -117,6 +117,12 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     </Routes>;
   }
 
+  // The administration console is an independent portal and must be reachable
+  // without creating or signing into a QuickChat member account.
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  }
+
   if (isAuthPage) {
     if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login')) return <Navigate to="/home" replace />;
     return <Routes>
@@ -130,11 +136,6 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
-
-  // Keep the governance dashboard separate without shadowing the RSS admin route.
-  if (location.pathname.replace(/\/+$/, '') === '/admin') {
-    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
-  }
 
   if (isLiveWatchPage) {
     return <Routes><Route path="/live/:sessionId" element={<Live />} /><Route path="*" element={<Navigate to="/live" replace />} /></Routes>;

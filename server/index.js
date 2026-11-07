@@ -8,6 +8,7 @@ const db = require('./database');
 const { toPost } = require('./routes/utils');
 const authRoutes = require('./auth');
 const { authenticate } = require('./middleware/authenticate');
+const adminAuth = require('./admin-auth');
 const { initializePageTables } = require('./schema');
 const contentRoutes = require('./routes/content');
 const statusRoutes = require('./routes/statuses');
@@ -216,7 +217,13 @@ function escapeHtml(value) {
 }
 
 // Page APIs require the bearer token returned by the login and registration routes.
-app.use('/api', authenticate);
+app.use('/api', (req, res, next) => {
+  // The admin console has its own token namespace and never consumes the user token.
+  if (req.path === '/admin/auth/login') return next();
+  if (req.path.startsWith('/admin/')) return adminAuth.authenticateAdmin(req, res, next);
+  return authenticate(req, res, next);
+});
+app.use('/api', adminAuth.router);
 app.use('/api', contentRoutes);
 app.use('/api', statusRoutes);
 app.use('/api', profileRoutes);
@@ -301,7 +308,8 @@ async function initializeDB() {
   await ensureUniqueIndexes();
   await initializePageTables();
   await adminRoutes.initializeAdminTables();
-  console.log('[Database] Users and administration tables are ready.');
+  await adminAuth.initializeAdminAuth();
+  console.log('[Database] Users and independent administration tables are ready.');
 }
 
 async function addMissingColumns() {

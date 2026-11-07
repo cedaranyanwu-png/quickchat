@@ -292,15 +292,15 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
       WHERE ur.user_id = ? AND ur.is_active = 1 AND r.is_active = 1 ORDER BY r.name`,
     [req.user.id],
   );
-  res.json({ userId: req.user.id, roles, permissions });
+  res.json({ userId: req.user.id, roles, permissions, admin: { id: req.adminAccount.id, username: req.adminAccount.username, mustChangePassword: Boolean(Number(req.adminAccount.must_change_password)) } });
 }));
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {
   const recentWindow = db.type === 'sqlite' ? "datetime('now', '-30 days')" : db.type === 'mysql' ? "DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)" : "CURRENT_TIMESTAMP - INTERVAL '30 days'";
   const suspensionExpiry = db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP';
   const counts = await Promise.all([
-    db.getCount('SELECT COUNT(*) AS count FROM users'),
-    db.getCount(`SELECT COUNT(*) AS count FROM users WHERE created_at >= ${recentWindow}`),
+    db.getCount("SELECT COUNT(*) AS count FROM users WHERE username NOT LIKE 'qc-admin-actor-%'"),
+    db.getCount(`SELECT COUNT(*) AS count FROM users WHERE username NOT LIKE 'qc-admin-actor-%' AND created_at >= ${recentWindow}`),
     db.getCount("SELECT COUNT(*) AS count FROM verification_applications WHERE status = 'pending'"),
     db.getCount("SELECT COUNT(*) AS count FROM moderation_reports WHERE status IN ('pending', 'under_review', 'escalated')"),
     db.getCount(`SELECT COUNT(*) AS count FROM users u WHERE EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${suspensionExpiry})`),
@@ -310,8 +310,9 @@ router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(as
   ]);
   const recent = await db.query(
     `SELECT l.id, l.action, l.target_type, l.target_id, l.reason, l.created_at,
-            u.username AS administrator
+            COALESCE(aa.username, u.username) AS administrator
        FROM admin_audit_logs l LEFT JOIN users u ON u.id = l.admin_user_id
+       LEFT JOIN admin_accounts aa ON aa.actor_user_id = l.admin_user_id
       ORDER BY l.created_at DESC, l.id DESC LIMIT 12`,
   );
   res.json({ metrics: {
@@ -326,7 +327,7 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
   const limit = Math.max(10, Math.min(100, Number.parseInt(req.query.limit, 10) || 25));
   const search = String(req.query.search || '').trim().slice(0, 100);
   const status = String(req.query.status || '').trim();
-  const where = [];
+  const where = ["u.username NOT LIKE 'qc-admin-actor-%'"];
   const params = [];
   if (search) {
     where.push('(LOWER(u.username) LIKE LOWER(?) OR LOWER(u.fullname) LIKE LOWER(?) OR LOWER(u.email) LIKE LOWER(?))');
@@ -387,8 +388,9 @@ router.post('/admin/roles', requirePermission('roles.create'), asyncRoute(async 
 router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute(async (req, res) => {
   const limit = Math.max(10, Math.min(100, Number.parseInt(req.query.limit, 10) || 50));
   const rows = await db.query(
-    `SELECT l.*, u.username AS administrator FROM admin_audit_logs l
+    `SELECT l.*, COALESCE(aa.username, u.username) AS administrator FROM admin_audit_logs l
        LEFT JOIN users u ON u.id = l.admin_user_id
+       LEFT JOIN admin_accounts aa ON aa.actor_user_id = l.admin_user_id
       ORDER BY l.created_at DESC, l.id DESC LIMIT ?`,
     [limit],
   );
