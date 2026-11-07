@@ -5,7 +5,7 @@ import { useUnreadCounts } from './UnreadCountsProvider';
 
 const navItems = [
   { name: 'Home', icon: 'fa-solid fa-house', path: '/home' },
-  { name: 'Explore', icon: 'fa-solid fa-compass', path: '/explore' },
+  { name: 'Discover', icon: 'fa-solid fa-compass', path: '/discover' },
   { name: 'Messages', icon: 'fa-solid fa-envelope', path: '/messages' },
   { name: 'Communities', icon: 'fa-solid fa-users', path: '/communities' },
   { name: 'Notifications', icon: 'fa-solid fa-bell', path: '/notifications' },

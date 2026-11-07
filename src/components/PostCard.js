@@ -329,6 +329,14 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
         ) : (
           <AdultContentGate isAdult={item.isAdult}>
             {item.text && <p className="text-sm text-slate-800 mt-1 whitespace-pre-wrap break-words">{item.text}</p>}
+            {item.linkedArticle?.url && <a href={item.linkedArticle.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 no-underline hover:border-blue-200">
+              {item.linkedArticle.imageUrl && <img src={item.linkedArticle.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-24 w-24 flex-shrink-0 object-cover" />}
+              <span className="min-w-0 flex-1 p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-blue-700">Discussing an external article</span>
+                <strong className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-900">{item.linkedArticle.title}</strong>
+                <span className="mt-1 block truncate text-[10px] text-slate-500">{item.linkedArticle.publisher} · Read original <i className="fa-solid fa-arrow-up-right-from-square ml-1" /></span>
+              </span>
+            </a>}
             {showPostMeta && item.sourceLink && <a href={item.sourceLink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"><i className="fa-solid fa-arrow-up-right-from-square" />Source: {sourceHost}</a>}
             {showPostMeta && item.hashtags?.length > 0 && <div className="mt-1 flex flex-wrap gap-x-2">{item.hashtags.map((tag) => <span key={tag} className="text-xs font-semibold text-blue-700">#{tag}</span>)}</div>}
             {hasMedia && (

@@ -8,6 +8,7 @@ const items = [
   ['Videos', 'fa-solid fa-video', '/videos', 'Watch and upload short-form videos.'],
   ['People', 'fa-solid fa-user-plus', '/follow', 'Find people to follow.'],
   ['Recommendations', 'fa-solid fa-wand-magic-sparkles', '/recommendations', 'Tune into content and people you may like.'],
+  ['RSS Publisher Admin', 'fa-solid fa-rss', '/admin/rss', 'Manage verified news feeds and synchronization.'],
   ['Books', 'fa-solid fa-bookmark', '/books', 'Saved posts and bookmarks.'],
   ['Settings', 'fa-solid fa-gear', '/settings', 'Account, notifications, payments and logout.'],
 ];
