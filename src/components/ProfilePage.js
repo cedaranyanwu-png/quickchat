@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiRequest } from '../api';
+import { apiRequest, resolveMediaUrl } from '../api';
 import Avatar from './Avatar';
 import PostCard from './PostCard';
 
@@ -108,13 +108,14 @@ export default function ProfilePage({ username, openModal, openVideo }) {
   };
 
   if (loading && !profile) return <p className="p-8 text-center text-sm text-slate-500">Loading profile…</p>;
+  const coverImageUrl = resolveMediaUrl(profile?.coverImage);
   return <div className="max-w-4xl mx-auto pb-20 lg:pb-0">
     <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-200 z-10 px-4 py-2 flex items-center gap-4"><button onClick={() => navigate(-1)} className="w-8 h-8 rounded-full hover:bg-slate-100"><i className="fa-solid fa-arrow-left"/></button><div><h2 className="text-base font-extrabold text-slate-900">{profile?.fullName || 'Profile'}</h2><p className="text-[10px] text-slate-500">{profile?.postCount || 0} posts</p></div></div>
     <div className="relative">
-      <button type="button" disabled={!profile?.coverImage} onClick={() => profile?.coverImage && openModal?.(profile.coverImage)} className="group relative block h-36 w-full overflow-hidden border-0 bg-slate-200 bg-cover bg-center text-left disabled:cursor-default" style={{ backgroundImage: profile?.coverImage ? `url(${profile.coverImage})` : undefined }} aria-label={profile?.coverImage ? 'View cover image' : undefined}>
+      <button type="button" disabled={!profile?.coverImage} onClick={() => coverImageUrl && openModal?.(coverImageUrl)} className="group relative block h-36 w-full overflow-hidden border-0 bg-slate-200 bg-cover bg-center text-left disabled:cursor-default" style={{ backgroundImage: coverImageUrl ? `url("${coverImageUrl.replace(/"/g, '%22')}")` : undefined }} aria-label={profile?.coverImage ? 'View cover image' : undefined}>
         {profile?.coverImage && <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100"><span className="rounded-full bg-black/55 px-3 py-2 text-xs font-bold"><i className="fa-solid fa-expand mr-1.5" />View image</span></span>}
       </button>
-      <button type="button" onClick={() => profile?.picture && openModal?.(profile.picture)} className="absolute bottom-0 left-4 z-20 translate-y-1/2 rounded-full border-4 border-white bg-white p-0 shadow-md" aria-label={profile?.picture ? 'View profile image' : undefined}>
+      <button type="button" onClick={() => profile?.picture && openModal?.(resolveMediaUrl(profile.picture))} className="absolute bottom-0 left-4 z-20 translate-y-1/2 cursor-zoom-in rounded-full border-4 border-white bg-white p-0 shadow-md" aria-label={profile?.picture ? 'View profile image' : undefined}>
         <Avatar name={profile?.fullName} picture={profile?.picture} size={84}/>
       </button>
     </div>

@@ -89,7 +89,7 @@ export default function Home({ refreshKey, openModal, onOpenPost, openVideo }) {
         </div>
       </div>
 
-      <StatusStrip />
+      <StatusStrip key={refreshKey} />
 
       <LiveNowStrip />
 
