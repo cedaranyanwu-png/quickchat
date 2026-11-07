@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { apiRequest } from '../api';
+import { apiRequest, uploadMedia } from '../api';
 import Avatar from '../components/Avatar';
 
 export default function Messages() {
@@ -22,11 +22,29 @@ export default function Messages() {
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyMenuId, setReplyMenuId] = useState(null);
   const [swipedMessageId, setSwipedMessageId] = useState(null);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [recordingMode, setRecordingMode] = useState('');
+  const [call, setCall] = useState(null);
+  const [callError, setCallError] = useState('');
+  const [callMuted, setCallMuted] = useState(false);
+  const [callCameraOff, setCallCameraOff] = useState(false);
   const touchStartRef = useRef(null);
   const endOfMessagesRef = useRef(null);
   const openedUserRef = useRef('');
   const typingTimeoutRef = useRef(null);
   const lastTypingSentAtRef = useRef(0);
+  const fileInputRef = useRef(null);
+  const recorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const callRef = useRef(null);
+  const callPcRef = useRef(null);
+  const callLocalStreamRef = useRef(null);
+  const callRemoteStreamRef = useRef(null);
+  const callCursorRef = useRef(0);
+  const pendingCallIceRef = useRef([]);
+  const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null);
+  const localVideoRef = useRef(null);
 
   const reportTyping = useCallback((conversationId, typing) => {
     if (!conversationId) return;
@@ -155,6 +173,206 @@ export default function Messages() {
     openedUserRef.current = requestedUserId;
     startConversation({ id: requestedUserId }).catch(() => {});
   }, [requestedUserId, startConversation]);
+
+  const sendAttachment = async (file) => {
+    if (!activeId || !file || uploadingMedia) return;
+    setUploadingMedia(true);
+    setError('');
+    try {
+      const uploaded = await uploadMedia(file);
+      await apiRequest(`/messages/conversations/${activeId}/messages`, { method: 'POST', body: { mediaUploadId: uploaded.id, text: '', replyToMessageId: replyingTo?.id || null } });
+      setReplyingTo(null);
+      await Promise.all([loadMessages(activeId), loadConversations()]);
+    } catch (uploadError) {
+      setError(uploadError.message || 'The attachment could not be sent.');
+    } finally {
+      setUploadingMedia(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleImageSelected = (event) => {
+    const file = event.target.files?.[0];
+    if (file) void sendAttachment(file);
+  };
+
+  const startRecording = async (mode) => {
+    if (!activeId || recordingMode || typeof MediaRecorder === 'undefined') return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(mode === 'voice'
+        ? { audio: { echoCancellation: true, noiseSuppression: true } }
+        : { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } });
+      const candidates = mode === 'voice' ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'] : ['video/webm;codecs=vp8,opus', 'video/webm'];
+      const mimeType = candidates.find((type) => MediaRecorder.isTypeSupported?.(type)) || '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const chunks = [];
+      recordingStreamRef.current = stream;
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => { if (event.data?.size) chunks.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: recorder.mimeType || (mode === 'voice' ? 'audio/webm' : 'video/webm') });
+        stream.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        recorderRef.current = null;
+        setRecordingMode('');
+        if (blob.size) void sendAttachment(new File([blob], `${mode}-${Date.now()}.webm`, { type: blob.type }));
+      };
+      recorder.start(500);
+      setRecordingMode(mode);
+    } catch (recordError) {
+      setError(recordError?.name === 'NotAllowedError' ? 'Allow microphone and camera access to record a message.' : 'Recording is unavailable on this device or browser.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
+  };
+
+  const updateCall = (next) => { callRef.current = next; setCall(next); };
+
+  const sendCallSignal = async (data, kind, payload = null) => {
+    if (!data?.callId || !data?.peerId) return;
+    await apiRequest(`/messages/calls/${data.callId}/signals`, { method: 'POST', body: { to: data.peerId, kind, payload } });
+  };
+
+  const closeDirectCall = () => {
+    try { callPcRef.current?.close(); } catch (_error) {}
+    callPcRef.current = null;
+    callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+    callLocalStreamRef.current = null;
+    callRemoteStreamRef.current = null;
+    pendingCallIceRef.current = [];
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    updateCall(null);
+    setCallMuted(false);
+    setCallCameraOff(false);
+  };
+
+  const createDirectPeer = async (data, initiator) => {
+    const pc = new RTCPeerConnection({ iceServers: data.iceServers || [] });
+    callPcRef.current = pc;
+    callLocalStreamRef.current?.getTracks().forEach((track) => pc.addTrack(track, callLocalStreamRef.current));
+    pc.onicecandidate = (event) => { if (event.candidate) void sendCallSignal(data, 'ice', event.candidate.toJSON()).catch(() => {}); };
+    pc.ontrack = (event) => {
+      const stream = event.streams?.[0] || new MediaStream([event.track]);
+      callRemoteStreamRef.current = stream;
+      if (remoteVideoRef.current) { remoteVideoRef.current.srcObject = stream; remoteVideoRef.current.play().catch(() => {}); }
+      if (remoteAudioRef.current) { remoteAudioRef.current.srcObject = stream; remoteAudioRef.current.play().catch(() => {}); }
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') setCallError('The call connection failed. Check your network and try again.');
+    };
+    if (initiator) {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await sendCallSignal(data, 'offer', { type: 'offer', sdp: pc.localDescription.sdp });
+    }
+    return pc;
+  };
+
+  const startCall = async (mediaType) => {
+    if (!activeId || !activeConversation || callRef.current) return;
+    setCallError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(mediaType === 'video'
+        ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+        : { audio: true });
+      callLocalStreamRef.current = stream;
+      const result = await apiRequest('/messages/calls/start', { method: 'POST', body: { conversationId: activeId, mediaType } });
+      const data = { callId: result.callId, conversationId: activeId, peerId: result.to, mediaType, status: 'outgoing', peerName: activeConversation.name, iceServers: result.iceServers || [], initiator: true };
+      updateCall(data);
+      if (localVideoRef.current && mediaType === 'video') localVideoRef.current.srcObject = stream;
+    } catch (callStartError) {
+      callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+      callLocalStreamRef.current = null;
+      setCallError(callStartError?.name === 'NotAllowedError' ? 'Allow microphone and camera access before starting a call.' : callStartError.message || 'Could not start the call.');
+    }
+  };
+
+  const answerCall = async () => {
+    const current = callRef.current;
+    if (!current || current.status !== 'incoming') return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia(current.mediaType === 'video'
+        ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
+        : { audio: true });
+      callLocalStreamRef.current = stream;
+      const accepted = { ...current, status: 'connecting', initiator: false };
+      updateCall(accepted);
+      if (localVideoRef.current && current.mediaType === 'video') localVideoRef.current.srcObject = stream;
+      await sendCallSignal(accepted, 'accept');
+    } catch (callAcceptError) {
+      setCallError(callAcceptError?.name === 'NotAllowedError' ? 'Allow microphone and camera access to answer this call.' : callAcceptError.message || 'Could not answer the call.');
+    }
+  };
+
+  const rejectCall = async () => {
+    const current = callRef.current;
+    if (current) await sendCallSignal(current, 'reject').catch(() => {});
+    closeDirectCall();
+  };
+
+  const endCall = async () => {
+    const current = callRef.current;
+    if (current) await sendCallSignal(current, 'end').catch(() => {});
+    closeDirectCall();
+  };
+
+  useEffect(() => {
+    let active = true;
+    let timer;
+    const pollCalls = async () => {
+      try {
+        const result = await apiRequest('/messages/calls/poll', { method: 'POST', body: { afterId: callCursorRef.current } });
+        for (const signal of result.signals || []) {
+          callCursorRef.current = Math.max(callCursorRef.current, Number(signal.id));
+          let current = callRef.current;
+          if (signal.kind === 'invite' && !current) {
+            const convo = conversations.find((item) => Number(item.id) === Number(signal.conversationId));
+            current = { callId: signal.callId, conversationId: signal.conversationId, peerId: Number(signal.from), peerName: signal.payload?.callerName || convo?.name || 'QuickChat member', mediaType: signal.mediaType, status: 'incoming', iceServers: [], initiator: false };
+            updateCall(current);
+            setActiveId(signal.conversationId);
+          } else if (!current || current.callId !== signal.callId) continue;
+          else if (signal.kind === 'accept' && current.initiator) {
+            updateCall({ ...current, status: 'connecting' });
+            await createDirectPeer(current, true);
+          } else if (signal.kind === 'offer' && !current.initiator) {
+            const pc = callPcRef.current || await createDirectPeer(current, false);
+            await pc.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await sendCallSignal(current, 'answer', { type: 'answer', sdp: pc.localDescription.sdp });
+            for (const candidate of pendingCallIceRef.current) await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            pendingCallIceRef.current = [];
+            updateCall({ ...current, status: 'active' });
+          } else if (signal.kind === 'answer' && current.initiator && callPcRef.current) {
+            await callPcRef.current.setRemoteDescription(new RTCSessionDescription(signal.payload));
+            updateCall({ ...current, status: 'active' });
+            for (const candidate of pendingCallIceRef.current) await callPcRef.current.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+            pendingCallIceRef.current = [];
+          } else if (signal.kind === 'ice' && signal.payload) {
+            if (callPcRef.current?.remoteDescription) await callPcRef.current.addIceCandidate(new RTCIceCandidate(signal.payload)).catch(() => {});
+            else pendingCallIceRef.current.push(signal.payload);
+          } else if (signal.kind === 'reject') {
+            setCallError('The other person declined your call.');
+            closeDirectCall();
+          } else if (signal.kind === 'end') closeDirectCall();
+        }
+      } catch (_error) { /* polling retries after a short delay */ }
+      finally { if (active) timer = setTimeout(pollCalls, 900); }
+    };
+    pollCalls();
+    return () => { active = false; clearTimeout(timer); };
+  }, [conversations]);
+
+  useEffect(() => () => {
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') recorderRef.current.stop();
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    try { callPcRef.current?.close(); } catch (_error) {}
+    callLocalStreamRef.current?.getTracks().forEach((track) => track.stop());
+  }, []);
 
   const sendMessage = async (event) => {
     event.preventDefault();
