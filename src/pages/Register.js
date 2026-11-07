@@ -6,7 +6,7 @@ import { INTEREST_OPTIONS } from '../interest-options';
 
 const Register = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', whatsappPhone: '', password: '', whatsappOptIn: false });
+  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pending, setPending] = useState(null);
