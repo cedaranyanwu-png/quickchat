@@ -447,12 +447,12 @@ router.post('/admin/verifications/:id/decision', requirePermission('verification
   }
   const application = await db.getOne('SELECT * FROM verification_applications WHERE id = ?', [id]);
   if (!application || application.status !== 'pending') return res.status(404).json({ message: 'Pending application not found.' });
+  if (decision === 'approved' && !(await hasPaidVerificationFee(application.user_id))) return res.status(402).json({ message: 'This applicant has not completed the verification fee. The badge cannot be awarded yet.' });
   await db.update(
     'UPDATE verification_applications SET status = ?, reviewer_id = ?, review_note = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?',
     [decision, req.user.id, note, id],
   );
   if (decision === 'approved') {
-    if (!(await hasPaidVerificationFee(application.user_id))) return res.status(402).json({ message: 'This applicant has not completed the verification fee. The badge cannot be awarded yet.' });
     await db.update('UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = ? WHERE id = ?', ['reviewed', application.user_id]);
     const category = String(application.account_category || '').toLowerCase();
     const badgeKey = category.includes('creator') ? 'verified_creator'
