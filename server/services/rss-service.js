@@ -29,14 +29,14 @@ function isPrivateAddress(address) {
     return a === 0 || a === 10 || a === 127 || a >= 224 ||
       (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
       (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
-      (a === 192 && b === 0) || (a === 198 && (b === 18 || b === 19));
+      (a === 192 && (b === 0 || b === 2)) || (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0);
   }
   if (family === 6) {
     const value = address.toLowerCase();
     return value === '::' || value === '::1' || value.startsWith('fc') ||
       value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') ||
       value.startsWith('fea') || value.startsWith('feb') || value.startsWith('::ffff:127.') ||
-      value.startsWith('::ffff:10.') || value.startsWith('::ffff:192.168.');
+      value.startsWith('::ffff:10.') || value.startsWith('::ffff:192.168.') || value.startsWith('2001:db8:');
   }
   return true;
 }
@@ -134,6 +134,13 @@ function itemImage(item) {
   return candidates.map((candidate) => validExternalUrl(candidate, false)).find(Boolean) || null;
 }
 
+function normalizedUrlForHash(value) {
+  const url = new URL(value);
+  url.hash = '';
+  url.hostname = url.hostname.toLowerCase();
+  return url.toString().replace(/\\/$/, '');
+}
+
 function normalizedGuid(item, articleUrl) {
   return String(item.guid || item.id || '').trim().slice(0, 512) || articleUrl;
 }
@@ -185,7 +192,7 @@ async function syncSource(sourceId, { force = false } = {}) {
       if (!articleUrl || !title) continue;
       const guid = normalizedGuid(item, articleUrl);
       const guidHash = crypto.createHash('sha256').update(guid).digest('hex');
-      const urlHash = crypto.createHash('sha256').update(articleUrl.toLowerCase()).digest('hex');
+      const urlHash = crypto.createHash('sha256').update(normalizedUrlForHash(articleUrl)).digest('hex');
       const excerpt = plainExcerpt(item.contentSnippet || item.contentEncoded || item.content || item.description);
       const imageUrl = itemImage(item);
       const category = String(item.categories && item.categories[0] || sourceCategories[0] || 'News').slice(0, 80);
