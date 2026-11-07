@@ -32,7 +32,6 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import VerifyEmail from './pages/VerifyEmail';
-import VerifyWhatsApp from './pages/VerifyWhatsApp';
 import EditProfile from './pages/EditProfile';
 import Settings from './pages/Settings';
 import AdvancedComposer from './pages/AdvancedComposer';
@@ -85,7 +84,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     navigate('/compose/advanced', { state: handoff ? { handoff } : undefined });
   };
 
-  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/verify-whatsapp'].includes(location.pathname);
+  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
   const isSharePage = location.pathname.startsWith('/share/');
   const isLiveWatchPage = /^\/live\/[^/]+\/?$/.test(location.pathname);
   const isVideosPage = location.pathname === '/videos';
@@ -134,7 +133,6 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
-      <Route path="/verify-whatsapp" element={<VerifyWhatsApp />} />
     </Routes>;
   }
 
