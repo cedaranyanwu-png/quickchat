@@ -353,10 +353,37 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
 }));
 
 function iceServers() {
-  const stun = String(process.env.WEBRTC_STUN_URLS || 'stun:stun.l.google.com:19302,stun:global.stun.twilio.com:3478').split(',').map((url) => url.trim()).filter(Boolean);
+  // Providers such as Metered and Twilio return several TURN transports.
+  // Keep the full ICE array in Railway instead of reducing it to one URL.
+  const configured = String(process.env.WEBRTC_ICE_SERVERS_JSON || '').trim();
+  if (configured) {
+    try {
+      const parsed = JSON.parse(configured);
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((server) => server && (
+          typeof server.urls === 'string' ||
+          (Array.isArray(server.urls) && server.urls.length > 0)
+        )).map((server) => ({
+          urls: server.urls,
+          ...(server.username ? { username: String(server.username) } : {}),
+          ...(server.credential ? { credential: String(server.credential) } : {}),
+        }));
+        if (valid.length) return valid;
+      }
+    } catch (error) {
+      console.error('[Messages] WEBRTC_ICE_SERVERS_JSON is not valid JSON:', error.message);
+    }
+  }
+
+  const stun = String(process.env.WEBRTC_STUN_URLS || 'stun:stun.l.google.com:19302,stun:global.stun.twilio.com:3478')
+    .split(',').map((url) => url.trim()).filter(Boolean);
   const servers = stun.length ? [{ urls: stun }] : [];
   const turnUrl = String(process.env.WEBRTC_TURN_URL || '').trim();
-  if (turnUrl) servers.push({ urls: turnUrl, username: process.env.WEBRTC_TURN_USERNAME || undefined, credential: process.env.WEBRTC_TURN_CREDENTIAL || undefined });
+  if (turnUrl) servers.push({
+    urls: turnUrl,
+    username: process.env.WEBRTC_TURN_USERNAME || undefined,
+    credential: process.env.WEBRTC_TURN_CREDENTIAL || undefined,
+  });
   return servers;
 }
 
