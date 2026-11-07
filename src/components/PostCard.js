@@ -35,13 +35,14 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
   const [showMenu, setShowMenu] = useState(false);
   const [showBoostModal, setShowBoostModal] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState('');
+  const [mediaIndex, setMediaIndex] = useState(0);
   const { confirmed: adultContentConfirmed } = useAdultContentConsent();
 
   const currentUser = (() => {
     try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; }
   })();
 
-  useEffect(() => setItem(post), [post]);
+  useEffect(() => { setItem(post); setMediaIndex(0); }, [post]);
 
   useEffect(() => {
     const timestamp = postTimestamp(item.createdAt);
@@ -226,7 +227,8 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
   const username = String(item.username || item.handle || '').replace(/^@/, '');
   const media = Array.isArray(item.media) ? item.media : [];
   const video = media.find((entry) => entry.type === 'video');
-  const image = media.find((entry) => entry.type === 'image');
+  const images = media.filter((entry) => entry.type === 'image');
+  const image = images[mediaIndex] || images[0];
   const isAuthor = currentUser?.id && item.authorId && Number(currentUser.id) === Number(item.authorId);
 
   let sourceHost = '';
@@ -325,12 +327,38 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
             {item.text && <p className="text-sm text-slate-800 mt-1 whitespace-pre-wrap break-words">{item.text}</p>}
             {showPostMeta && item.sourceLink && <a href={item.sourceLink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"><i className="fa-solid fa-arrow-up-right-from-square" />Source: {sourceHost}</a>}
             {showPostMeta && item.hashtags?.length > 0 && <div className="mt-1 flex flex-wrap gap-x-2">{item.hashtags.map((tag) => <span key={tag} className="text-xs font-semibold text-blue-700">#{tag}</span>)}</div>}
-            {image && (readOnly
-              ? <img src={image.url} alt="Post attachment" className="mt-2 w-full max-h-[460px] rounded-xl object-cover" />
-              : <button onClick={() => openModal?.(image.url)} className="mt-2 block w-full overflow-hidden rounded-xl border-0 bg-transparent p-0"><img src={image.url} alt="Post attachment" className="w-full max-h-[460px] rounded-xl object-cover" /></button>)}
+            {images.length > 0 && (
+              <div className="mt-2 relative overflow-hidden rounded-xl border border-slate-200 bg-black">
+                {readOnly ? (
+                  <img src={image.url} alt={`Post attachment ${mediaIndex + 1}`} className="w-full max-h-[460px] object-cover" />
+                ) : (
+                  <button type="button" onClick={() => openModal?.(image.url)} className="block w-full overflow-hidden border-0 bg-transparent p-0">
+                    <img src={image.url} alt={`Post attachment ${mediaIndex + 1}`} className="w-full max-h-[460px] object-cover" />
+                  </button>
+                )}
+                {images.length > 1 && (
+                  <>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex((current) => (current - 1 + images.length) % images.length); }} className="absolute left-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white shadow" aria-label="Previous image">
+                      <i className="fa-solid fa-chevron-left text-xs" />
+                    </button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex((current) => (current + 1) % images.length); }} className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white shadow" aria-label="Next image">
+                      <i className="fa-solid fa-chevron-right text-xs" />
+                    </button>
+                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/45 px-2 py-1">
+                      {images.map((entry, index) => <button key={entry.url || index} type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex(index); }} aria-label={`Show image ${index + 1}`} className={`h-1.5 w-1.5 rounded-full ${index === mediaIndex ? 'bg-white' : 'bg-white/45'}`} />)}
+                    </div>
+                    <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">{mediaIndex + 1}/{images.length}</span>
+                  </>
+                )}
+              </div>
+            )}
             {video?.embed
-              ? <iframe src={video.url} title="Embedded video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen className="mt-2 aspect-video w-full rounded-xl border-0 bg-black" />
-              : video && <video src={video.url} poster={video.thumbnailUrl || undefined} controls playsInline className="mt-2 w-full max-h-[280px] rounded-xl bg-black object-contain" />}
+              ? <button type="button" onClick={() => openModal?.({ type: 'video', url: video.url })} className="mt-2 block w-full overflow-hidden rounded-xl border-0 bg-black p-0">
+                  <iframe src={video.url} title="Embedded video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen className="pointer-events-none aspect-video w-full border-0 bg-black" />
+                </button>
+              : video && <button type="button" onClick={() => openModal?.({ type: 'video', url: video.url })} className="mt-2 block w-full overflow-hidden rounded-xl border-0 bg-black p-0">
+                  <video src={video.url} poster={video.thumbnailUrl || undefined} controls playsInline className="w-full max-h-[460px] bg-black object-contain" />
+                </button>}
             {!readOnly && !image && !video && item.videoId && <button onClick={() => openVideo?.(item.videoId)} className="mt-2 px-3 py-2 rounded-lg bg-slate-100 text-blue-700 text-xs font-bold">Open video</button>}
           </AdultContentGate>
         )}
