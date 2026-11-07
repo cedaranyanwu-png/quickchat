@@ -571,9 +571,11 @@ router.post('/posts/:postId/replies', asyncRoute(async (req, res) => {
 router.get('/videos', asyncRoute(async (req, res) => {
   const videos = await db.query(
     `SELECT v.id, v.title, v.description, v.video_url, v.thumbnail_url, v.duration, v.views, v.created_at,
-            u.id AS creator_id, u.fullname AS creator, u.username, u.avatar_url, u.picture
+            u.id AS creator_id, u.fullname AS creator, u.username, u.avatar_url, u.picture,
+            (SELECT COUNT(*) FROM video_likes vl WHERE vl.video_id = v.id) AS like_count,
+            EXISTS(SELECT 1 FROM video_likes mine WHERE mine.video_id = v.id AND mine.user_id = ?) AS liked
        FROM videos v JOIN users u ON u.id = v.user_id ORDER BY v.created_at DESC LIMIT ?`,
-    [clampLimit(req.query.limit, 30, 100)],
+    [req.user.id, clampLimit(req.query.limit, 30, 100)],
   );
   res.json({ videos: videos.map(toVideo) });
 }));
@@ -582,9 +584,11 @@ router.get('/videos/:videoId', asyncRoute(async (req, res) => {
   const videoId = positiveId(req.params.videoId);
   if (!videoId) return res.status(400).json({ message: 'Invalid video ID.' });
   const video = await db.getOne(
-    `SELECT v.*, u.fullname AS creator, u.username, u.avatar_url, u.picture
+    `SELECT v.*, u.fullname AS creator, u.username, u.avatar_url, u.picture,
+            (SELECT COUNT(*) FROM video_likes vl WHERE vl.video_id = v.id) AS like_count,
+            EXISTS(SELECT 1 FROM video_likes mine WHERE mine.video_id = v.id AND mine.user_id = ?) AS liked
        FROM videos v JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
-    [videoId],
+    [req.user.id, videoId],
   );
   if (!video) return notFound(res, 'Video not found.');
   res.json({ video: toVideo(video) });
@@ -614,6 +618,32 @@ router.post('/videos/:videoId/views', asyncRoute(async (req, res) => {
   const changed = videoId ? await db.update('UPDATE videos SET views = views + 1 WHERE id = ?', [videoId]) : 0;
   if (!changed) return notFound(res, 'Video not found.');
   res.json({ views: await db.getCount('SELECT views AS count FROM videos WHERE id = ?', [videoId]) });
+}));
+
+router.post('/videos/:videoId/likes', asyncRoute(async (req, res) => {
+  const videoId = positiveId(req.params.videoId);
+  if (!videoId) return res.status(400).json({ message: 'Invalid video ID.' });
+  const video = await db.getOne('SELECT id, user_id FROM videos WHERE id = ?', [videoId]);
+  if (!video) return notFound(res, 'Video not found.');
+  const existing = await db.getOne('SELECT user_id FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
+  if (!existing) {
+    await db.query('INSERT INTO video_likes (video_id, user_id) VALUES (?, ?)', [videoId, req.user.id]);
+    if (Number(video.user_id) !== Number(req.user.id)) {
+      await notifyUser({ userId: video.user_id, actorId: req.user.id, type: 'video_like', text: 'liked your video' });
+    }
+  }
+  const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
+  res.json({ liked: true, likes });
+}));
+
+router.delete('/videos/:videoId/likes', asyncRoute(async (req, res) => {
+  const videoId = positiveId(req.params.videoId);
+  if (!videoId) return res.status(400).json({ message: 'Invalid video ID.' });
+  const video = await db.getOne('SELECT id FROM videos WHERE id = ?', [videoId]);
+  if (!video) return notFound(res, 'Video not found.');
+  await db.delete('DELETE FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
+  const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
+  res.json({ liked: false, likes });
 }));
 
 router.get('/videos/:videoId/comments', asyncRoute(async (req, res) => {
@@ -704,6 +734,8 @@ function toVideo(row) {
     thumbnail: fields.thumbnail_url || null,
     duration: fields.duration || '',
     views: Number(fields.views || 0),
+    likes: Number(fields.like_count || 0),
+    liked: Boolean(Number(fields.liked || 0)),
     creatorId: fields.creator_id || fields.user_id,
     creator: fields.creator || fields.fullname || '',
     username,
