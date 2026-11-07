@@ -10,6 +10,7 @@ const navItems = [
   { name: 'Ads', icon: 'fa-solid fa-bullhorn', path: '/ads' },
   { name: 'Notifications', icon: 'fa-solid fa-bell', path: '/notifications' },
   { name: 'Profile', icon: 'fa-solid fa-user', path: '/profile' },
+  { name: 'Menu', icon: 'fa-solid fa-bars', path: '/menu' },
 ];
 
 const BottomNav = () => {
