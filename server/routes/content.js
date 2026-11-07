@@ -254,16 +254,20 @@ router.get('/discover', asyncRoute(async (req, res) => {
   );
   const trendingRows = await db.query(
     `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.source_link, p.media, p.video_id, p.created_at,
-            u.fullname, u.username, u.avatar_url, u.picture, u.verified,
+            p.hashtags, p.target_interests, p.visibility, u.fullname, u.username, u.avatar_url, u.picture, u.verified,
             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
+            EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
+            EXISTS(SELECT 1 FROM bookmarks mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS bookmarked,
+            EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
             ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) * 2 +
              (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) * 3 +
              (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) * 2) AS engagement_score
        FROM posts p JOIN users u ON u.id = p.author_id
       WHERE p.community_id IS NULL AND COALESCE(p.visibility, 'public') = 'public' AND TRIM(p.body) <> ''
       ORDER BY engagement_score DESC, p.created_at DESC, p.id DESC LIMIT 5`,
+    [req.user.id, req.user.id, req.user.id],
   );
   const mediaRows = await db.query(
     `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname
