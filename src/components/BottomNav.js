@@ -7,7 +7,6 @@ const navItems = [
   { name: 'Home', icon: 'fa-solid fa-house', path: '/home' },
   { name: 'Explore', icon: 'fa-solid fa-compass', path: '/explore' },
   { name: 'Recs', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
-  { name: 'Ads', icon: 'fa-solid fa-bullhorn', path: '/ads' },
   { name: 'Notifications', icon: 'fa-solid fa-bell', path: '/notifications' },
   { name: 'Profile', icon: 'fa-solid fa-user', path: '/profile' },
   { name: 'Menu', icon: 'fa-solid fa-bars', path: '/menu' },
