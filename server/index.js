@@ -130,7 +130,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
         WHERE p.id = ?`,
       [postId],
     );
-    if (!postRow) return res.status(404).send('This post is unavailable.');
+    if (!postRow || postRow.visibility === 'moderated_removed') return res.status(404).send('This post is unavailable.');
 
     const post = toPost(postRow);
     const firstImage = post.media?.find((media) => media.type === 'image' && media.url);
