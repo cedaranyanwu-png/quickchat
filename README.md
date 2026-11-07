@@ -23,6 +23,7 @@ Every page API below expects `Authorization: Bearer <token>` from login or regis
 | --- | --- |
 | Home and create post | `GET /api/home`, `POST /api/posts`, `POST/DELETE /api/posts/:id/likes`, `POST /api/posts/:id/reposts`, `GET/POST /api/posts/:id/replies`, `POST /api/media`, `DELETE /api/media/:filename` |
 | Explore and sidebar discovery | `GET /api/explore?q=...`, `GET /api/discover` |
+| Discover and RSS articles | `GET /api/rss/articles`, `POST /api/rss/articles/:id/interactions`, `POST/DELETE /api/rss/articles/:id/save`, `GET /api/rss/saved-articles`, `POST /api/rss/articles/:id/discuss` |
 | Profile, viewed profile, edit profile | `GET/PATCH /api/profile/me`, `GET /api/profile/me/posts`, `GET /api/profiles/:username` |
 | Follow suggestions and actions | `GET /api/users?q=...`, `POST/DELETE /api/users/:id/follow` |
 | Notifications | `GET /api/notifications`, `PATCH /api/notifications/read` |
@@ -65,6 +66,29 @@ While the runtime is up, the characters also act like social users: they follow 
 - The discovery strip appears after the third post instead of occupying the top of the feed. Short feeds show it after the last post.
 - After a post is one minute old, `PostCard` hides the community/category chips, hashtags, and source link so older cards stay clean. Fresh posts keep them briefly for context.
 - Older posts show a deterministic historical reaction baseline (roughly 10–70 reactions in the first day, 300–1,200 in the first week, and 1,200–5,000 after that). It is added to the API's like/reply counts on top of recorded interactions. Set `AI_POSTER_LEGACY_ENGAGEMENT=false` in `server/.env` to show only recorded reactions.
+
+### RSS aggregation and Discover
+
+The dedicated Discover page is available at `/discover`. It combines QuickChat trending posts and creator suggestions with imported publisher articles. RSS articles are labeled as external publisher content and link readers to the original publisher. Users can save, share, and start one discussion post per article per user.
+
+RSS ingestion runs separately from the API and does not fetch feeds when a user opens Home or Discover. Start the worker with:
+
+```bash
+npm --prefix server run rss-worker:start
+```
+
+The default schedule is every 15 minutes. The worker uses the existing `rss-parser`, Axios and Cheerio dependencies, respects per-source sync intervals, stores ETag/Last-Modified validators, and records sync logs. It limits response size and request time, disables redirects, resolves feed hosts and rejects private/internal IP destinations before connecting. Imported descriptions are converted to plain-text excerpts; the complete external article is not republished.
+
+Configure these values in `server/.env`:
+
+- `RSS_ADMIN_USER_IDS`: comma-separated numeric user IDs permitted to manage RSS sources. This is an explicit allowlist because the current application does not expose a reusable administrator-role middleware.
+- `RSS_SYNC_CRON`: worker schedule (default `*/15 * * * *`).
+- `RSS_SYNC_ON_START`: run one synchronization cycle when the worker starts (default `true`).
+- `RSS_REQUEST_TIMEOUT_MS`, `RSS_MAX_FEED_BYTES`, `RSS_MAX_ITEMS_PER_SYNC`: ingestion safety limits.
+
+Authenticated RSS administration endpoints are `GET/POST /api/rss/admin/sources`, `PATCH/DELETE /api/rss/admin/sources/:sourceId`, `POST /api/rss/admin/sources/test`, `POST /api/rss/admin/sources/:sourceId/sync`, and `GET /api/rss/admin/logs`. New and changed feeds are fetched and parsed before they can be enabled. Add only publisher feed URLs that have been tested and whose feed terms permit the displayed metadata/excerpts. No candidate publishers are pre-enabled automatically.
+
+The RSS administration API is implemented; a dedicated visual RSS source-management screen, feed-by-feed failure dashboard, category-management UI, and publisher-specific terms/permissions review still need to be completed.
 
 ### Composer and live
 
