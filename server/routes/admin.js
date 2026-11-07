@@ -401,10 +401,11 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
 
 async function hasPaidVerificationFee(userId) {
   const fee = await getVerificationFeeNaira();
-  return Boolean(await db.getOne(
-    "SELECT id FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' AND amount = ? ORDER BY id DESC LIMIT 1",
-    [userId, `${fee}.00`],
-  ));
+  const payments = await db.query(
+    "SELECT amount FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' ORDER BY id DESC",
+    [userId],
+  );
+  return payments.some((payment) => Number(payment.amount) >= fee);
 }
 
 router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncRoute(async (req, res) => {
