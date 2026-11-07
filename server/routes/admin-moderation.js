@@ -26,10 +26,11 @@ router.get('/admin/moderation/posts', requirePermission('posts.view'), asyncRout
   const status = ['active', 'removed', 'all'].includes(String(req.query.status)) ? String(req.query.status) : 'active';
   const where = [];
   const params = [];
-  if (status === 'active') where.push("COALESCE(m.status, 'active') = 'active'");
+  if (status === 'active') where.push("(m.status IS NULL OR m.status = 'restored')");
   if (status === 'removed') where.push("m.status = 'removed'");
   if (search) {
-    where.push('(CAST(p.id AS CHAR) LIKE ? OR LOWER(p.body) LIKE LOWER(?) OR LOWER(u.username) LIKE LOWER(?) OR LOWER(u.fullname) LIKE LOWER(?))');
+    const idExpression = db.type === 'mysql' ? 'CAST(p.id AS CHAR)' : 'CAST(p.id AS TEXT)';
+    where.push(`(${idExpression} LIKE ? OR LOWER(p.body) LIKE LOWER(?) OR LOWER(u.username) LIKE LOWER(?) OR LOWER(u.fullname) LIKE LOWER(?))`);
     params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
   }
   const filter = where.length ? `WHERE ${where.join(' AND ')}` : '';
