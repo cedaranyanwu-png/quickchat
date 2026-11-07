@@ -7,8 +7,6 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [previewUrl, setPreviewUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -16,8 +14,6 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setNotice('');
-    setPreviewUrl('');
     setIsLoading(true);
 
     try {
@@ -44,27 +40,6 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
     }
   };
 
-  const resendVerification = async () => {
-    if (!unverifiedEmail) return;
-    setError('');
-    setNotice('Sending a new verification link…');
-    try {
-      const result = await fetch(`${API_BASE_URL}/auth/resend-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: unverifiedEmail }),
-      }).then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Could not resend the verification email.');
-        return data;
-      });
-      setNotice(result.message || 'A new verification link is on its way.');
-      setPreviewUrl(result.previewUrl || '');
-    } catch (requestError) {
-      setError(requestError.message);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-slate-200">
@@ -77,13 +52,6 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         {error && (
           <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm flex items-center gap-2">
             <i className="fa-solid fa-circle-exclamation"></i> {error}
-          </div>
-        )}
-
-        {notice && (
-          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800" role="status">
-            <p>{notice}</p>
-            {previewUrl && <a href={previewUrl} className="ml-3 mt-2 inline-block text-xs font-bold text-blue-700 underline">Open development verification link</a>}
           </div>
         )}
 
