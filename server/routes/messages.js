@@ -287,6 +287,12 @@ router.post('/messages/calls/:callId/signals', asyncRoute(async (req, res) => {
   const expected = Number(call.caller_id) === Number(req.user.id) ? Number(call.callee_id) : Number(call.caller_id);
   const kind = String(req.body?.kind || '');
   if (to !== expected || !['accept', 'reject', 'offer', 'answer', 'ice', 'end'].includes(kind)) return res.status(400).json({ message: 'Invalid call signal.' });
+  if (['accept', 'reject', 'answer'].includes(kind) && Number(req.user.id) !== Number(call.callee_id)) {
+    return res.status(403).json({ message: 'Only the receiving participant can answer or reject a call.' });
+  }
+  if (kind === 'offer' && Number(req.user.id) !== Number(call.caller_id)) {
+    return res.status(403).json({ message: 'Only the caller can initiate the call offer.' });
+  }
   const payload = req.body?.payload === undefined ? null : JSON.stringify(req.body.payload);
   if (payload && payload.length > 16000) return res.status(413).json({ message: 'Call signal is too large.' });
   const now = Date.now();
@@ -320,6 +326,7 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
     await db.delete('DELETE FROM message_call_signals WHERE to_user_id = ? AND id <= ?', [req.user.id, maxId]);
   }
   await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [Date.now() - 86400000]);
+  await db.delete('DELETE FROM message_calls WHERE created_at_ms < ?', [Date.now() - 1209600000]);
   const expiredCalls = await db.query("SELECT id, caller_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now() - 60000]);
   for (const expired of expiredCalls) {
     await db.insert(
