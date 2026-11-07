@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import UnreadBadge from './UnreadBadge';
 
 const navItems = [
   { name: 'Home', icon: 'fa-solid fa-house', path: '/home' },
