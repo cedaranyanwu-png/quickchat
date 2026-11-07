@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { apiRequest } from '../api';
 import Avatar from './Avatar';
 import NovaIcon from './NovaIcon';
@@ -9,7 +9,6 @@ import { useUnreadCounts } from './UnreadCountsProvider';
 
 export default function Sidebar({ onOpenPost, onLogout }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showRecommendationOnboarding, setShowRecommendationOnboarding] = useState(false);
@@ -31,13 +30,6 @@ export default function Sidebar({ onOpenPost, onLogout }) {
   useEffect(() => {
     apiRequest('/profile/me').then((result) => setProfile(result.profile)).catch(() => {});
   }, [location.pathname]);
-
-  const logout = () => {
-    onLogout?.();
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/login');
-  };
 
   return <>
     <aside className="relative flex h-screen w-[220px] flex-col bg-slate-900 px-2">
