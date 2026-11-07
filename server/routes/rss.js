@@ -84,7 +84,7 @@ function diversifyArticles(rows, maxPerPublisher = 3) {
 
 router.get('/rss/articles', asyncRoute(async (req, res) => {
   const limit = clampLimit(req.query.limit, 20, 50);
-  const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
+  const page = Math.max(1, Math.min(40, Number.parseInt(req.query.page, 10) || 1));
   const offset = (page - 1) * limit;
   const category = String(req.query.category || '').trim().slice(0, 80);
   const query = String(req.query.q || '').trim().slice(0, 100);
@@ -99,7 +99,7 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
     params.push(term, term, term);
   }
   const where = conditions.join(' AND ');
-  const candidateLimit = Math.min(300, offset + limit * 2);
+  const candidateLimit = Math.min(2000, offset + limit * 2);
   const [rows, count, user, interactionRows, popularityRows, affinityRows] = await Promise.all([
     db.query(
       'SELECT a.*, s.name AS source_name, EXISTS(SELECT 1 FROM saved_articles sa WHERE sa.article_id = a.id AND sa.user_id = ?) AS saved FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' +
@@ -126,7 +126,7 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
     .map((entry) => entry.row));
   const selected = ranked.slice(offset, offset + limit);
   const total = Number(count && count.total || 0);
-  res.json({ articles: selected.map(mapArticle), page, limit, total, hasMore: offset + selected.length < total });
+  res.json({ articles: selected.map(mapArticle), page, limit, total, hasMore: offset + selected.length < Math.min(total, candidateLimit) });
 }));
 
 router.post('/rss/articles/:articleId/interactions', asyncRoute(async (req, res) => {
@@ -195,7 +195,10 @@ router.post('/rss/articles/:articleId/discuss', asyncRoute(async (req, res) => {
   } catch (error) {
     if (!uniqueConstraint(error)) throw error;
     const raced = await db.getOne('SELECT post_id FROM rss_article_discussions WHERE article_id = ? AND user_id = ?', [articleId, req.user.id]);
-    if (raced) return res.json({ postId: Number(raced.post_id), alreadyDiscussed: true });
+    if (raced) {
+      await db.delete('DELETE FROM posts WHERE id = ? AND author_id = ?', [post.id, req.user.id]);
+      return res.json({ postId: Number(raced.post_id), alreadyDiscussed: true });
+    }
     throw error;
   }
   res.status(201).json({

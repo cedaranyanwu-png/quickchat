@@ -111,6 +111,15 @@ export default function Discover({ openModal, openVideo }) {
     } finally { setBusyArticle(null); }
   };
 
+  const mutePublisher = async (article) => {
+    try {
+      await apiRequest('/rss/sources/' + article.sourceId + '/hide', { method: 'POST' });
+      setArticles((current) => current.filter((item) => item.sourceId !== article.sourceId));
+    } catch (requestError) {
+      setError(requestError.message || 'Could not mute this publisher.');
+    }
+  };
+
   const shareArticle = async (article) => {
     await recordInteraction(article.id, 'share');
     try {
@@ -220,6 +229,7 @@ export default function Discover({ openModal, openVideo }) {
                       <i className={article.saved ? 'fa-solid fa-bookmark text-blue-700' : 'fa-regular fa-bookmark'} />
                     </button>
                     <button type="button" onClick={() => shareArticle(article)} className="grid h-8 w-8 place-items-center rounded-full border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Share article"><i className="fa-solid fa-share-nodes" /></button>
+                    <button type="button" onClick={() => mutePublisher(article)} className="text-[10px] font-semibold text-slate-400 hover:text-red-600">Mute source</button>
                     <button type="button" onClick={() => { setDiscussionArticle(article); setCommentary(''); setDiscussionError(''); }} className="ml-auto rounded-full bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-200">Discuss <i className="fa-solid fa-comments ml-1" /></button>
                   </div>
                 </div>
