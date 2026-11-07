@@ -41,6 +41,7 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import Admin from './pages/Admin';
 import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
@@ -126,6 +127,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   }
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+
+  // Keep the governance dashboard separate without shadowing the RSS admin route.
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  }
 
   if (isLiveWatchPage) {
     return <Routes><Route path="/live/:sessionId" element={<Live />} /><Route path="*" element={<Navigate to="/live" replace />} /></Routes>;
