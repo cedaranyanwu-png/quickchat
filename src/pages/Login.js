@@ -39,7 +39,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       onAuthenticated?.();
-      navigate('/home');
+      navigate(data.user?.mustChangePassword ? '/admin/first-login' : '/home');
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(err.email || formData.email);
@@ -155,7 +155,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 onAuthenticated?.();
-                navigate('/home');
+                navigate(data.user?.mustChangePassword ? '/admin/first-login' : '/home');
               } catch (err) {
                 setError(err.message);
               } finally {
