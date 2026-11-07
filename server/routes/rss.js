@@ -187,8 +187,8 @@ router.post('/rss/articles/:articleId/discuss', asyncRoute(async (req, res) => {
   const existing = await db.getOne('SELECT post_id FROM rss_article_discussions WHERE article_id = ? AND user_id = ?', [articleId, req.user.id]);
   if (existing) return res.json({ postId: Number(existing.post_id), alreadyDiscussed: true });
   const post = await db.insert(
-    'INSERT INTO posts (author_id, body, kind, category, visibility, source_link) VALUES (?, ?, ?, ?, ?, ?)',
-    [req.user.id, commentary, 'text', article.category || 'News', 'public', article.article_url],
+    'INSERT INTO posts (author_id, body, kind, category, visibility, rss_article_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [req.user.id, commentary, 'text', article.category || 'News', 'public', articleId],
   );
   try {
     await db.insert('INSERT INTO rss_article_discussions (article_id, user_id, post_id) VALUES (?, ?, ?)', [articleId, req.user.id, post.id]);
