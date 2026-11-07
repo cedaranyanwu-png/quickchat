@@ -267,7 +267,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
             </div>
           </div>
 
-          <label className="flex items-start gap-2 text-[11px] leading-5 text-slate-600"><input type="checkbox" name="whatsappOptIn" checked={formData.whatsappOptIn || false} onChange={handleChange} required className="mt-1 rounded border-slate-300 text-blue-700" /><span>I agree to receive important QuickChat service announcements and account notifications on WhatsApp. I can opt out later.</span></label>
+          <label className="flex items-start gap-2 text-[11px] leading-5 text-slate-600"><input type="checkbox" name="whatsappOptIn" checked={formData.whatsappOptIn || false} onChange={handleChange} className="mt-1 rounded border-slate-300 text-blue-700" /><span>Optional: I agree to receive important QuickChat service announcements and account notifications on WhatsApp.</span></label>
 
           <button type="submit" disabled={isLoading}
             className="w-full py-2.5 mt-2 bg-blue-700 text-white rounded-lg text-sm font-bold hover:bg-blue-800 transition-colors disabled:opacity-70 flex items-center justify-center gap-2">
