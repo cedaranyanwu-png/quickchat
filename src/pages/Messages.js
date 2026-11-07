@@ -329,6 +329,14 @@ export default function Messages() {
   }, [call?.callId, call?.mediaType]);
 
   useEffect(() => {
+    if (!call?.callId || !['outgoing', 'connecting', 'active'].includes(call.status)) return undefined;
+    const beat = () => apiRequest(`/messages/calls/${call.callId}/heartbeat`, { method: 'POST' }).catch(() => {});
+    beat();
+    const timer = setInterval(beat, 15000);
+    return () => clearInterval(timer);
+  }, [call?.callId, call?.status]);
+
+  useEffect(() => {
     let active = true;
     let timer;
     const pollCalls = async () => {
@@ -365,6 +373,9 @@ export default function Messages() {
             else pendingCallIceRef.current.push(signal.payload);
           } else if (signal.kind === 'reject') {
             setCallError('The other person declined your call.');
+            closeDirectCall();
+          } else if (signal.kind === 'missed') {
+            setCallError('There was no answer to your call.');
             closeDirectCall();
           } else if (signal.kind === 'end') closeDirectCall();
         }
@@ -673,7 +684,7 @@ export default function Messages() {
           </div>
         </div>
       </div>}
-      {error && <div role="alert" className="fixed bottom-20 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 p-3 text-xs text-red-700 shadow">{error}</div>}
+      {(error || callError) && <div role="alert" className="fixed bottom-20 right-4 z-50 max-w-[calc(100vw-2rem)] rounded-lg bg-red-50 p-3 text-xs text-red-700 shadow">{error || callError}</div>}
     </div>
   );
 }
