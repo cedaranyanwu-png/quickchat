@@ -85,7 +85,18 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS messages (
       id ${idColumn}, conversation_id INTEGER NOT NULL, sender_id INTEGER NOT NULL, text TEXT NOT NULL,
-      reply_to_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+      reply_to_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, media_upload_id INTEGER,
+      media_type VARCHAR(20), media_url TEXT, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS message_calls (
+      id VARCHAR(64) PRIMARY KEY, conversation_id INTEGER NOT NULL, caller_id INTEGER NOT NULL,
+      callee_id INTEGER NOT NULL, media_type VARCHAR(12) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'ringing',
+      created_at_ms ${epochType} NOT NULL, updated_at_ms ${epochType} NOT NULL
+    )`,
+    `CREATE TABLE IF NOT EXISTS message_call_signals (
+      id ${idColumn}, call_id VARCHAR(64) NOT NULL, from_user_id INTEGER NOT NULL,
+      to_user_id INTEGER NOT NULL, kind VARCHAR(20) NOT NULL, payload TEXT,
+      created_at_ms ${epochType} NOT NULL DEFAULT 0
     )`,
     `CREATE TABLE IF NOT EXISTS lists (
       id ${idColumn}, owner_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL, description VARCHAR(500),
@@ -303,8 +314,9 @@ async function addMissingMessageColumns() {
       ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
       : await db.query('SHOW COLUMNS FROM messages').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
 
-  if (!columns.has('reply_to_message_id')) {
-    await db.query('ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER');
+  const additions = { reply_to_message_id: 'INTEGER', media_upload_id: 'INTEGER', media_type: 'VARCHAR(20)', media_url: 'TEXT' };
+  for (const [column, type] of Object.entries(additions)) {
+    if (!columns.has(column)) await db.query(`ALTER TABLE messages ADD COLUMN ${column} ${type}`);
   }
 }
 
@@ -412,6 +424,9 @@ async function ensureIndexes() {
     ['live_gifts_session_idx', 'live_gifts (session_id, id)', false],
     ['live_viewers_session_idx', 'live_viewers (session_id, last_seen)', false],
     ['live_signals_to_idx', 'live_signals (to_user_id, id)', false],
+    ['message_call_signals_to_idx', 'message_call_signals (to_user_id, id)', false],
+    ['message_calls_participants_idx', 'message_calls (caller_id, callee_id, status)', false],
+    ['messages_conversation_idx', 'messages (conversation_id, id)', false],
     ['point_transactions_user_idx', 'point_transactions (user_id, id)', false],
     ['point_transactions_reference_unique_idx', 'point_transactions (reference)', true],
     ['push_subscriptions_user_idx', 'push_subscriptions (user_id)', false],
