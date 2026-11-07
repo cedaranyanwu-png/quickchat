@@ -105,6 +105,20 @@ async function fetchFeed(feedUrl, validators = {}) {
   } finally { agent.destroy(); }
 }
 
+async function fetchFeedWithRetry(feedUrl, validators = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try { return await fetchFeed(feedUrl, validators); }
+    catch (error) {
+      lastError = error;
+      const status = Number(error && error.response && error.response.status || 0);
+      if (attempt === 3 || (status && status < 500 && status !== 429)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    }
+  }
+  throw lastError;
+}
+
 function plainExcerpt(value, maxLength = 420) {
   const $ = cheerio.load(String(value || ''));
   $('script, style, iframe, object, embed, form, noscript').remove();
@@ -196,7 +210,7 @@ async function syncSource(sourceId, { force = false } = {}) {
   const startedAt = new Date().toISOString();
   const counts = { fetched: 0, imported: 0, duplicates: 0 };
   try {
-    const result = await fetchFeed(source.feed_url, { etag: source.etag, lastModified: source.last_modified });
+    const result = await fetchFeedWithRetry(source.feed_url, { etag: source.etag, lastModified: source.last_modified });
     if (result.notModified) {
       await db.update('UPDATE rss_sources SET last_sync_at = CURRENT_TIMESTAMP, last_success_at = CURRENT_TIMESTAMP, last_error = NULL WHERE id = ?', [sourceId]);
       await logSync(sourceId, 'unchanged', counts, null, startedAt);
@@ -256,4 +270,4 @@ async function syncEnabledSources({ force = false } = {}) {
   return results;
 }
 
-module.exports = { fetchFeed, validateFeedUrl, plainExcerpt, syncSource, syncEnabledSources, validExternalUrl };
+module.exports = { fetchFeed, fetchFeedWithRetry, validateFeedUrl, plainExcerpt, syncSource, syncEnabledSources, validExternalUrl };
