@@ -1,5 +1,3 @@
-const fs = require('node:fs/promises');
-const path = require('node:path');
 const axios = require('axios');
 const characterData = require('./models/data/characters.json');
 const mediaStorage = require('./routes/media');
