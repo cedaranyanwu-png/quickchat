@@ -135,7 +135,7 @@ router.post('/register', async (req, res) => {
     const user = normalizeUser(
       await db.insert(
         // Keep the legacy NOT NULL `name` column populated in older SQLite files.
-        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified, whatsapp_phone, whatsapp_phone_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)',
+        'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified, whatsapp_phone, whatsapp_phone_verified, whatsapp_notifications_opt_in) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1)',
         [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0, whatsappPhone],
       ),
     );
