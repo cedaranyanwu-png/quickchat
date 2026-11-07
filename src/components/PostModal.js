@@ -12,6 +12,7 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('post');
+  const [postTarget, setPostTarget] = useState('feed');
 
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
@@ -29,6 +30,7 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
       setCurrentSlide(0);
       setIsAutoSlide(true);
       setMode('post');
+      setPostTarget('feed');
       setError('');
       // The composer uses the signed-in account returned by the backend.
       apiRequest('/profile/me').then((result) => setProfile(result.profile)).catch(() => {});
@@ -65,19 +67,19 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);
-    const available = Math.max(0, 4 - media.length);
+    const available = postTarget === 'status' ? (media.length ? 0 : 1) : Math.max(0, 4 - media.length);
     const newMedia = files.slice(0, available).map((file) => ({ type: 'image', url: URL.createObjectURL(file), file }));
     setMedia((prev) => [...prev, ...newMedia]);
-    setError(files.length > available ? 'Posts can have at most four attachments.' : '');
+    setError(files.length > available ? (postTarget === 'status' ? 'A status can contain one photo or video.' : 'Posts can have at most four attachments.') : '');
     e.target.value = '';
   };
 
   const handleVideoUpload = (e) => {
     const files = Array.from(e.target.files);
-    const available = Math.max(0, 4 - media.length);
+    const available = postTarget === 'status' ? (media.length ? 0 : 1) : Math.max(0, 4 - media.length);
     const newMedia = files.slice(0, available).map((file) => ({ type: 'video', url: URL.createObjectURL(file), file }));
     setMedia((prev) => [...prev, ...newMedia]);
-    setError(files.length > available ? 'Posts can have at most four attachments.' : '');
+    setError(files.length > available ? (postTarget === 'status' ? 'A status can contain one photo or video.' : 'Posts can have at most four attachments.') : '');
     e.target.value = '';
   };
 
@@ -94,30 +96,61 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + media.length) % media.length);
 
   const handlePost = async () => {
-    if (!postText.trim() && media.length === 0) return;
+    const text = postText.trim();
+    if (!text && media.length === 0) return;
+    if (postTarget === 'status' && media[0]?.type === 'video' && text.length > 300) {
+      setError('Video status captions must be 300 characters or fewer.');
+      return;
+    }
     setIsPosting(true);
     setError('');
     try {
-      // Upload selected files first; the post stores only their backend URLs.
+      // Upload selected files first; both destinations store backend media URLs.
       const uploadedMedia = await Promise.all(media.map(async (item) => {
         const uploaded = await uploadMedia(item.file);
-        return { type: uploaded.type, url: uploaded.url };
+        return { type: uploaded.type || item.type, url: uploaded.url };
       }));
-      const result = await apiRequest('/posts', {
-        method: 'POST',
-        body: { text: postText, media: uploadedMedia },
-      });
-      onPost?.(result.post);
+      if (postTarget === 'status') {
+        await apiRequest('/statuses', {
+          method: 'POST',
+          body: {
+            type: uploadedMedia[0]?.type || 'text',
+            text,
+            mediaUrl: uploadedMedia[0]?.url || '',
+            backgroundColor: '#123b8a',
+          },
+        });
+      } else {
+        const result = await apiRequest('/posts', {
+          method: 'POST',
+          body: { text, media: uploadedMedia },
+        });
+        onPost?.(result.post);
+      }
+      // Refresh the Home feed and status tray after either successful publish.
+      if (postTarget === 'status') onPost?.(null);
       media.forEach((item) => URL.revokeObjectURL(item.url));
       setPostText('');
       setMedia([]);
       setCurrentSlide(0);
+      setPostTarget('feed');
       onClose();
     } catch (requestError) {
       setError(requestError.message);
     } finally {
       setIsPosting(false);
     }
+  };
+
+  const changePostTarget = (target) => {
+    if (target === postTarget) return;
+    if (target === 'status' && media.length > 1) {
+      media.slice(1).forEach((item) => URL.revokeObjectURL(item.url));
+      setMedia((current) => current.slice(0, 1));
+      setCurrentSlide(0);
+    }
+    setPostTarget(target);
+    setError('');
   };
 
   const handleClose = () => {
@@ -136,11 +169,19 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
           <button onClick={handleClose} className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors">
             <i className="fa-solid fa-xmark text-slate-700 text-lg"></i>
           </button>
-          <h3 className="font-bold text-slate-900 text-base">Create Post</h3>
+          <h3 className="font-bold text-slate-900 text-base">{postTarget === 'status' ? 'Create Status' : 'Create Post'}</h3>
           <div className="w-8"></div>
         </div>
 
         <div className="p-4">
+          <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1" role="group" aria-label="Choose where to publish">
+            <button type="button" onClick={() => changePostTarget('feed')} className={`rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${postTarget === 'feed' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              <i className="fa-solid fa-newspaper mr-1.5" /> Normal feed
+            </button>
+            <button type="button" onClick={() => changePostTarget('status')} className={`rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${postTarget === 'status' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              <i className="fa-solid fa-circle-notch mr-1.5" /> Status · 24 hours
+            </button>
+          </div>
           <div className="flex gap-3">
             <Avatar name={profile?.fullName} picture={profile?.picture} size={40} />
             <div className="flex-1">
@@ -149,12 +190,14 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
               <textarea
                 value={postText}
                 onChange={(e) => setPostText(e.target.value)}
-                placeholder="What's happening?!"
+                placeholder={postTarget === 'status' ? 'Write a status update…' : "What's happening?!"}
+                maxLength={postTarget === 'status' ? 700 : undefined}
                 className="w-full border-none outline-none text-sm resize-none min-h-[80px] mt-2 text-slate-900 placeholder-slate-400"
               />
             </div>
           </div>
 
+          {postTarget === 'status' && <p className="mt-1 text-[11px] text-slate-400">Your status is visible for 24 hours. Add one photo or video, or share text only.</p>}
           {error && <p className="mt-3 text-xs text-red-600" role="alert">{error}</p>}
 
           {media.length > 0 && (
@@ -226,7 +269,7 @@ const PostModal = ({ isOpen, onClose, onOpenAdvanced, onPost }) => {
                 <i className="fa-solid fa-sliders" />
               </button>
               <button onClick={handlePost} disabled={(!postText.trim() && media.length === 0) || isPosting} className="px-5 py-2 bg-blue-700 text-white rounded-full text-sm font-bold hover:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                {isPosting ? (<><i className="fa-solid fa-circle-notch fa-spin text-xs"></i> Posting...</>) : 'Post'}
+                {isPosting ? (<><i className="fa-solid fa-circle-notch fa-spin text-xs"></i> Publishing...</>) : postTarget === 'status' ? 'Share status' : 'Post'}
               </button>
             </div>
           </div>
