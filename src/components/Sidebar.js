@@ -71,7 +71,7 @@ export default function Sidebar({ onOpenPost, onLogout }) {
         </button>
         {showMenu && <div className="absolute bottom-full left-0 z-50 mb-2 w-full rounded-xl border border-slate-700 bg-slate-800 p-1 shadow-xl">
           <Link to="/settings" onClick={() => setShowMenu(false)} className="block rounded-lg px-3 py-2 text-sm text-white hover:bg-slate-700">Settings</Link>
-          <button onClick={logout} className="w-full rounded-lg px-3 py-2 text-left text-sm text-red-300 hover:bg-slate-700">Log out</button>
+          <p className="px-3 py-2 text-[10px] leading-4 text-slate-400">Log out is available in Settings.</p>
         </div>}
       </div>
     </aside>

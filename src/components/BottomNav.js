@@ -6,6 +6,10 @@ import { useUnreadCounts } from './UnreadCountsProvider';
 const navItems = [
   { name: 'Home', icon: 'fa-solid fa-house', path: '/home' },
   { name: 'Explore', icon: 'fa-solid fa-compass', path: '/explore' },
+  { name: 'Recs', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
+  { name: 'Notifications', icon: 'fa-solid fa-bell', path: '/notifications' },
+  { name: 'Profile', icon: 'fa-solid fa-user', path: '/profile' },
+  { name: 'Menu', icon: 'fa-solid fa-bars', path: '/menu' },
   { name: 'Messages', icon: 'fa-solid fa-envelope', path: '/messages' },
   { name: 'Communities', icon: 'fa-solid fa-users', path: '/communities' },
   { name: 'Notifications', icon: 'fa-solid fa-bell', path: '/notifications' },
