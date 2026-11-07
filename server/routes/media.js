@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const fsPromises = require('fs/promises');
 const path = require('path');
-const { Transform } = require('stream');
+const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const express = require('express');
 const { db, asyncRoute, notFound } = require('./utils');
@@ -29,7 +29,90 @@ const videoTypes = {
 };
 const fileTypes = { ...imageTypes, ...videoTypes, ...audioTypes };
 
-// Stream uploads to disk so longer videos do not need to fit in server memory.
+function s3Config() {
+  const endpoint = process.env.QUICKCHAT_S3_ENDPOINT;
+  const bucket = process.env.QUICKCHAT_S3_BUCKET;
+  const region = process.env.QUICKCHAT_S3_REGION;
+  const accessKey = process.env.QUICKCHAT_S3_ACCESS_KEY_ID;
+  const secretKey = process.env.QUICKCHAT_S3_SECRET_ACCESS_KEY;
+  if (![endpoint, bucket, region, accessKey, secretKey].every(Boolean)) return null;
+  return { endpoint: endpoint.replace(/\/$/, ''), bucket, region, accessKey, secretKey };
+}
+
+function hmac(key, value) {
+  return crypto.createHmac('sha256', key).update(value, 'utf8').digest();
+}
+
+function signingKey(secret, date, region) {
+  const dateKey = hmac(`AWS4${secret}`, date);
+  const regionKey = hmac(dateKey, region);
+  const serviceKey = hmac(regionKey, 's3');
+  return hmac(serviceKey, 'aws4_request');
+}
+
+function s3RequestUrl(config, filename) {
+  const url = new URL(config.endpoint);
+  url.pathname = `${url.pathname.replace(/\/$/, '')}/${config.bucket}/${encodeURIComponent(filename)}`;
+  url.search = '';
+  return url;
+}
+
+function signedHeaders(config, method, url, payloadHash, contentType = '') {
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const date = amzDate.slice(0, 8);
+  const headers = {
+    host: url.host,
+    'x-amz-content-sha256': payloadHash,
+    'x-amz-date': amzDate,
+  };
+  if (contentType) headers['content-type'] = contentType;
+  const names = Object.keys(headers).sort();
+  const canonicalHeaders = names.map((name) => `${name}:${headers[name].trim()}\n`).join('');
+  const signedNames = names.join(';');
+  const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedNames, payloadHash].join('\n');
+  const scope = `${date}/${config.region}/s3/aws4_request`;
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    scope,
+    crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
+  ].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region))
+    .update(stringToSign).digest('hex');
+  return {
+    ...headers,
+    Authorization: `AWS4-HMAC-SHA256 Credential=${config.accessKey}/${scope}, SignedHeaders=${signedNames}, Signature=${signature}`,
+  };
+}
+
+async function hashFile(filePath) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
+  return hash.digest('hex');
+}
+
+async function putObject(config, filename, filePath, mimeType) {
+  const url = s3RequestUrl(config, filename);
+  const headers = signedHeaders(config, 'PUT', url, await hashFile(filePath), mimeType);
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: fs.createReadStream(filePath),
+    duplex: 'half',
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Cloud media storage rejected the upload (${response.status}): ${detail.slice(0, 300)}`);
+  }
+}
+
+async function getObject(config, filename, range) {
+  const url = s3RequestUrl(config, filename);
+  const headers = signedHeaders(config, 'GET', url, crypto.createHash('sha256').update('').digest('hex'));
+  if (range) headers.Range = range;
+  return fetch(url, { method: 'GET', headers });
+}
+
 router.post('/media', asyncRoute(async (req, res) => {
   const mimeType = String(req.get('content-type') || '').split(';')[0].trim().toLowerCase();
   const type = fileTypes[mimeType];
@@ -44,35 +127,26 @@ router.post('/media', asyncRoute(async (req, res) => {
   const filename = `${crypto.randomUUID()}.${type.extension}`;
   const filePath = path.join(uploadDirectory, filename);
   await fsPromises.mkdir(uploadDirectory, { recursive: true });
-
   let bytes = 0;
   let tooLarge = false;
   let header = Buffer.alloc(0);
   const meter = new Transform({
     transform(chunk, _encoding, callback) {
       bytes += chunk.length;
-      if (!tooLarge && bytes > type.maxBytes) tooLarge = true;
+      if (bytes > type.maxBytes) tooLarge = true;
       if (header.length < 32) header = Buffer.concat([header, chunk.subarray(0, 32 - header.length)]);
-      // Discard bytes beyond the limit but finish consuming the request cleanly.
-      if (tooLarge) callback();
-      else callback(null, chunk);
+      callback(null, tooLarge ? undefined : chunk);
     },
   });
 
   try {
     await pipeline(req, meter, fs.createWriteStream(filePath, { flags: 'wx' }));
-    if (tooLarge) {
-      await fsPromises.rm(filePath, { force: true });
-      return res.status(413).json({ message: `This file exceeds the ${mimeType.startsWith('video/') ? '500 MB' : mimeType.startsWith('audio/') ? '30 MB' : '15 MB'} upload limit.` });
-    }
-    if (bytes === 0) {
-      await fsPromises.rm(filePath, { force: true });
-      return res.status(400).json({ message: 'The uploaded file is empty.' });
-    }
-    if (!hasExpectedSignature(mimeType, header)) {
-      await fsPromises.rm(filePath, { force: true });
-      return res.status(415).json({ message: 'The file contents do not match the selected image or video type.' });
-    }
+    if (tooLarge) return res.status(413).json({ message: `This file exceeds the ${mimeType.startsWith('video/') ? '500 MB' : mimeType.startsWith('audio/') ? '30 MB' : '15 MB'} upload limit.` });
+    if (bytes === 0) return res.status(400).json({ message: 'The uploaded file is empty.' });
+    if (!hasExpectedSignature(mimeType, header)) return res.status(415).json({ message: 'The file contents do not match the selected image or video type.' });
+
+    const storage = s3Config();
+    if (storage) await putObject(storage, filename, filePath, mimeType);
 
     const upload = await db.insert(
       'INSERT INTO media_uploads (owner_id, filename, mime_type, size_bytes) VALUES (?, ?, ?, ?)',
@@ -85,11 +159,60 @@ router.post('/media', asyncRoute(async (req, res) => {
       type: mimeType.startsWith('video/') ? 'video' : mimeType.startsWith('audio/') ? 'audio' : 'image',
       size: bytes,
     });
-  } catch (error) {
-    await fsPromises.rm(filePath, { force: true });
-    throw error;
+  } finally {
+    await fsPromises.rm(filePath, { force: true }).catch(() => {});
   }
 }));
+
+async function servePublicMedia(req, res, next) {
+  try {
+    const filename = String(req.params.filename || '');
+    if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) return res.status(404).end();
+    const upload = await db.getOne(
+      'SELECT mime_type, size_bytes FROM media_uploads WHERE filename = ?',
+      [filename],
+    );
+    if (!upload) return res.status(404).end();
+
+    const filePath = path.join(uploadDirectory, filename);
+    if (fs.existsSync(filePath)) {
+      res.setHeader('Content-Type', upload.mime_type);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      if (req.headers.range) {
+        const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+        if (!match) return res.status(416).end();
+        const start = match[1] ? Number(match[1]) : 0;
+        const end = match[2] ? Math.min(Number(match[2]), upload.size_bytes - 1) : upload.size_bytes - 1;
+        if (start > end || start >= upload.size_bytes) return res.status(416).end();
+        res.status(206).set({
+          'Content-Range': `bytes ${start}-${end}/${upload.size_bytes}`,
+          'Content-Length': String(end - start + 1),
+        });
+        return pipeline(fs.createReadStream(filePath, { start, end }), res);
+      }
+      res.setHeader('Content-Length', String(upload.size_bytes));
+      return pipeline(fs.createReadStream(filePath), res);
+    }
+
+    const storage = s3Config();
+    if (!storage) return res.status(404).end();
+    const remote = await getObject(storage, filename, req.headers.range);
+    if (!remote.ok && remote.status !== 206) return res.status(remote.status === 404 ? 404 : 502).end();
+    res.status(remote.status);
+    res.setHeader('Content-Type', upload.mime_type);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    for (const header of ['content-length', 'content-range']) {
+      const value = remote.headers.get(header);
+      if (value) res.setHeader(header, value);
+    }
+    if (!remote.body) return res.end();
+    return pipeline(Readable.fromWeb(remote.body), res);
+  } catch (error) {
+    return next(error);
+  }
+}
 
 router.delete('/media/:filename', asyncRoute(async (req, res) => {
   const filename = String(req.params.filename || '');
@@ -101,7 +224,15 @@ router.delete('/media/:filename', asyncRoute(async (req, res) => {
     [filename, req.user.id],
   );
   if (!upload) return notFound(res, 'Media file not found.');
-  await fsPromises.rm(path.join(uploadDirectory, filename), { force: true });
+  const filePath = path.join(uploadDirectory, filename);
+  if (fs.existsSync(filePath)) await fsPromises.rm(filePath, { force: true });
+  const storage = s3Config();
+  if (storage) {
+    const url = s3RequestUrl(storage, filename);
+    const headers = signedHeaders(storage, 'DELETE', url, crypto.createHash('sha256').update('').digest('hex'));
+    const response = await fetch(url, { method: 'DELETE', headers });
+    if (!response.ok && response.status !== 404) throw new Error('Could not remove the media object from cloud storage.');
+  }
   await db.delete('DELETE FROM media_uploads WHERE id = ? AND owner_id = ?', [upload.id, req.user.id]);
   res.json({ message: 'Media file deleted.' });
 }));
@@ -120,4 +251,5 @@ function hasExpectedSignature(mimeType, bytes) {
   return false;
 }
 
+router.servePublicMedia = servePublicMedia;
 module.exports = router;
