@@ -11,7 +11,7 @@ const verificationFeatures = [
   { icon: 'fa-comments', title: 'Verified Comment Highlighting', desc: 'Your comments stand out at the top of post reply threads and live events.' },
 ];
 
-const DEFAULT_PLAN_POINTS = 5000;
+const DEFAULT_PLAN_POINTS = 2000;
 
 export default function Verification() {
   const [profile, setProfile] = useState(null);
@@ -169,7 +169,7 @@ export default function Verification() {
               <div className="text-right">
                 <p className="text-xs text-white/70">One-time</p>
                 <p className="text-3xl font-black">{planPoints.toLocaleString()} pts</p>
-                <p className="text-[11px] text-white/70">≈ ₦{Number(status?.planPrice || 5000).toLocaleString()}</p>
+                <p className="text-[11px] text-white/70">≈ ₦{Number(status?.planPrice || 2000).toLocaleString()}</p>
               </div>
             </div>
           </div>
