@@ -44,6 +44,44 @@ function mapArticle(row) {
   };
 }
 
+function normalizeTopic(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function scoreArticle(row, interests, popularity, publisherAffinity) {
+  const category = normalizeTopic(row.category);
+  const keywords = parseArray(row.keywords).map(normalizeTopic);
+  let interestScore = 0;
+  for (const interest of interests) {
+    const normalized = normalizeTopic(interest);
+    if (!normalized) continue;
+    if (category === normalized) interestScore += 5;
+    else if (category.includes(normalized) || normalized.includes(category)) interestScore += 2.5;
+    if (keywords.some((keyword) => keyword === normalized || keyword.includes(normalized) || normalized.includes(keyword))) interestScore += 1.25;
+  }
+  const published = new Date(row.published_at || row.imported_at || 0).getTime();
+  const ageHours = Math.max(0, (Date.now() - (Number.isFinite(published) ? published : 0)) / 3600000);
+  const freshness = 3 / (1 + ageHours / 30);
+  const popularityScore = Math.min(2, Number(popularity.get(Number(row.id)) || 0) * 0.15);
+  const publisherScore = Math.min(1.5, Number(publisherAffinity.get(String(row.publisher || row.source_name || '').toLowerCase()) || 0) * 0.35);
+  return interestScore + freshness + popularityScore + publisherScore;
+}
+
+function diversifyArticles(rows, maxPerPublisher = 3) {
+  const preferred = [];
+  const overflow = [];
+  const counts = new Map();
+  for (const row of rows) {
+    const publisher = String(row.publisher || row.source_name || 'publisher').toLowerCase();
+    const count = counts.get(publisher) || 0;
+    if (count < maxPerPublisher) {
+      preferred.push(row);
+      counts.set(publisher, count + 1);
+    } else overflow.push(row);
+  }
+  return preferred.concat(overflow);
+}
+
 router.get('/rss/articles', asyncRoute(async (req, res) => {
   const limit = clampLimit(req.query.limit, 20, 50);
   const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
@@ -61,16 +99,34 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
     params.push(term, term, term);
   }
   const where = conditions.join(' AND ');
-  const rows = await db.query(
-    'SELECT a.*, s.name AS source_name, EXISTS(SELECT 1 FROM saved_articles sa WHERE sa.article_id = a.id AND sa.user_id = ?) AS saved FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' +
-      where + ' ORDER BY COALESCE(a.published_at, a.imported_at) DESC, a.id DESC LIMIT ? OFFSET ?',
-    [req.user.id, ...params, limit, offset],
-  );
-  const count = await db.getOne(
-    'SELECT COUNT(*) AS total FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' + where,
-    params,
-  );
-  res.json({ articles: rows.map(mapArticle), page, limit, total: Number(count && count.total || 0), hasMore: offset + rows.length < Number(count && count.total || 0) });
+  const candidateLimit = Math.min(300, offset + limit * 2);
+  const [rows, count, user, interactionRows, popularityRows, affinityRows] = await Promise.all([
+    db.query(
+      'SELECT a.*, s.name AS source_name, EXISTS(SELECT 1 FROM saved_articles sa WHERE sa.article_id = a.id AND sa.user_id = ?) AS saved FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' +
+        where + ' ORDER BY COALESCE(a.published_at, a.imported_at) DESC, a.id DESC LIMIT ?',
+      [req.user.id, ...params, candidateLimit],
+    ),
+    db.getOne('SELECT COUNT(*) AS total FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' + where, params),
+    db.getOne('SELECT interests FROM users WHERE id = ?', [req.user.id]),
+    db.query("SELECT article_id, action, MAX(created_at) AS last_at FROM article_interactions WHERE user_id = ? GROUP BY article_id, action", [req.user.id]),
+    db.query("SELECT article_id, COUNT(*) AS total FROM article_interactions WHERE action IN ('click', 'share') GROUP BY article_id"),
+    db.query("SELECT LOWER(a.publisher) AS publisher, COUNT(*) AS total FROM article_interactions i JOIN rss_articles a ON a.id = i.article_id WHERE i.user_id = ? AND i.action IN ('share') GROUP BY LOWER(a.publisher)", [req.user.id]),
+  ]);
+  const interests = parseArray(user && user.interests).map(String);
+  const recentClicks = new Set(interactionRows.filter((row) => {
+    if (row.action !== 'click') return false;
+    const timestamp = new Date(row.last_at).getTime();
+    return Number.isFinite(timestamp) && Date.now() - timestamp < 7 * 24 * 60 * 60 * 1000;
+  }).map((row) => Number(row.article_id)));
+  const popularity = new Map(popularityRows.map((row) => [Number(row.article_id), Number(row.total || 0)]));
+  const publisherAffinity = new Map(affinityRows.map((row) => [String(row.publisher || '').toLowerCase(), Number(row.total || 0)]));
+  const ranked = diversifyArticles(rows.filter((row) => !recentClicks.has(Number(row.id)))
+    .map((row) => ({ row, score: scoreArticle(row, interests, popularity, publisherAffinity) }))
+    .sort((a, b) => b.score - a.score || new Date(b.row.published_at || b.row.imported_at) - new Date(a.row.published_at || a.row.imported_at))
+    .map((entry) => entry.row));
+  const selected = ranked.slice(offset, offset + limit);
+  const total = Number(count && count.total || 0);
+  res.json({ articles: selected.map(mapArticle), page, limit, total, hasMore: offset + selected.length < total });
 }));
 
 router.post('/rss/articles/:articleId/interactions', asyncRoute(async (req, res) => {
