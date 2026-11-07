@@ -72,7 +72,7 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS messages (
       id ${idColumn}, conversation_id INTEGER NOT NULL, sender_id INTEGER NOT NULL, text TEXT NOT NULL,
-      is_read INTEGER NOT NULL DEFAULT 0, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+      reply_to_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS lists (
       id ${idColumn}, owner_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL, description VARCHAR(500),
@@ -261,7 +261,23 @@ async function initializePageTables() {
   await addMissingPostColumns();
   await addMissingPaymentColumns();
   await addMissingNotificationColumns();
+  await addMissingMessageColumns();
   await ensureIndexes();
+}
+
+async function addMissingMessageColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(messages)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query(
+        'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?',
+        ['messages'],
+      ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM messages').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+
+  if (!columns.has('reply_to_message_id')) {
+    await db.query('ALTER TABLE messages ADD COLUMN reply_to_message_id INTEGER');
+  }
 }
 
 async function addMissingNotificationColumns() {

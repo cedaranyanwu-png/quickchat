@@ -19,6 +19,10 @@ export default function Messages() {
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
   const [startingConversation, setStartingConversation] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyMenuId, setReplyMenuId] = useState(null);
+  const [swipedMessageId, setSwipedMessageId] = useState(null);
+  const touchStartRef = useRef(null);
   const endOfMessagesRef = useRef(null);
   const openedUserRef = useRef('');
   const typingTimeoutRef = useRef(null);
@@ -162,8 +166,11 @@ export default function Messages() {
     reportTyping(activeId, false);
     lastTypingSentAtRef.current = 0;
     try {
-      await apiRequest(`/messages/conversations/${activeId}/messages`, { method: 'POST', body: { text } });
+      await apiRequest(`/messages/conversations/${activeId}/messages`, { method: 'POST', body: { text, replyToMessageId: replyingTo?.id || null } });
       setMessageInput('');
+      setReplyingTo(null);
+      setReplyMenuId(null);
+      setSwipedMessageId(null);
       await Promise.all([loadMessages(activeId), loadConversations()]);
     } catch (requestError) { setError(requestError.message); }
     finally { setSending(false); }
@@ -196,6 +203,48 @@ export default function Messages() {
   const additionalUsers = otherUsers.filter((user) => !contactIds.has(String(user.id)));
   const activeConversation = conversations.find((conversation) => String(conversation.id) === String(activeId));
   const activeUserOnline = activeStatus.online || Boolean(activeConversation?.online);
+
+  const beginReply = useCallback((message) => {
+    if (!message) return;
+    setReplyingTo(message);
+    setReplyMenuId(null);
+    setSwipedMessageId(null);
+    requestAnimationFrame(() => document.getElementById('quickchat-message-input')?.focus());
+  }, []);
+
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+    setReplyMenuId(null);
+    setSwipedMessageId(null);
+  }, []);
+
+  const handleMessageTouchStart = (message, event) => {
+    const touch = event.touches[0];
+    touchStartRef.current = { id: message.id, x: touch.clientX, y: touch.clientY };
+    setReplyMenuId(null);
+  };
+
+  const handleMessageTouchMove = (message, event) => {
+    const start = touchStartRef.current;
+    if (!start || start.id !== message.id) return;
+    const touch = event.touches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 8 || Math.abs(dx) < Math.abs(dy)) return;
+    const clamped = Math.max(-76, Math.min(76, dx));
+    if (Math.abs(clamped) >= 8) setSwipedMessageId(message.id);
+  };
+
+  const handleMessageTouchEnd = (message, event) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    if (!start || start.id !== message.id) return;
+    const touch = event.changedTouches[0];
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) > 52 && Math.abs(dx) > Math.abs(dy)) beginReply(message);
+    else setSwipedMessageId(null);
+  };
 
   return (
     <div className="flex h-[calc(100dvh-6.25rem)] min-h-0 overflow-hidden bg-white pb-[4.5rem] lg:h-screen lg:pb-0">
@@ -243,9 +292,75 @@ export default function Messages() {
             <div className="min-w-0"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name}</h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-24 lg:pb-24">
-            {messages.map((message) => <div key={message.id} className={`flex ${message.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`${message.sender === 'me' ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-900'} max-w-[75%] rounded-xl px-3 py-2`}><p className="break-words whitespace-pre-wrap text-sm">{message.text}</p><small className="opacity-70">{message.time}</small></div>
-            </div>)}
+            {messages.map((message) => {
+              const isMine = message.sender === 'me';
+              const isSwiped = swipedMessageId === message.id;
+              const isMenuOpen = replyMenuId === message.id;
+              const dragStyle = isSwiped ? { transform: 'translateX(52px)' } : undefined;
+              return (
+                <div key={message.id} className={`group flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className="relative max-w-[82%] lg:max-w-[75%] touch-pan-y"
+                    style={dragStyle}
+                    onTouchStart={(event) => handleMessageTouchStart(message, event)}
+                    onTouchMove={(event) => handleMessageTouchMove(message, event)}
+                    onTouchEnd={(event) => handleMessageTouchEnd(message, event)}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => beginReply(message)}
+                      className={`absolute top-1/2 z-0 hidden h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-blue-700 shadow-sm lg:flex ${isMine ? '-left-11' : '-right-11'}`}
+                      aria-label="Reply to message"
+                      title="Reply to message"
+                    >
+                      <i className="fa-solid fa-reply text-xs" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => beginReply(message)}
+                      className={`absolute top-1/2 z-0 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-blue-100 bg-white text-blue-700 shadow-sm lg:hidden ${isMine ? '-left-10' : '-right-10'} ${isSwiped ? 'opacity-100' : 'pointer-events-none opacity-0'} transition-opacity`}
+                      aria-label="Reply to message"
+                    >
+                      <i className="fa-solid fa-reply text-xs" />
+                    </button>
+                    <div className={`relative z-10 ${isMine ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-900'} rounded-2xl px-3 py-2 shadow-sm`}>
+                      {message.replyTo && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const target = document.getElementById(`message-${message.replyTo.id}`);
+                            target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }}
+                          className={`mb-2 block w-full rounded-lg border-l-2 px-2 py-1 text-left text-[11px] ${isMine ? 'border-white/60 bg-white/10 text-white/90' : 'border-blue-500 bg-white text-slate-600'}`}
+                        >
+                          <span className="block font-bold opacity-80">{message.replyTo.sender === 'me' ? 'You' : activeConversation.name}</span>
+                          <span className="block truncate">{message.replyTo.text}</span>
+                        </button>
+                      )}
+                      <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <small className="opacity-70">{message.time}</small>
+                        <button
+                          type="button"
+                          onClick={() => setReplyMenuId((current) => current === message.id ? null : message.id)}
+                          className="grid h-5 w-5 place-items-center rounded-full text-current opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-70 lg:hidden"
+                          aria-label="Message actions"
+                        >
+                          <i className="fa-solid fa-ellipsis text-[10px]" />
+                        </button>
+                      </div>
+                    </div>
+                    {isMenuOpen && (
+                      <div className={`absolute bottom-[-2.75rem] z-40 flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ${isMine ? 'right-0' : 'left-0'}`}>
+                        <button type="button" onClick={() => beginReply(message)} className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                          <i className="fa-solid fa-reply text-blue-700" /> Reply
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
             {messages.length === 0 && <p className="text-center text-sm text-slate-500">Send the first message.</p>}
             {activeStatus.typing && <div role="status" aria-label={`${activeConversation.name} is typing`} className="flex justify-start" aria-live="polite"><span className="chat-typing-bubble flex h-9 items-center gap-1 rounded-2xl rounded-bl-md bg-slate-100 px-3"><span className="chat-typing-dot"/><span className="chat-typing-dot"/><span className="chat-typing-dot"/></span></div>}
             <div ref={endOfMessagesRef} />
@@ -253,7 +368,22 @@ export default function Messages() {
         </> : <div className="grid flex-1 place-items-center pb-24 text-sm text-slate-500">Choose a conversation or message someone you follow.</div>}
 
         <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-2 border-t border-slate-200 bg-white px-3 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(15,23,42,0.08)]">
-          <input
+          <div className="absolute inset-x-0 bottom-full border-t border-slate-100 bg-white px-3 py-2 shadow-sm">
+          {replyingTo && (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white text-blue-700"><i className="fa-solid fa-reply text-xs" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-extrabold uppercase tracking-wide text-blue-700">Replying to {replyingTo.sender === 'me' ? 'yourself' : activeConversation?.name}</p>
+                <p className="truncate text-xs text-slate-600">{replyingTo.text}</p>
+              </div>
+              <button type="button" onClick={cancelReply} className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-white hover:text-slate-900" aria-label="Cancel reply">
+                <i className="fa-solid fa-xmark text-xs" />
+              </button>
+            </div>
+          )}
+        </div>
+        <input
+            id="quickchat-message-input"
             value={messageInput}
             onChange={handleMessageInputChange}
             maxLength={5000}
