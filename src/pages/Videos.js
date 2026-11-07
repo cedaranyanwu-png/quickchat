@@ -138,6 +138,19 @@ export default function Videos({ openVideo }) {
     }
   };
 
+  const toggleLike = async (videoId) => {
+    const current = videos.find((video) => String(video.id) === String(videoId));
+    if (!current) return;
+    try {
+      const result = await apiRequest(`/videos/${videoId}/likes`, { method: current.liked ? 'DELETE' : 'POST' });
+      setVideos((rows) => rows.map((video) => String(video.id) === String(videoId)
+        ? { ...video, liked: result.liked, likes: result.likes }
+        : video));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
   const togglePlayback = (event, videoId) => {
     const player = event.currentTarget.querySelector('video');
     if (!player) return;
@@ -163,7 +176,7 @@ export default function Videos({ openVideo }) {
   return <div className="videos-page">
     {/* On phones the route itself is the reel experience; no card tap or modal is needed. */}
     <section ref={feedRef} className="videos-reel-feed" aria-label="Videos">
-      {videos.map((video) => <article key={video.id} className="videos-reel" onClick={(event) => togglePlayback(event, video.id)}>
+      {videos.map((video) => <article key={video.id} className="videos-reel" onClick={(event) => togglePlayback(event, video.id)} onDoubleClick={(event) => { event.stopPropagation(); toggleLike(video.id); }}>
         <video
           data-video-id={String(video.id)}
           src={video.videoUrl}
@@ -182,6 +195,9 @@ export default function Videos({ openVideo }) {
           <span className="videos-reel-views"><i className="fa-solid fa-eye" /> {video.views} views</span>
         </div>
         <div className="videos-reel-actions">
+          <button type="button" aria-label={video.liked ? 'Unlike video' : 'Like video'} onClick={(event) => { event.stopPropagation(); toggleLike(video.id); }}>
+            <i className={`fa-heart ${video.liked ? 'fa-solid text-red-400' : 'fa-regular'}`} /><span>{video.likes || 0}</span>
+          </button>
           <button type="button" aria-label="View comments" onClick={(event) => { event.stopPropagation(); showComments(video.id); }}>
             <i className="fa-regular fa-comment" /><span>Comments</span>
           </button>
