@@ -4,7 +4,6 @@ const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./database');
 const { sendEmail } = require('./email');
-const whatsapp = require('./whatsapp');
 const { createToken } = require('./middleware/authenticate');
 
 const router = express.Router();
