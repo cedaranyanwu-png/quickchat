@@ -258,14 +258,15 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {
   const recentWindow = db.type === 'sqlite' ? "datetime('now', '-30 days')" : db.type === 'mysql' ? "DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)" : "CURRENT_TIMESTAMP - INTERVAL '30 days'";
+  const suspensionExpiry = db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP';
   const counts = await Promise.all([
     db.getCount('SELECT COUNT(*) AS count FROM users'),
     db.getCount(`SELECT COUNT(*) AS count FROM users WHERE created_at >= ${recentWindow}`),
     db.getCount("SELECT COUNT(*) AS count FROM verification_applications WHERE status = 'pending'"),
     db.getCount("SELECT COUNT(*) AS count FROM moderation_reports WHERE status IN ('pending', 'under_review', 'escalated')"),
-    db.getCount("SELECT COUNT(*) AS count FROM users u WHERE EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP)"),
+    db.getCount(`SELECT COUNT(*) AS count FROM users u WHERE EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${suspensionExpiry})`),
     db.getCount("SELECT COUNT(*) AS count FROM account_bans WHERE revoked_at IS NULL"),
-    db.getCount("SELECT COUNT(*) AS count FROM user_badges WHERE revoked_at IS NULL"),
+    db.getCount('SELECT COUNT(*) AS count FROM users WHERE verified = 1'),
     db.getCount("SELECT COUNT(*) AS count FROM communities"),
   ]);
   const recent = await db.query(
