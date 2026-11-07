@@ -8,6 +8,7 @@ const items = [
   { label: 'Videos', description: 'Watch and discover short videos.', icon: 'fa-solid fa-video', path: '/videos' },
   { label: 'People', description: 'Find people to follow.', icon: 'fa-solid fa-user-plus', path: '/follow' },
   { label: 'Recommendations', description: 'Discover content and people you may like.', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
+  { label: 'Account Booster', description: 'Promote your profile and grow content reach.', icon: 'fa-solid fa-rocket', path: '/account-booster' },
   { label: 'RSS Publisher Admin', description: 'Manage RSS feeds and synchronization.', icon: 'fa-solid fa-rss', path: '/admin/rss' },
   { label: 'Saved posts', description: 'View your bookmarks and saved content.', icon: 'fa-solid fa-bookmark', path: '/books' },
   { label: 'Settings', description: 'Account, notifications, payments, and preferences.', icon: 'fa-solid fa-gear', path: '/settings' },
