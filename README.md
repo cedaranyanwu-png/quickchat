@@ -77,12 +77,12 @@ RSS ingestion runs separately from the API and does not fetch feeds when a user 
 npm --prefix server run rss-worker:start
 ```
 
-The default schedule is every 15 minutes. The worker uses the existing `rss-parser`, Axios and Cheerio dependencies, respects per-source sync intervals, stores ETag/Last-Modified validators, and records sync logs. It limits response size and request time, disables redirects, resolves feed hosts and rejects private/internal IP destinations before connecting. Imported descriptions are converted to plain-text excerpts; the complete external article is not republished.
+The worker checks for due sources every 5 minutes; each publisher defaults to a 15-minute interval and can be configured from 10 to 60 minutes. It uses the existing `rss-parser`, Axios and Cheerio dependencies, respects per-source sync intervals, stores ETag/Last-Modified validators, and records sync logs. It limits response size and request time, disables redirects, resolves feed hosts and rejects private/internal IP destinations before connecting. Imported descriptions are converted to plain-text excerpts; the complete external article is not republished.
 
 Configure these values in `server/.env`:
 
 - `RSS_ADMIN_USER_IDS`: comma-separated numeric user IDs permitted to manage RSS sources. This is an explicit allowlist because the current application does not expose a reusable administrator-role middleware.
-- `RSS_SYNC_CRON`: worker schedule (default `*/15 * * * *`).
+- `RSS_SYNC_CRON`: worker scheduler tick (default `*/5 * * * *`); per-publisher intervals are applied independently.
 - `RSS_SYNC_ON_START`: run one synchronization cycle when the worker starts (default `true`).
 - `RSS_REQUEST_TIMEOUT_MS`, `RSS_MAX_FEED_BYTES`, `RSS_MAX_ITEMS_PER_SYNC`: ingestion safety limits.
 
