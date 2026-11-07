@@ -40,7 +40,7 @@ router.get('/messages/contacts', asyncRoute(async (req, res) => {
   const limit = clampLimit(req.query.limit, 100, 200);
   const offset = Math.max(0, Math.min(100000, Number.parseInt(req.query.offset, 10) || 0));
   const rows = await db.query(
-    `SELECT u.id, u.fullname, u.username, u.avatar_url, u.picture, u.is_synthetic,
+    `SELECT u.id, u.fullname, u.username, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             u.automation_status, u.typing_until, u.typing_conversation_id,
             EXISTS(SELECT 1 FROM follows outgoing WHERE outgoing.follower_id = ? AND outgoing.followed_id = u.id) AS following,
             EXISTS(SELECT 1 FROM follows incoming WHERE incoming.follower_id = u.id AND incoming.followed_id = ?) AS follower
@@ -81,7 +81,7 @@ router.get('/messages/unread-count', asyncRoute(async (req, res) => {
 
 router.get('/messages/conversations', asyncRoute(async (req, res) => {
   const conversations = await db.query(
-    `SELECT c.id, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture, u.is_synthetic,
+    `SELECT c.id, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             u.automation_status, u.typing_until, u.typing_conversation_id,
             (SELECT CASE WHEN COALESCE(m.media_type, '') = 'image' THEN '📷 Photo' WHEN COALESCE(m.media_type, '') = 'audio' THEN '🎤 Voice message' WHEN COALESCE(m.media_type, '') = 'video' THEN '🎬 Video' ELSE m.text END FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
             (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message_at,
@@ -103,6 +103,7 @@ router.get('/messages/conversations', asyncRoute(async (req, res) => {
       username: row.username,
       handle: row.username?.startsWith('@') ? row.username : `@${row.username || ''}`,
       picture: row.avatar_url || row.picture || null,
+      verified: Boolean(Number(row.verified || 0)),
       isAutomated: Boolean(Number(row.is_synthetic || 0)),
       online: isAccountOnline(row),
       typing: isAccountTyping(row, row.id),
@@ -179,7 +180,7 @@ router.get('/messages/conversations/:conversationId/status', asyncRoute(async (r
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
 
   const participants = await db.query(
-    `SELECT u.id, u.fullname, u.is_synthetic, u.automation_status, u.typing_until, u.typing_conversation_id
+    `SELECT u.id, u.fullname, u.verified, u.is_synthetic, u.automation_status, u.typing_until, u.typing_conversation_id
        FROM conversation_members members
        JOIN users u ON u.id = members.user_id
       WHERE members.conversation_id = ? AND members.user_id <> ?`,
@@ -190,6 +191,7 @@ router.get('/messages/conversations/:conversationId/status', asyncRoute(async (r
     return {
       userId: user.id,
       name: user.fullname || 'User',
+      verified: Boolean(Number(user.verified || 0)),
       online: automated ? user.automation_status === 'active' : isUserOnline(user.id),
       typing: automated ? isAccountTyping(user) : isUserTyping(conversationId, user.id),
     };
