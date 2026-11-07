@@ -58,6 +58,8 @@ app.post('/api/webhooks/flutterwave', express.json({ limit: '1mb' }), async (req
 });
 app.use(express.json({ limit: '1mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', immutable: true }));
+// Serve status/post media from persistent object storage, with legacy local-file fallback.
+app.get('/uploads/:filename', mediaRoutes.servePublicMedia);
 
 // Google Identity Services uses a popup; this policy allows its opener messaging.
 app.use((req, res, next) => {
