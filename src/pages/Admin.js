@@ -4,7 +4,7 @@ import { API_BASE_URL, adminRequest } from '../api';
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
-  { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-brands fa-whatsapp', permission: 'notifications.send' },
+  { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
   { key: 'verification', label: 'User verification', icon: 'fa-circle-check', permission: 'verification.review' },
   { key: 'reports', label: 'Reports & complaints', icon: 'fa-flag', permission: 'reports.view' },
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
@@ -61,6 +61,8 @@ export default function Admin() {
   const [whatsappLogs, setWhatsappLogs] = useState([]);
   const [whatsappForm, setWhatsappForm] = useState({ title: '', message: '' });
   const [whatsappBusy, setWhatsappBusy] = useState(false);
+  const [whatsappOffset, setWhatsappOffset] = useState(0);
+  const [whatsappHasMore, setWhatsappHasMore] = useState(false);
   const [backupRunning, setBackupRunning] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -215,16 +217,18 @@ export default function Admin() {
   const sendWhatsAppBroadcast = async (event) => {
     event.preventDefault();
     if (!whatsappForm.title.trim() || !whatsappForm.message.trim()) return;
-    if (!window.confirm('Send this WhatsApp notification to all verified users who opted in to QuickChat WhatsApp notifications?')) return;
+    if (!window.confirm(whatsappOffset > 0 ? 'Send the next batch of this WhatsApp notification?' : 'Send this WhatsApp notification to verified users who opted in to QuickChat WhatsApp notifications?')) return;
     setWhatsappBusy(true);
     setError('');
     setNotice('');
     try {
       const result = await adminRequest('/admin/whatsapp/messages', {
         method: 'POST',
-        body: { target: 'all', title: whatsappForm.title.trim(), message: whatsappForm.message.trim() },
+        body: { target: 'all', offset: whatsappOffset, title: whatsappForm.title.trim(), message: whatsappForm.message.trim() },
       });
-      setNotice(`WhatsApp processing finished: ${result.accepted || 0} accepted by Meta, ${result.failed || 0} failed, ${result.total || 0} recipients.`);
+      setNotice(`Batch processed: ${result.accepted || 0} accepted by Meta, ${result.failed || 0} failed, ${result.total || 0} recipients.`);
+      setWhatsappOffset(result.nextOffset || 0);
+      setWhatsappHasMore(Boolean(result.hasMore));
       await loadSection('whatsapp');
     } catch (err) {
       setError(err.message || 'WhatsApp notification could not be sent.');
@@ -355,7 +359,8 @@ export default function Admin() {
             <div className="mb-5"><h3 className="font-extrabold text-slate-900">Compose service notification</h3><p className="mt-1 text-xs leading-5 text-slate-500">Use this for maintenance windows, outages, incident updates and service restoration notices.</p></div>
             <label className="mb-4 block text-sm font-bold text-slate-700">Notification title<input value={whatsappForm.title} onChange={(event) => setWhatsappForm((form) => ({ ...form, title: event.target.value }))} maxLength={160} required placeholder="QuickChat service update" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" /></label>
             <label className="mb-4 block text-sm font-bold text-slate-700">Message<textarea value={whatsappForm.message} onChange={(event) => setWhatsappForm((form) => ({ ...form, message: event.target.value }))} maxLength={900} rows={5} required placeholder="We are investigating a temporary service interruption. Your account and content remain safe. We will send another update when service is restored." className="mt-2 w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" /></label>
-            <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">{whatsappForm.message.length}/900 characters · Template approval required in Meta WhatsApp Manager.</p><button disabled={whatsappBusy || !whatsappConfig} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><i className="fa-brands fa-whatsapp mr-2" />{whatsappBusy ? 'Processing…' : 'Send to opted-in users'}</button></div>
+            <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">{whatsappForm.message.length}/900 characters · 250 recipients per batch · Approved Meta template required.</p><div className="flex flex-wrap gap-2">{whatsappOffset > 0 && <button type="button" onClick={() => { setWhatsappOffset(0); setWhatsappHasMore(false); }} className="rounded-xl border border-slate-200 px-4 py-3 text-xs font-bold text-slate-600">Reset batch</button>}<button disabled={whatsappBusy || !whatsappConfig || !whatsappForm.title.trim() || !whatsappForm.message.trim()} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><i className="fa-brands fa-whatsapp mr-2" />{whatsappBusy ? 'Processing…' : whatsappOffset > 0 ? 'Send next batch' : 'Send first batch'}</button></div></div>
+            {whatsappHasMore && <p className="mt-3 text-xs font-semibold text-amber-700">More opted-in recipients remain. Send the next batch to continue this notification.</p>}
           </form>
           <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">Recent WhatsApp activity</h3><p className="mt-1 text-xs text-slate-500">“Accepted” means Meta accepted the API request; it is not a delivery receipt.</p></div>
