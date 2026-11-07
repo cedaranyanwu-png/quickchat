@@ -15,10 +15,10 @@ const GIFTS = [
 const GIFTS_BY_KEY = new Map(GIFTS.map((gift) => [gift.key, gift]));
 
 const POINT_PACKS = [
-  { key: 'starter', points: 100, amount: '500.00', label: 'Starter' },
-  { key: 'popular', points: 500, amount: '2000.00', label: 'Popular' },
-  { key: 'creator', points: 1200, amount: '4000.00', label: 'Creator' },
-  { key: 'studio', points: 3000, amount: '9000.00', label: 'Studio' },
+  { key: 'starter', points: 1000, amount: '100.00', label: 'Starter' },
+  { key: 'popular', points: 5000, amount: '500.00', label: 'Popular' },
+  { key: 'creator', points: 10000, amount: '1000.00', label: 'Creator' },
+  { key: 'studio', points: 50000, amount: '5000.00', label: 'Studio' },
 ];
 
 const POINT_PACKS_BY_KEY = new Map(POINT_PACKS.map((pack) => [pack.key, pack]));
