@@ -17,7 +17,6 @@ export default function Sidebar({ onOpenPost, onLogout }) {
   const navItems = [
     ['Home', 'fa-solid fa-house', '/home'],
     ['Explore', 'fa-solid fa-compass', '/explore'],
-    ['Discover', 'fa-solid fa-sparkles', '/discover'],
     ['Recommendations', 'fa-solid fa-wand-magic-sparkles', '/recommendations'],
     ['Notifications', 'fa-solid fa-bell', '/notifications'],
     ['Messages', 'fa-solid fa-envelope', '/messages'],
