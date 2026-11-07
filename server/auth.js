@@ -11,7 +11,6 @@ const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
 const VERIFICATION_TTL_MINUTES = 24 * 60;
 // Set EMAIL_VERIFICATION=off to skip verification emails (no mail provider configured).
-const emailVerificationOff = String(process.env.EMAIL_VERIFICATION || '').toLowerCase() === 'off';
 const RESET_TTL_MINUTES = 60;
 const recentEmailSends = new Map();
 
@@ -136,7 +135,7 @@ router.post('/register', async (req, res) => {
       await db.insert(
         // Keep the legacy NOT NULL `name` column populated in older SQLite files.
         'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified, whatsapp_phone, whatsapp_phone_verified, whatsapp_notifications_opt_in) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
-        [fullName, fullName, username, email, passwordHash, null, 1, whatsappPhone, req.body.whatsappOptIn === true ? 1 : 0],
+        [fullName, fullName, username, email, passwordHash, null, 0, whatsappPhone, req.body.whatsappOptIn === true ? 1 : 0],
       ),
     );
 
@@ -263,6 +262,12 @@ router.post('/google', async (req, res) => {
       return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
     }
     if (createdAccount) await createWelcomeNotification(user.id);
+    if (!user.whatsapp_phone) {
+      return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
+    }
+    if (Number(user.whatsapp_phone_verified || 0) !== 1) {
+      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
+    }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -334,6 +339,7 @@ router.post('/whatsapp/start', async (req, res) => {
     if (Number(user.whatsapp_phone_verified || 0) === 1 && user.whatsapp_phone === phone) {
       return res.json({ verified: true, message: 'This WhatsApp number is already verified.' });
     }
+    if (recentlySent('whatsapp-start:' + user.id, 60_000)) return res.status(429).json({ message: 'Wait one minute before requesting another WhatsApp verification link.' });
     await db.update('UPDATE users SET whatsapp_phone = ?, whatsapp_phone_verified = 0 WHERE id = ?', [phone, user.id]);
     const delivery = await sendWhatsappVerification(user.id, phone);
     return res.json({
@@ -364,6 +370,7 @@ router.post('/google/whatsapp/start', async (req, res) => {
     if (user.whatsapp_phone && user.whatsapp_phone !== phone && Number(user.whatsapp_phone_verified || 0) === 1) {
       return res.status(409).json({ message: 'This account already has a verified WhatsApp number. Contact support to change it.' });
     }
+    if (recentlySent('google-whatsapp-start:' + user.id, 60_000)) return res.status(429).json({ message: 'Wait one minute before requesting another WhatsApp verification link.' });
     await db.update('UPDATE users SET whatsapp_phone = ?, whatsapp_phone_verified = 0 WHERE id = ?', [phone, user.id]);
     const delivery = await sendWhatsappVerification(user.id, phone);
     return res.json({
@@ -502,7 +509,7 @@ function sendSession(res, user, status, message, extra = {}) {
       fullName: user.fullName,
       username: user.username,
       email: user.email,
-      emailVerified: true,
+      emailVerified: Number(user.email_verified || 0) === 1,
       picture: extra.picture || user.picture || null,
     },
   });
