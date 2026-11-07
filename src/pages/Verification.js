@@ -11,7 +11,7 @@ const verificationFeatures = [
   { icon: 'fa-comments', title: 'Verified Comment Highlighting', desc: 'Your comments stand out at the top of post reply threads and live events.' },
 ];
 
-const DEFAULT_PLAN_POINTS = 5000;
+const DEFAULT_VERIFICATION_PRICE = 2000;
 
 export default function Verification() {
   const [profile, setProfile] = useState(null);
@@ -54,32 +54,19 @@ export default function Verification() {
     setError('');
     setSuccess('');
     try {
-      const result = await apiRequest('/verification/upgrade', { method: 'POST' });
-      setSuccess(result.message || 'Congratulations! Your account has been verified.');
-      if (result.profile) {
-        setProfile(result.profile);
-      }
-      if (typeof result.balance === 'number') {
-        setStatus((current) => ({ ...(current || {}), verified: true, pointsBalance: result.balance }));
-      } else {
-        loadProfile();
-      }
+      const result = await apiRequest('/verification/checkout', { method: 'POST' });
+      if (!result.checkoutUrl) throw new Error('Flutterwave did not return a payment link.');
+      window.location.assign(result.checkoutUrl);
     } catch (err) {
-      setError(err?.message || 'Verification could not be processed. Please try again.');
-      // A 402 means the wallet is short — refresh the balance so the UI is honest.
-      apiRequest('/verification/status')
-        .then((fresh) => setStatus(fresh))
-        .catch(() => {});
-    } finally {
+      setError(err?.message || 'Payment could not be started. Please try again.');
+      apiRequest('/verification/status').then((fresh) => setStatus(fresh)).catch(() => {});
       setSubmitting(false);
     }
   };
 
   const isVerified = Boolean(profile?.verified) || Boolean(status?.verified);
-  const planPoints = Number(status?.planPoints) || DEFAULT_PLAN_POINTS;
-  const pointsBalance = Number(status?.pointsBalance) || 0;
-  const canAfford = pointsBalance >= planPoints;
-  const shortfall = Math.max(0, planPoints - pointsBalance);
+  const planPrice = Number(status?.planPrice) || DEFAULT_VERIFICATION_PRICE;
+  const paymentStatus = String(status?.paymentStatus || 'unpaid');
 
   return (
     <div className="max-w-3xl mx-auto pb-24 lg:pb-12">
@@ -168,8 +155,8 @@ export default function Verification() {
               </div>
               <div className="text-right">
                 <p className="text-xs text-white/70">One-time</p>
-                <p className="text-3xl font-black">{planPoints.toLocaleString()} pts</p>
-                <p className="text-[11px] text-white/70">≈ ₦{Number(status?.planPrice || 5000).toLocaleString()}</p>
+                <p className="text-3xl font-black">₦{planPrice.toLocaleString()}</p>
+                <p className="text-[11px] text-white/70">One-time verification fee</p>
               </div>
             </div>
           </div>
@@ -195,12 +182,12 @@ export default function Verification() {
             <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold text-slate-800">
-                  {isVerified ? 'Status: Active and verified' : 'Ready to verify your profile?'}
+                  {isVerified ? 'Status: Active and verified' : paymentStatus === 'paid' ? 'Payment confirmed · Awaiting administrator review' : 'Ready to request verification?'}
                 </p>
                 <p className="text-[11px] text-slate-400">
                   {isVerified
                     ? 'Your blue badge is displayed across all QuickChat apps and web.'
-                    : 'Instant activation will apply the verified badge to your profile and posts.'}
+                    : paymentStatus === 'paid' ? 'Your fee has been confirmed. QuickChat administration can now review and award your badge.' : 'Pay the one-time verification fee. Your badge is awarded after administrator review.'}
                 </p>
               </div>
 
@@ -209,12 +196,14 @@ export default function Verification() {
                   <i className="fa-solid fa-circle-check text-sm text-emerald-600" />
                   Account Verified
                 </div>
+              ) : paymentStatus === 'paid' ? (
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-5 py-2.5 text-xs font-extrabold text-amber-800"><i className="fa-solid fa-clock" /> Awaiting review</div>
               ) : (
                 <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
                   <button
                     type="button"
                     onClick={handleVerify}
-                    disabled={loading || submitting || !canAfford}
+                    disabled={loading || submitting}
                     className="flex w-full items-center justify-center gap-2 rounded-full bg-blue-700 px-7 py-3 text-sm font-extrabold text-white shadow-lg shadow-blue-500/25 transition hover:bg-blue-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                   >
                     {submitting ? (
@@ -225,18 +214,11 @@ export default function Verification() {
                     ) : (
                       <>
                         <i className="fa-solid fa-circle-check text-sm" />
-                        Verify Account Now ({planPoints.toLocaleString()} pts)
+                        Pay ₦{planPrice.toLocaleString()} verification fee
                       </>
                     )}
                   </button>
-                  <p className="text-center text-[11px] text-slate-500 sm:text-right">
-                    Wallet: <strong className="text-slate-700">{pointsBalance.toLocaleString()} pts</strong>
-                    {!canAfford && (
-                      <> — you need {shortfall.toLocaleString()} more.{' '}
-                        <Link to="/live" className="font-bold text-blue-700 hover:underline">Top up</Link>
-                      </>
-                    )}
-                  </p>
+                  <p className="text-center text-[11px] text-slate-500 sm:text-right">Secure payment processed by Flutterwave. Badge approval is handled by QuickChat administration.</p>
                 </div>
               )}
             </div>

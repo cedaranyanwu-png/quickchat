@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
+const { getVerificationFeeNaira } = require('../platform-config');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -25,7 +26,7 @@ const PERMISSIONS = [
 const DEFAULT_ROLES = [
   { name: 'Super Administrator', key: 'super_admin', permissions: ['*'] },
   { name: 'Administrator', key: 'admin', permissions: PERMISSIONS.filter((p) => !['roles.create', 'roles.delete', 'permissions.assign', 'admins.manage', 'settings.manage'].includes(p)) },
-  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
+  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'posts.restore', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
   { name: 'Verification Officer', key: 'verification_officer', permissions: ['dashboard.view', 'users.view', 'users.verify', 'communities.view', 'communities.verify', 'verification.review', 'badges.assign', 'badges.revoke'] },
   { name: 'Community Manager', key: 'community_manager', permissions: ['dashboard.view', 'communities.view', 'communities.edit', 'communities.suspend', 'communities.verify', 'reports.view', 'reports.resolve'] },
   { name: 'Support Agent', key: 'support_agent', permissions: ['dashboard.view', 'users.view', 'reports.view', 'reports.resolve'] },
@@ -436,6 +437,36 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
   res.json({ logs: rows });
 }));
 
+
+async function hasPaidVerificationFee(userId) {
+  const fee = await getVerificationFeeNaira();
+  const payments = await db.query(
+    "SELECT amount FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' ORDER BY id DESC",
+    [userId],
+  );
+  return payments.some((payment) => Number(payment.amount) >= fee);
+}
+
+router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const note = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !note) return res.status(400).json({ message: 'A verification note is required.' });
+  const target = await db.getOne('SELECT id, verified FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  if (Number(target.verified)) return res.status(409).json({ message: 'This account is already verified.' });
+  if (!(await hasPaidVerificationFee(userId))) {
+    return res.status(402).json({ message: 'The user must complete the current verification fee before an administrator can award the badge.' });
+  }
+  await db.update("UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = 'admin_review' WHERE id = ?", [userId]);
+  const badge = await db.getOne("SELECT id FROM verification_badges WHERE badge_key = 'verified_individual' AND is_active = 1");
+  if (badge) {
+    const existing = await db.getOne('SELECT id FROM user_badges WHERE user_id = ? AND badge_id = ? AND revoked_at IS NULL', [userId, badge.id]);
+    if (!existing) await db.insert('INSERT INTO user_badges (user_id, badge_id, assigned_by) VALUES (?, ?, ?)', [userId, badge.id, req.user.id]);
+  }
+  await audit(req, 'user.verified_by_admin', 'user', userId, note, { verified: 0 }, { verified: 1, method: 'admin_review' });
+  res.json({ message: 'User verified after confirmed verification-fee payment.' });
+}));
+
 router.get('/admin/verifications', requirePermission('verification.review'), asyncRoute(async (req, res) => {
   const status = ['pending', 'approved', 'rejected', 'needs_information'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
   const rows = await db.query(
@@ -456,6 +487,7 @@ router.post('/admin/verifications/:id/decision', requirePermission('verification
   }
   const application = await db.getOne('SELECT * FROM verification_applications WHERE id = ?', [id]);
   if (!application || application.status !== 'pending') return res.status(404).json({ message: 'Pending application not found.' });
+  if (decision === 'approved' && !(await hasPaidVerificationFee(application.user_id))) return res.status(402).json({ message: 'This applicant has not completed the verification fee. The badge cannot be awarded yet.' });
   await db.update(
     'UPDATE verification_applications SET status = ?, reviewer_id = ?, review_note = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ?',
     [decision, req.user.id, note, id],

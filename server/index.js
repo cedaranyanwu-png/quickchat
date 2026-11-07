@@ -28,6 +28,9 @@ const recommendationRoutes = require('./routes/recommendations');
 const adminRoutes = require('./routes/admin');
 const rssRoutes = require('./routes/rss');
 const adminBackupRoutes = require('./routes/admin-backups');
+const adminModerationRoutes = require('./routes/admin-moderation');
+const adminConfigRoutes = require('./routes/admin-config');
+const platformConfig = require('./platform-config');
 const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
@@ -87,6 +90,7 @@ app.get('/api/ads/click/:campaignId', adsRoutes);
 app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
   try {
     const pointsPurchase = String(req.query.tx_ref || '').startsWith('qcpts_');
+    const verificationPurchase = String(req.query.tx_ref || '').startsWith('qcverify_');
     const paid = await verifyAndProcessPayment({
       transactionId: req.query.transaction_id,
       txRef: req.query.tx_ref,
@@ -95,7 +99,9 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
     // Points buyers return to the live hub, where the wallet balance is shown.
     res.redirect(pointsPurchase
       ? `${publicAppUrl()}/live?points=${result}`
-      : `${publicAppUrl()}/home?payment=${result}`);
+      : verificationPurchase
+        ? `${publicAppUrl()}/verification?payment=${result}`
+        : `${publicAppUrl()}/home?payment=${result}`);
   } catch (error) {
     next(error);
   }
@@ -124,7 +130,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
         WHERE p.id = ?`,
       [postId],
     );
-    if (!postRow) return res.status(404).send('This post is unavailable.');
+    if (!postRow || postRow.visibility === 'moderated_removed') return res.status(404).send('This post is unavailable.');
 
     const post = toPost(postRow);
     const firstImage = post.media?.find((media) => media.type === 'image' && media.url);
@@ -241,6 +247,8 @@ app.use('/api', recommendationRoutes);
 app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
 app.use('/api', adminBackupRoutes);
+app.use('/api', adminModerationRoutes.router);
+app.use('/api', adminConfigRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -308,6 +316,8 @@ async function initializeDB() {
   await ensureUniqueIndexes();
   await initializePageTables();
   await adminRoutes.initializeAdminTables();
+  await adminModerationRoutes.initializePostModeration();
+  await platformConfig.initializePlatformConfig();
   await adminAuth.initializeAdminAuth();
   console.log('[Database] Users and independent administration tables are ready.');
 }
