@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../database');
-const { getVerificationFeePoints } = require('../platform-config');
+const { getVerificationFeeNaira } = require('../platform-config');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -400,7 +400,7 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
 
 
 async function hasPaidVerificationFee(userId) {
-  const fee = await getVerificationFeePoints();
+  const fee = await getVerificationFeeNaira();
   return Boolean(await db.getOne(
     "SELECT id FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' AND amount = ? ORDER BY id DESC LIMIT 1",
     [userId, `${fee}.00`],
