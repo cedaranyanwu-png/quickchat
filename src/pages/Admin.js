@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { apiRequest } from '../api';
+import { API_BASE_URL, apiRequest } from '../api';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
@@ -184,7 +184,7 @@ export default function Admin() {
   const downloadPlatformBackup = async (backup) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/admin/backups/${encodeURIComponent(backup.filename)}/download`, {
+      const response = await fetch(`${API_BASE_URL}/admin/backups/${encodeURIComponent(backup.filename)}/download`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!response.ok) {
