@@ -29,6 +29,8 @@ const adminRoutes = require('./routes/admin');
 const rssRoutes = require('./routes/rss');
 const adminBackupRoutes = require('./routes/admin-backups');
 const adminModerationRoutes = require('./routes/admin-moderation');
+const adminConfigRoutes = require('./routes/admin-config');
+const platformConfig = require('./platform-config');
 const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
@@ -243,6 +245,7 @@ app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
 app.use('/api', adminBackupRoutes);
 app.use('/api', adminModerationRoutes.router);
+app.use('/api', adminConfigRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -311,6 +314,7 @@ async function initializeDB() {
   await initializePageTables();
   await adminRoutes.initializeAdminTables();
   await adminModerationRoutes.initializePostModeration();
+  await platformConfig.initializePlatformConfig();
   await adminAuth.initializeAdminAuth();
   console.log('[Database] Users and independent administration tables are ready.');
 }
