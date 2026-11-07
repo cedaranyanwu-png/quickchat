@@ -301,12 +301,13 @@ router.post('/admin/whatsapp/messages', requirePermission('notifications.send'),
   const message = String(req.body?.message || '').trim().slice(0, 900);
   const target = String(req.body?.target || 'all');
   const selectedIds = Array.isArray(req.body?.userIds) ? req.body.userIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, 500) : [];
+  const offset = Math.max(0, Math.min(1000000, Number.parseInt(req.body?.offset, 10) || 0));
   if (!title || !message) return res.status(400).json({ message: 'Enter both a notification title and message.' });
   if (!whatsapp.isConfigured()) return res.status(503).json({ message: 'WhatsApp Cloud API is not configured on the server.' });
   if (target === 'selected' && !selectedIds.length) return res.status(400).json({ message: 'Select at least one recipient.' });
   const recipients = target === 'selected'
-    ? await db.query(`SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_notifications_opt_in = 1 AND id IN (${selectedIds.map(() => '?').join(',')})`, selectedIds)
-    : await db.query("SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 ORDER BY id LIMIT 5000");
+    ? await db.query(`SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 AND id IN (${selectedIds.map(() => '?').join(',')}) ORDER BY id LIMIT 500`, selectedIds)
+    : await db.query("SELECT id, whatsapp_phone FROM users WHERE whatsapp_phone IS NOT NULL AND whatsapp_phone <> '' AND whatsapp_phone_verified = 1 AND whatsapp_notifications_opt_in = 1 ORDER BY id LIMIT 250 OFFSET ?", [offset]);
   let sent = 0; let failed = 0;
   for (const user of recipients) {
     const result = await whatsapp.sendAdminNotification(user.whatsapp_phone, title, message);
@@ -318,7 +319,7 @@ router.post('/admin/whatsapp/messages', requirePermission('notifications.send'),
     if (result.delivered) sent += 1; else failed += 1;
   }
   await audit(req, 'whatsapp.broadcast_sent', 'whatsapp', null, `WhatsApp notification: ${title}`, null, { target, recipients: recipients.length, accepted: sent, failed });
-  res.json({ message: 'WhatsApp notification processing completed.', total: recipients.length, accepted: sent, failed });
+  res.json({ message: 'WhatsApp notification batch processed.', total: recipients.length, accepted: sent, failed, offset, nextOffset: offset + recipients.length, hasMore: target !== 'selected' && recipients.length === 250 });
 }));
 
 router.get('/admin/me', asyncRoute(async (req, res) => {
