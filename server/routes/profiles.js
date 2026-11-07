@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('node:crypto');
 const {
   db, asyncRoute, clampLimit, notFound, toPost, toProfile, uniqueConstraint,
 } = require('./utils');
@@ -6,6 +7,7 @@ const { normalizeSelectedInterests } = require('../algorithm');
 const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
 const { getVerificationFeePoints } = require('../platform-config');
+const { flutterwaveRequest, isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured, publicAppUrl, flutterwaveWebhookUrl } = require('../flutterwave');
 
 const router = express.Router();
 
@@ -100,7 +102,7 @@ router.patch('/profile/me', asyncRoute(async (req, res) => {
   }
 }));
 
-// Verification routes: Check verification status and activate verified badge
+// Verification is a paid application. Flutterwave confirms the charge; an administrator awards the badge after review.
 router.get('/verification/status', asyncRoute(async (req, res) => {
   const row = await db.getOne(
     'SELECT id, verified, verified_at, verification_method, fullname, username FROM users WHERE id = ?',
@@ -108,6 +110,10 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
   );
   if (!row) return notFound(res, 'User not found.');
   const verificationPoints = await getVerificationFeePoints();
+  const payment = await db.getOne(
+    'SELECT status, amount, currency, paid_at, created_at FROM verification_fee_payments WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+    [req.user.id],
+  );
   res.json({
     verified: Boolean(Number(row.verified || 0)),
     verifiedAt: row.verified_at || null,
@@ -115,68 +121,46 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
     planPrice: String(verificationPoints),
     planPoints: verificationPoints,
     currency: 'NGN',
-    pointsBalance: await currentBalance(req.user.id),
+    paymentStatus: payment?.status || 'unpaid',
+    payment,
   });
 }));
 
-router.post('/verification/upgrade', asyncRoute(async (req, res) => {
-  const verificationPoints = await getVerificationFeePoints();
-  const user = await db.getOne('SELECT id, verified FROM users WHERE id = ?', [req.user.id]);
+router.post('/verification/checkout', asyncRoute(async (req, res) => {
+  const user = await db.getOne('SELECT id, email, fullname, username, verified FROM users WHERE id = ?', [req.user.id]);
   if (!user) return notFound(res, 'User not found.');
-  if (Number(user.verified || 0) === 1) {
-    return res.status(409).json({ message: 'Your account is already verified.', alreadyVerified: true });
+  if (Number(user.verified || 0)) return res.status(409).json({ message: 'Your account is already verified.' });
+  if (!isFlutterwaveSecretConfigured() || !isFlutterwaveWebhookSecretConfigured()) {
+    return res.status(503).json({ message: 'Flutterwave is not fully configured. Please contact QuickChat support.' });
   }
-
-  // Charge the badge from the points wallet. The balance guard lives in the UPDATE,
-  // so two concurrent requests cannot both buy the badge.
-  const reference = `verification_${req.user.id}_${Date.now()}`;
-  const spent = await spendPoints(req.user.id, verificationPoints, {
-    kind: 'verification_purchase',
-    reference,
-  });
-  if (!spent.ok) {
-    return res.status(402).json({
-      message: `Verification costs ${verificationPoints.toLocaleString()} points. Your wallet has ${Number(spent.balance || 0).toLocaleString()} — top up your wallet to continue.`,
-      balance: spent.balance || 0,
-      required: verificationPoints,
-    });
-  }
-
-  // Re-check inside the update so a parallel request that won the race cannot charge twice.
-  const changed = await db.update(
-    `UPDATE users
-        SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = 'points'
-      WHERE id = ? AND (verified IS NULL OR verified = 0)`,
-    [req.user.id],
+  const fee = await getVerificationFeePoints();
+  const pending = await db.getOne("SELECT checkout_url, tx_ref FROM verification_fee_payments WHERE user_id = ? AND status = 'pending' ORDER BY id DESC LIMIT 1", [req.user.id]);
+  if (pending?.checkout_url && pending.tx_ref) return res.json({ checkoutUrl: pending.checkout_url, txRef: pending.tx_ref });
+  const txRef = `qcverify_${req.user.id}_${crypto.randomUUID()}`;
+  await db.insert(
+    "INSERT INTO verification_fee_payments (user_id, tx_ref, amount, currency, status) VALUES (?, ?, ?, 'NGN', 'pending')",
+    [req.user.id, txRef, `${fee}.00`],
   );
-  if (!changed) {
-    // Someone else verified the account mid-flight: refund this purchase.
-    await creditPoints(req.user.id, verificationPoints, {
-      kind: 'verification_refund',
-      reference: `${reference}_refund`,
-    }).catch(() => {});
-    return res.status(409).json({ message: 'Your account is already verified.', alreadyVerified: true });
+  try {
+    const origin = publicAppUrl();
+    flutterwaveWebhookUrl();
+    const checkout = await flutterwaveRequest('POST', 'payments', {
+      tx_ref: txRef,
+      amount: `${fee}.00`,
+      currency: 'NGN',
+      redirect_url: `${origin}/api/payments/flutterwave/callback`,
+      customer: { email: user.email, name: user.fullname || user.username || 'QuickChat member' },
+      customizations: { title: 'QuickChat Verification', description: 'One-time account verification fee' },
+      meta: { quickchat_kind: 'verification_fee', quickchat_user_id: String(user.id) },
+    });
+    const checkoutUrl = checkout?.data?.link;
+    if (!checkoutUrl) throw Object.assign(new Error('Flutterwave did not return a checkout URL.'), { status: 502 });
+    await db.update('UPDATE verification_fee_payments SET checkout_url = ? WHERE tx_ref = ?', [checkoutUrl, txRef]);
+    res.status(201).json({ checkoutUrl, txRef, amount: fee, currency: 'NGN' });
+  } catch (error) {
+    await db.update("UPDATE verification_fee_payments SET status = 'failed' WHERE tx_ref = ?", [txRef]);
+    throw error;
   }
-
-  const row = await db.getOne(`${PROFILE_SELECT} WHERE u.id = ?`, [req.user.id, req.user.id]);
-
-  await notifyUser({
-    userId: req.user.id,
-    type: 'system',
-    text: 'is now verified! Enjoy your blue verified badge and creator features.',
-    push: {
-      title: '🌟 Account Verified!',
-      body: 'Congratulations! Your QuickChat account is now verified with the official blue checkmark badge.',
-      url: '/profile',
-    },
-  }).catch(() => {});
-
-  res.json({
-    verified: true,
-    message: 'Your account has been successfully verified!',
-    profile: toProfile(row),
-    balance: await currentBalance(req.user.id),
-  });
 }));
 
 function parseStoredInterests(value) {
