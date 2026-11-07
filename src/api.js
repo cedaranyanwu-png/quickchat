@@ -67,3 +67,17 @@ export function uploadMedia(file) {
     body: file,
   });
 }
+
+
+// Resolve media/profile URLs returned by the API. Relative upload paths must stay
+// on the API origin when the React app and API are hosted on different origins.
+export function resolveMediaUrl(value) {
+  if (!value || typeof value !== 'string') return '';
+  const url = value.trim();
+  if (!url) return '';
+  if (/^(https?:|data:|blob:)/i.test(url)) return url;
+  if (url.startsWith('//')) return `${typeof window !== 'undefined' ? window.location.protocol : 'https:'}${url}`;
+  const apiOrigin = API_BASE_URL.startsWith('http') ? API_BASE_URL.replace(/\/api\/?$/, '') : '';
+  if (url.startsWith('/')) return apiOrigin ? `${apiOrigin}${url}` : url;
+  return apiOrigin ? `${apiOrigin}/${url}` : `/${url}`;
+}
