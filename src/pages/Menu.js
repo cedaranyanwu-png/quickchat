@@ -3,8 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 
 const items = [
   { label: 'Live', description: 'Start or discover live sessions.', icon: 'fa-solid fa-tower-broadcast', path: '/live' },
-  { label: 'Messages', description: 'Open your conversations.', icon: 'fa-solid fa-envelope', path: '/messages' },
-  { label: 'Notifications', description: 'View your latest activity and alerts.', icon: 'fa-solid fa-bell', path: '/notifications' },
   { label: 'Communities', description: 'Create, discover, and join communities.', icon: 'fa-solid fa-users', path: '/communities' },
   { label: 'People', description: 'Find people to follow.', icon: 'fa-solid fa-user-plus', path: '/follow' },
   { label: 'Videos', description: 'Watch and discover short videos.', icon: 'fa-solid fa-video', path: '/videos' },
