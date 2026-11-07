@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate, Link } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
-import { API_BASE_URL, apiRequest } from './api';
+import { API_BASE_URL, apiRequest, resolveMediaUrl } from './api';
 
 // Components
 import Sidebar from './components/Sidebar';
@@ -71,7 +71,10 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (!presenceSessionId.current) {
     presenceSessionId.current = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const openModal = (src, type = 'image') => setModalImage({ src, type });
+  const openModal = (src, type = 'image') => {
+    const resolvedSrc = resolveMediaUrl(src);
+    if (resolvedSrc) setModalImage({ src: resolvedSrc, type });
+  };
   const closeModal = () => setModalImage(null);
   const openPostModal = () => setIsPostModalOpen(true);
   const closePostModal = () => setIsPostModalOpen(false);
