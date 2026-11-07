@@ -26,14 +26,16 @@ function isPrivateAddress(address) {
   if (family === 4) {
     const parts = address.split('.').map(Number);
     const a = parts[0], b = parts[1];
+    const third = parts[2];
     return a === 0 || a === 10 || a === 127 || a >= 224 ||
       (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) ||
-      (a === 192 && (b === 0 || b === 2)) || (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0);
+      (a === 172 && b >= 16 && b <= 31) || (a === 192 && (b === 0 || b === 2 || b === 88 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19 || b === 51)) || (a === 203 && b === 0) ||
+      (a === 192 && b === 0 && third === 0);
   }
   if (family === 6) {
     const value = address.toLowerCase();
-    return value === '::' || value === '::1' || value.startsWith('fc') ||
+    return value === '::' || value === '::1' || value.startsWith('::ffff:') || value.startsWith('ff') || value.startsWith('fc') ||
       value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') ||
       value.startsWith('fea') || value.startsWith('feb') || value.startsWith('::ffff:127.') ||
       value.startsWith('::ffff:10.') || value.startsWith('::ffff:192.168.') || value.startsWith('2001:db8:');
