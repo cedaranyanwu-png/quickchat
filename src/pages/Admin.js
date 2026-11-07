@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL, adminRequest } from '../api';
+import AdminModeration from './AdminModeration';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
+  { key: 'moderation', label: 'Post moderation', icon: 'fa-shield-halved', permission: 'posts.view' },
   { key: 'verification', label: 'User verification', icon: 'fa-circle-check', permission: 'verification.review' },
   { key: 'reports', label: 'Reports & complaints', icon: 'fa-flag', permission: 'reports.view' },
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
@@ -334,6 +336,8 @@ export default function Admin() {
             <div className="mt-4 divide-y divide-slate-100">{(overview?.recentActions || []).length ? overview.recentActions.map((row) => <div key={row.id} className="flex flex-wrap items-center gap-3 py-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-100 text-slate-500"><i className="fa-solid fa-shield-halved text-xs" /></span><div className="min-w-0 flex-1"><p className="text-sm font-bold text-slate-800">{row.action}</p><p className="mt-0.5 text-xs text-slate-500">{row.administrator || 'Administrator'} · {row.target_type || 'platform'} {row.target_id || ''}</p></div><time className="text-[11px] text-slate-400">{formatDate(row.created_at)}</time></div>) : <p className="py-8 text-center text-sm text-slate-400">No administrative actions have been recorded yet.</p>}</div>
           </div>
         </section>}
+
+        {section === 'moderation' && <AdminModeration />}
 
         {section === 'users' && <section>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">User directory</h2><p className="mt-1 text-sm text-slate-500">Search and review existing QuickChat accounts.</p></div><div className="flex w-full gap-2 sm:w-auto"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadSection('users', 1, search)} placeholder="Search name, username or email" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 sm:w-72" /><button onClick={() => { setUserPage(1); loadSection('users', 1, search); }} className="rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Search</button></div></div>
