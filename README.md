@@ -88,7 +88,7 @@ Configure these values in `server/.env`:
 
 Authenticated RSS administration endpoints are `GET/POST /api/rss/admin/sources`, `PATCH/DELETE /api/rss/admin/sources/:sourceId`, `POST /api/rss/admin/sources/test`, `POST /api/rss/admin/sources/:sourceId/sync`, and `GET /api/rss/admin/logs`. New and changed feeds are fetched and parsed before they can be enabled. Add only publisher feed URLs that have been tested and whose feed terms permit the displayed metadata/excerpts. No candidate publishers are pre-enabled automatically.
 
-The RSS administration API is implemented; a dedicated visual RSS source-management screen, feed-by-feed failure dashboard, category-management UI, and publisher-specific terms/permissions review still need to be completed.
+The visual RSS source manager is available at `/admin/rss` for IDs listed in `RSS_ADMIN_USER_IDS`. It includes feed testing, enable/disable controls, manual synchronization and recent logs. A dedicated failed-feed filter, category-management UI, and publisher-specific terms/permissions review remain to be completed.
 
 ### Composer and live
 
