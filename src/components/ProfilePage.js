@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest, resolveMediaUrl } from '../api';
 import Avatar from './Avatar';
+import VerifiedBadge from './VerifiedBadge';
 import PostCard from './PostCard';
 
 const tabs = ['Posts', 'Media', 'Likes'];
@@ -133,7 +134,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
           </>
         )}
       </div>
-      <h3 className="text-base font-extrabold text-slate-900">{profile?.fullName} {profile?.verified && <i className="fa-solid fa-circle-check text-sm text-blue-700" aria-label="Verified account"/>}</h3>
+      <h3 className="text-base font-extrabold text-slate-900">{profile?.fullName} <VerifiedBadge verified={profile?.verified} className="text-sm" /></h3>
       <p className="text-xs text-slate-500">@{String(profile?.username || '').replace(/^@/, '')}</p>
       {profile?.bio && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">{profile.bio}</p>}
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -158,7 +159,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
           {relationshipUsers.map((person) => <article key={person.id} className="flex items-center gap-3 border-b border-slate-100 px-4 py-3 hover:bg-slate-50">
             <button type="button" onClick={() => { closeRelationshipList(); navigate(`/profile/${encodeURIComponent(String(person.username || '').replace(/^@/, ''))}`); }} aria-label={`View ${person.name}'s profile`} className="flex-shrink-0 rounded-full"><Avatar name={person.name} picture={person.picture} size={44} /></button>
             <div className="min-w-0 flex-1">
-              <button type="button" onClick={() => { closeRelationshipList(); navigate(`/profile/${encodeURIComponent(String(person.username || '').replace(/^@/, ''))}`); }} className="block max-w-full truncate border-0 bg-transparent p-0 text-left text-sm font-bold text-slate-900 hover:underline">{person.name} {person.verified && <i className="fa-solid fa-circle-check text-blue-700" aria-label="Verified account" />}</button>
+              <button type="button" onClick={() => { closeRelationshipList(); navigate(`/profile/${encodeURIComponent(String(person.username || '').replace(/^@/, ''))}`); }} className="block max-w-full truncate border-0 bg-transparent p-0 text-left text-sm font-bold text-slate-900 hover:underline">{person.name} <VerifiedBadge verified={person.verified} /></button>
               <p className="truncate text-xs text-slate-500">{person.handle}</p>
               {person.bio && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{person.bio}</p>}
             </div>
