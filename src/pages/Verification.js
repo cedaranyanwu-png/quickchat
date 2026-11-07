@@ -11,7 +11,7 @@ const verificationFeatures = [
   { icon: 'fa-comments', title: 'Verified Comment Highlighting', desc: 'Your comments stand out at the top of post reply threads and live events.' },
 ];
 
-const DEFAULT_PLAN_POINTS = 2000;
+const DEFAULT_VERIFICATION_PRICE = 2000;
 
 export default function Verification() {
   const [profile, setProfile] = useState(null);
