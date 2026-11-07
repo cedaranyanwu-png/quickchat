@@ -7,9 +7,6 @@ const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
 const { getVerificationFeePoints } = require('../platform-config');
 
-// One-time price of the verified badge, paid from the user's points wallet.
-const DEFAULT_VERIFICATION_POINTS = 2000;
-
 const router = express.Router();
 
 const PROFILE_SELECT = `
