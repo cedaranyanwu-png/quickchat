@@ -1,7 +1,6 @@
 const express = require('express');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
-const { getVerificationFeeNaira } = require('../platform-config');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -437,15 +436,6 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
   res.json({ logs: rows });
 }));
 
-
-async function hasPaidVerificationFee(userId) {
-  const fee = await getVerificationFeeNaira();
-  const payments = await db.query(
-    "SELECT amount FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' ORDER BY id DESC",
-    [userId],
-  );
-  return payments.some((payment) => Number(payment.amount) >= fee);
-}
 
 router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncRoute(async (req, res) => {
   const userId = Number(req.params.id);
