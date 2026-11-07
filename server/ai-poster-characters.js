@@ -2,6 +2,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const axios = require('axios');
 const characterData = require('./models/data/characters.json');
+const mediaStorage = require('./routes/media');
 
 let faker;
 let localizedFakers = {};
@@ -213,10 +214,8 @@ async function generateCharacterSelfies(database, options = {}) {
     return [];
   }
 
-  const uploadDirectory = path.join(__dirname, 'uploads', 'ai-character-selfies');
-  await fs.mkdir(uploadDirectory, { recursive: true });
   const accounts = await database.query(
-    'SELECT id, fullname, character_id FROM users WHERE is_synthetic = 1 AND character_id IS NOT NULL',
+    'SELECT id, fullname, character_id, avatar_url, picture FROM users WHERE is_synthetic = 1 AND character_id IS NOT NULL',
   );
   const byCharacter = new Map(accounts.map((account) => [account.character_id, account]));
   const selfies = [];
@@ -225,32 +224,25 @@ async function generateCharacterSelfies(database, options = {}) {
     const account = byCharacter.get(character.id);
     if (!account) continue;
     try {
-      let filename = await findExistingSelfie(uploadDirectory, character.id);
-      if (!filename) filename = await requestPollinationsSelfie(character, account, uploadDirectory, apiKey);
-      const imageUrl = `/uploads/ai-character-selfies/${filename}`;
-      await database.update('UPDATE users SET avatar_url = ?, picture = ? WHERE id = ?', [imageUrl, imageUrl, account.id]);
-      selfies.push({ character, account, imageUrl });
+      const currentUrl = account.avatar_url || account.picture || '';
+      const existingFilename = currentUrl.match(/\\/uploads\\/([a-f0-9-]{36}\\.(?:jpg|png|webp))$/i)?.[1];
+      if (existingFilename && await database.getOne(
+        'SELECT id FROM media_uploads WHERE filename = ? AND owner_id = ?',
+        [existingFilename, account.id],
+      )) {
+        continue;
+      }
+      const stored = await requestPollinationsSelfie(character, account, apiKey);
+      await database.update('UPDATE users SET avatar_url = ?, picture = ? WHERE id = ?', [stored.url, stored.url, account.id]);
+      selfies.push({ character, account, imageUrl: stored.url });
     } catch (error) {
-      logger(`[AI poster] Could not create a Pollinations selfie for ${character.id}`, error);
+      logger(`[AI poster] Could not create a cloud-stored Pollinations selfie for ${character.id}`, error);
     }
   }
   return selfies;
 }
 
-async function findExistingSelfie(directory, characterId) {
-  for (const extension of ['jpg', 'png', 'webp']) {
-    const filename = `${characterId}.${extension}`;
-    try {
-      await fs.access(path.join(directory, filename));
-      return filename;
-    } catch (_error) {
-      // Try the next supported image extension.
-    }
-  }
-  return null;
-}
-
-async function requestPollinationsSelfie(character, account, directory, apiKey) {
+async function requestPollinationsSelfie(character, account, apiKey) {
   const prompt = [
     `Create a realistic, warm, natural head-and-shoulders selfie portrait of a fictional AI social character named ${account.fullname}.`,
     `They are based in ${character.location} and enjoy ${character.interests.join(', ')}.`,
@@ -271,12 +263,10 @@ async function requestPollinationsSelfie(character, account, directory, apiKey) 
     maxContentLength: 8 * 1024 * 1024,
     maxBodyLength: 8 * 1024 * 1024,
   });
-  const contentType = String(response.headers?.['content-type'] || '').toLowerCase();
+  const contentType = String(response.headers?.['content-type'] || '').split(';')[0].trim().toLowerCase();
   if (!contentType.startsWith('image/')) throw new Error(`Pollinations returned ${contentType || 'a non-image response'}.`);
-  const extension = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
-  const filename = `${character.id}.${extension}`;
-  await fs.writeFile(path.join(directory, filename), Buffer.from(response.data));
-  return filename;
+  const normalizedType = contentType === 'image/jpg' ? 'image/jpeg' : contentType;
+  return mediaStorage.storeBufferForUser(account.id, Buffer.from(response.data), normalizedType);
 }
 
 function positiveInteger(value, fallback, maximum) {
