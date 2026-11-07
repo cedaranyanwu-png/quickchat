@@ -153,6 +153,12 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
     const finalPath = path.join(backupDirectory, filename);
     await fsp.writeFile(tempPath, archive, { flag: 'wx', mode: 0o600 });
     await fsp.rename(tempPath, finalPath);
+    const persisted = await fsp.readFile(finalPath);
+    const persistedChecksum = crypto.createHash('sha256').update(persisted).digest('hex');
+    if (persistedChecksum !== checksum) {
+      await fsp.unlink(finalPath).catch(() => {});
+      throw new Error('Backup checksum verification failed; the incomplete archive was removed.');
+    }
     const stat = await fsp.stat(finalPath);
     return { id, filename, path: finalPath, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString() };
   } finally {
