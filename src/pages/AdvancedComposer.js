@@ -75,7 +75,7 @@ export default function AdvancedComposer({ onPublished }) {
 
   useEffect(() => {
     apiRequest('/communities')
-      .then((result) => setCommunities((result.communities || []).filter((community) => community.joined)))
+      .then((result) => setCommunities((result.communities || []).filter((community) => community.canPost || community.joined)))
       .catch(() => setCommunities([]));
     apiRequest('/creator/analytics')
       .then(setAnalytics)
@@ -385,7 +385,11 @@ export default function AdvancedComposer({ onPublished }) {
       setMedia([]);
       setCaption('');
       onPublished?.(result.post);
-      navigate('/home');
+      if (destination === 'community' && communityId) {
+        navigate(`/communities/${encodeURIComponent(communityId)}`);
+      } else {
+        navigate('/home');
+      }
     } catch (requestError) {
       setError(requestError.message);
     } finally {
