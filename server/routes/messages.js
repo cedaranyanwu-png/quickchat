@@ -261,10 +261,10 @@ router.post('/messages/calls/start', asyncRoute(async (req, res) => {
   );
   if (!other) return res.status(404).json({ message: 'The other participant could not be found.' });
   const existing = await db.getOne(
-    "SELECT id FROM message_calls WHERE conversation_id = ? AND status IN ('ringing', 'active') AND updated_at_ms > ?",
-    [conversationId, Date.now() - 120000],
+    "SELECT id FROM message_calls WHERE (caller_id = ? OR callee_id = ? OR caller_id = ? OR callee_id = ?) AND status IN ('ringing', 'active') AND updated_at_ms > ?",
+    [req.user.id, req.user.id, other.user_id, other.user_id, Date.now() - 120000],
   );
-  if (existing) return res.status(409).json({ message: 'There is already an active call in this conversation.' });
+  if (existing) return res.status(409).json({ message: 'One of the participants is already in another call.' });
   const callId = crypto.randomUUID();
   const now = Date.now();
   await db.insert(
