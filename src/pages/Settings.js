@@ -32,7 +32,8 @@ const ASSISTANCE_OPTIONS = [
   'Logistics & Courier Delivery',
 ];
 
-export default function Settings() {
+export default function Settings({ onLogout }) {
+  const navigate = useSearchParams()[0];
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'general');
 
