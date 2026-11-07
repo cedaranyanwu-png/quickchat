@@ -10,6 +10,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pending, setPending] = useState(null);
+  const [googleCredential, setGoogleCredential] = useState('');
   const [resendStatus, setResendStatus] = useState('');
   const [step, setStep] = useState('register'); // 'register' or 'interests'
   const [selectedInterests, setSelectedInterests] = useState([]);
@@ -56,6 +57,26 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
     }
   };
 
+  const startGoogleWhatsAppVerification = async (event) => {
+    event.preventDefault();
+    setError('');
+    setResendStatus('Sending a WhatsApp verification link…');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/google/whatsapp/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: googleCredential, whatsappPhone: formData.whatsappPhone }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not start WhatsApp verification.');
+      setPending((current) => ({ ...current, whatsappPhone: formData.whatsappPhone, whatsappSent: Boolean(data.whatsappSent), googleSetup: false, previewUrl: data.previewUrl || '' }));
+      setResendStatus(data.message || 'WhatsApp verification link requested.');
+    } catch (requestError) {
+      setResendStatus('');
+      setError(requestError.message);
+    }
+  };
+
   const resendWhatsAppVerification = async () => {
     if (!pending?.email) return;
     setResendStatus('Sending a WhatsApp verification link…');
@@ -93,13 +114,14 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-slate-200 text-center">
         <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-emerald-100 text-emerald-700"><i className="fa-brands fa-whatsapp text-2xl" /></div>
         <h1 className="text-2xl font-extrabold text-slate-900">Verify your WhatsApp</h1>
-        <p className="mt-2 text-sm text-slate-600">We sent an account activation link to <strong>{pending.whatsappPhone}</strong>. Open the link on WhatsApp to confirm that you control this number. Your account becomes active after verification.</p>
-        {!pending.whatsappSent && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">WhatsApp has not accepted the message. Check the number or try again after WhatsApp delivery is configured.</p>}
-        {pending.previewUrl && <a href={pending.previewUrl} className="mt-4 inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white no-underline hover:bg-blue-800">Open development verification link</a>}
+        <p className="mt-2 text-sm text-slate-600">{pending.googleSetup ? 'Add the WhatsApp number you want to use for account activation.' : <>We sent an account activation link to <strong>{pending.whatsappPhone}</strong>. Open the link on WhatsApp to confirm that you control this number. Your account becomes active after verification.</>}</p>
+        {pending.googleSetup && <form onSubmit={startGoogleWhatsAppVerification} className="mt-4 text-left"><label className="block text-xs font-bold text-slate-700">WhatsApp number<input type="tel" value={formData.whatsappPhone} onChange={handleChange} name="whatsappPhone" required placeholder="+2348012345678" className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm" /></label><button className="mt-3 w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white">Send WhatsApp verification link</button></form>}
+        {!pending.googleSetup && !pending.whatsappSent && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">WhatsApp has not accepted the message. Check the number or try again after WhatsApp delivery is configured.</p>}
+        {!pending.googleSetup && pending.previewUrl && <a href={pending.previewUrl} className="mt-4 inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white no-underline hover:bg-blue-800">Open development verification link</a>}
         {resendStatus && <p className="mt-3 text-xs text-emerald-700" role="status">{resendStatus}</p>}
         {error && <p className="mt-3 text-xs text-red-600" role="alert">{error}</p>}
         <div className="mt-5 flex flex-col gap-2">
-          <button type="button" onClick={resendWhatsAppVerification} className="rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"><i className="fa-brands fa-whatsapp mr-2" />Resend WhatsApp link</button>
+          {!pending.googleSetup && <button type="button" onClick={resendWhatsAppVerification} className="rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"><i className="fa-brands fa-whatsapp mr-2" />Resend WhatsApp link</button>}
           <Link to="/login" className="text-xs font-bold text-blue-700 hover:underline">Back to sign in</Link>
         </div>
       </div>
@@ -292,7 +314,20 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                   body: JSON.stringify({ token: credentialResponse.credential }),
                 });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.message || 'Google signup failed');
+                if (!response.ok) {
+                  if (data.code === 'WHATSAPP_PHONE_REQUIRED') {
+                    setGoogleCredential(credentialResponse.credential);
+                    setPending({ email: data.email || '', whatsappPhone: '', whatsappSent: false, googleSetup: true });
+                    return;
+                  }
+                  if (data.code === 'WHATSAPP_NOT_VERIFIED') {
+                    setGoogleCredential(credentialResponse.credential);
+                    setPending({ email: data.email || '', whatsappPhone: '', whatsappSent: false, googleSetup: false });
+                    setResendStatus('This Google account already has a WhatsApp number. Sign in on the login page to request another link.');
+                    return;
+                  }
+                  throw new Error(data.message || 'Google signup failed');
+                }
                 
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
