@@ -93,7 +93,7 @@ router.post('/media', asyncRoute(async (req, res) => {
 
 router.delete('/media/:filename', asyncRoute(async (req, res) => {
   const filename = String(req.params.filename || '');
-  if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(filename)) {
+  if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) {
     return res.status(400).json({ message: 'Invalid media file name.' });
   }
   const upload = await db.getOne(
