@@ -93,6 +93,9 @@ async function authenticateAdmin(req, res, next) {
       return res.status(401).json({ message: 'This administration session is no longer active.' });
     }
     req.adminAccount = account;
+    if (Number(account.must_change_password) && !['/admin/me', '/admin/auth/credentials', '/admin/auth/session'].includes(req.path)) {
+      return res.status(403).json({ message: 'Update the initial administrator password before using the dashboard.' });
+    }
     // The service principal exists only to satisfy the legacy governance tables'
     // actor foreign keys. It has a random password and cannot authenticate as a user.
     req.user = { id: Number(account.actor_user_id), username: account.username };
@@ -151,6 +154,9 @@ router.post('/admin/auth/credentials', async (req, res, next) => {
     if (!currentPassword) return res.status(400).json({ message: 'Enter your current password to confirm this change.' });
     if (!/^[a-zA-Z0-9._-]{3,80}$/.test(newUsername)) {
       return res.status(400).json({ message: 'Username must be 3–80 characters and may contain letters, numbers, dots, underscores and hyphens.' });
+    }
+    if (Number(account.must_change_password) && !newPassword) {
+      return res.status(400).json({ message: 'Set a new password before using the administration centre.' });
     }
     if (!newPassword && newUsername.toLowerCase() === account.username.toLowerCase()) {
       return res.status(400).json({ message: 'Enter a new username or a new password.' });
