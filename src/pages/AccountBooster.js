@@ -64,7 +64,7 @@ export default function AccountBooster() {
       const [boostData, walletData, postData] = await Promise.all([
         apiRequest('/boosts'),
         apiRequest('/live/wallet'),
-        apiRequest('/content/my-posts?limit=30').catch(() => ({ posts: [] })),
+        apiRequest('/profile/me/posts?limit=30').catch(() => ({ posts: [] })),
       ]);
       setBoosts(boostData.boosts || []);
       setBalance(Number(walletData.balance || 0));
