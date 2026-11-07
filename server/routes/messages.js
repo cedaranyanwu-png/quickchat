@@ -300,6 +300,15 @@ router.post('/messages/calls/:callId/signals', asyncRoute(async (req, res) => {
   res.status(201).json({ sent: true });
 }));
 
+router.post('/messages/calls/:callId/heartbeat', asyncRoute(async (req, res) => {
+  const callId = String(req.params.callId || '');
+  const call = await db.getOne('SELECT id, caller_id, callee_id, status FROM message_calls WHERE id = ?', [callId]);
+  if (!call || ![Number(call.caller_id), Number(call.callee_id)].includes(Number(req.user.id))) return notFound(res, 'Call not found.');
+  if (!['ringing', 'active'].includes(call.status)) return res.status(409).json({ message: 'This call is no longer active.' });
+  await db.update('UPDATE message_calls SET updated_at_ms = ? WHERE id = ?', [Date.now(), callId]);
+  res.json({ active: true });
+}));
+
 router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
   const afterId = Math.max(0, Number.parseInt(req.body?.afterId, 10) || 0);
   const rows = await db.query(
@@ -311,7 +320,16 @@ router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
     await db.delete('DELETE FROM message_call_signals WHERE to_user_id = ? AND id <= ?', [req.user.id, maxId]);
   }
   await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [Date.now() - 86400000]);
-  await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now(), Date.now() - 60000]);
+  const expiredCalls = await db.query("SELECT id, caller_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now() - 60000]);
+  for (const expired of expiredCalls) {
+    await db.insert(
+      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+      [expired.id, 0, expired.caller_id, 'missed', null, Date.now()],
+    );
+  }
+  if (expiredCalls.length) {
+    await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE status = 'ringing' AND updated_at_ms < ?", [Date.now(), Date.now() - 60000]);
+  }
   res.json({ iceServers: iceServers(), signals: rows.map((row) => ({
     id: row.id, callId: row.call_id, from: row.from_user_id, kind: row.kind,
     payload: row.payload ? safeParse(row.payload) : null,
