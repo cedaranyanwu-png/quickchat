@@ -25,6 +25,7 @@ const businessRoutes = require('./routes/business');
 const recommendationRoutes = require('./routes/recommendations');
 const adminRoutes = require('./routes/admin');
 const rssRoutes = require('./routes/rss');
+const adminBackupRoutes = require('./routes/admin-backups');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
 const { emailProvider } = require('./email');
@@ -229,6 +230,7 @@ app.use('/api', businessRoutes);
 app.use('/api', recommendationRoutes);
 app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
+app.use('/api', adminBackupRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
