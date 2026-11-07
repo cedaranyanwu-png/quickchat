@@ -6,7 +6,7 @@ import { INTEREST_OPTIONS } from '../interest-options';
 
 const Register = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', password: '' });
+  const [formData, setFormData] = useState({ fullName: '', username: '', email: '', whatsappPhone: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [pending, setPending] = useState(null);
@@ -38,6 +38,8 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       if (data.requiresVerification) {
         setPending({
           email: data.email || formData.email,
+          whatsappPhone: formData.whatsappPhone,
+          whatsappSent: Boolean(data.whatsappSent),
           previewUrl: data.previewUrl || '',
           emailSent: data.emailSent !== false,
         });
@@ -53,6 +55,18 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const resendWhatsAppVerification = async () => {
+    if (!pending?.email) return;
+    setResendStatus('Sending a WhatsApp verification link…');
+    setError('');
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/whatsapp/resend`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: pending.email }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Could not send the WhatsApp verification link.');
+      setResendStatus(data.message || 'WhatsApp verification link requested.');
+    } catch (requestError) { setResendStatus(''); setError(requestError.message); }
   };
 
   const resendVerification = async () => {
@@ -79,14 +93,16 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8 border border-slate-200 text-center">
         <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-blue-100 text-blue-700"><i className="fa-solid fa-envelope-circle-check text-xl" /></div>
-        <h1 className="text-2xl font-extrabold text-slate-900">Check your email</h1>
-        <p className="mt-2 text-sm text-slate-600">We sent a verification link to <strong>{pending.email}</strong>. Open it to activate your QuickChat account.</p>
+        <h1 className="text-2xl font-extrabold text-slate-900">Verify your account</h1>
+        <p className="mt-2 text-sm text-slate-600">We sent an email verification link to <strong>{pending.email}</strong> and a WhatsApp verification link to <strong>{pending.whatsappPhone}</strong>. Complete both checks to activate your account.</p>
         {!pending.emailSent && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">The email provider is not configured yet, so no message was delivered. Use the development link below or ask an admin to configure email delivery.</p>}
         {pending.previewUrl && <a href={pending.previewUrl} className="mt-4 inline-block rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white no-underline hover:bg-blue-800">Open verification link (development preview)</a>}
+        {!pending.whatsappSent && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-xs text-amber-700">WhatsApp delivery is not confirmed. You can request another link after the service is configured.</p>}
         {resendStatus && <p className="mt-3 text-xs text-emerald-700" role="status">{resendStatus}</p>}
         {error && <p className="mt-3 text-xs text-red-600" role="alert">{error}</p>}
         <div className="mt-5 flex flex-col gap-2">
-          <button type="button" onClick={resendVerification} className="rounded-lg border border-slate-300 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Resend verification email</button>
+          <button type="button" onClick={resendVerification} className="rounded-lg border border-slate-300 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">Resend email verification</button>
+          <button type="button" onClick={resendWhatsAppVerification} className="rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700"><i className="fa-brands fa-whatsapp mr-2" />Resend WhatsApp link</button>
           <Link to="/login" className="text-xs font-bold text-blue-700 hover:underline">Back to sign in</Link>
         </div>
       </div>
@@ -230,6 +246,16 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
               <input type="email" name="email" value={formData.email} onChange={handleChange} required
                 className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all" placeholder="you@example.com" />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">WhatsApp Number</label>
+            <div className="relative">
+              <i className="fa-brands fa-whatsapp absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 text-sm"></i>
+              <input type="tel" name="whatsappPhone" value={formData.whatsappPhone} onChange={handleChange} required
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all" placeholder="+2348012345678" />
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">Use international format, including your country code.</p>
           </div>
 
           <div>
