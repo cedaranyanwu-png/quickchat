@@ -51,7 +51,7 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
   const category = String(req.query.category || '').trim().slice(0, 80);
   const query = String(req.query.q || '').trim().slice(0, 100);
   const conditions = ['a.status = ?'];
-  const params = ['published', req.user.id, req.user.id];
+  const params = ['published'];
   conditions.push('NOT EXISTS (SELECT 1 FROM hidden_rss_sources h WHERE h.user_id = ? AND h.source_id = a.source_id)');
   params.push(req.user.id);
   if (category) { conditions.push('LOWER(a.category) = LOWER(?)'); params.push(category); }
@@ -68,7 +68,7 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
   );
   const count = await db.getOne(
     'SELECT COUNT(*) AS total FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' + where,
-    params.slice(0, 1).concat(params.slice(3)),
+    params,
   );
   res.json({ articles: rows.map(mapArticle), page, limit, total: Number(count && count.total || 0), hasMore: offset + rows.length < Number(count && count.total || 0) });
 }));
