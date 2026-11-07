@@ -316,7 +316,7 @@ export default function Messages() {
                       <i className="fa-solid fa-reply text-xs" />
                     </button>
                     {isSwiped && (
-                      <div className={`absolute top-1/2 z-0 w-52 -translate-y-1/2 rounded-xl border border-blue-100 bg-white px-3 py-2 shadow-lg lg:hidden ${isMine ? 'right-full mr-3' : 'left-full ml-3'}`}>
+                      <div className="absolute bottom-full left-0 z-30 mb-2 w-64 max-w-[75vw] rounded-xl border border-blue-100 bg-white px-3 py-2 shadow-lg lg:hidden">
                         <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-blue-700">
                           <i className="fa-solid fa-reply" />
                           Replying to
