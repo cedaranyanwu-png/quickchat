@@ -45,6 +45,7 @@ import Wallet from './pages/Wallet';
 import Admin from './pages/Admin';
 import AdminModeration from './pages/AdminModeration';
 import Menu from './pages/Menu';
+import AccountBooster from './pages/AccountBooster';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
@@ -188,6 +189,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/compose/advanced" element={<AdvancedComposer onPublished={() => setFeedRevision((revision) => revision + 1)} />} />
             <Route path="/recommendations" element={<RecommendationAssistant openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/ads" element={<AdsDashboard />} />
+            <Route path="/account-booster" element={<AccountBooster />} />
             <Route path="/profile/:username" element={<ViewProfile openModal={openModal} openVideo={setActiveVideoId} />} />
           </Routes>
         </main>
