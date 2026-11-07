@@ -322,7 +322,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                   }
                   if (data.code === 'WHATSAPP_NOT_VERIFIED') {
                     setGoogleCredential(credentialResponse.credential);
-                    setPending({ email: data.email || '', whatsappPhone: '', whatsappSent: false, googleSetup: false });
+                    setPending({ email: data.email || '', whatsappPhone: data.whatsappPhone || '', whatsappSent: false, googleSetup: false });
                     setResendStatus('This Google account already has a WhatsApp number. Sign in on the login page to request another link.');
                     return;
                   }
