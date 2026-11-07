@@ -30,6 +30,7 @@ const DEFAULT_ROLES = [
 ];
 
 async function initializeAdminTables() {
+  if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
   const statements = [
     `CREATE TABLE IF NOT EXISTS admin_roles (
       id ${idColumn}, role_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
@@ -41,17 +42,21 @@ async function initializeAdminTables() {
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS admin_role_permissions (
-      role_id INTEGER NOT NULL, permission_id INTEGER NOT NULL,
+      role_id INTEGER NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
+      permission_id INTEGER NOT NULL REFERENCES admin_permissions(id) ON DELETE CASCADE,
       PRIMARY KEY (role_id, permission_id)
     )`,
     `CREATE TABLE IF NOT EXISTS admin_user_roles (
-      user_id INTEGER NOT NULL, role_id INTEGER NOT NULL, assigned_by INTEGER,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role_id INTEGER NOT NULL REFERENCES admin_roles(id) ON DELETE CASCADE,
+      assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
       assigned_at ${dateType} DEFAULT CURRENT_TIMESTAMP, is_active INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (user_id, role_id)
     )`,
     `CREATE TABLE IF NOT EXISTS admin_permission_overrides (
-      user_id INTEGER NOT NULL, permission_id INTEGER NOT NULL, allowed INTEGER NOT NULL,
-      assigned_by INTEGER, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      permission_id INTEGER NOT NULL REFERENCES admin_permissions(id) ON DELETE CASCADE,
+      allowed INTEGER NOT NULL, assigned_by INTEGER REFERENCES users(id) ON DELETE SET NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, permission_id)
     )`,
     `CREATE TABLE IF NOT EXISTS admin_audit_logs (
@@ -60,7 +65,7 @@ async function initializeAdminTables() {
       reason TEXT, request_id VARCHAR(120), created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS verification_applications (
-      id ${idColumn}, user_id INTEGER NOT NULL, account_category VARCHAR(60) NOT NULL,
+      id ${idColumn}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, account_category VARCHAR(60) NOT NULL,
       reason TEXT NOT NULL, supporting_links TEXT, evidence_reference TEXT,
       status VARCHAR(24) NOT NULL DEFAULT 'pending', reviewer_id INTEGER, review_note TEXT,
       reviewed_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
@@ -89,14 +94,15 @@ async function initializeAdminTables() {
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at ${dateType}, revoked_by INTEGER
     )`,
     `CREATE TABLE IF NOT EXISTS moderation_reports (
-      id ${idColumn}, reporter_id INTEGER NOT NULL, entity_type VARCHAR(30) NOT NULL,
+      id ${idColumn}, reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, entity_type VARCHAR(30) NOT NULL,
       entity_id VARCHAR(100) NOT NULL, category VARCHAR(60) NOT NULL, description TEXT,
-      assigned_to INTEGER, priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+      assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL, priority VARCHAR(20) NOT NULL DEFAULT 'normal',
       status VARCHAR(24) NOT NULL DEFAULT 'pending', resolution TEXT,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS moderation_actions (
-      id ${idColumn}, actor_id INTEGER NOT NULL, target_user_id INTEGER,
+      id ${idColumn}, actor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       entity_type VARCHAR(30), entity_id VARCHAR(100), action VARCHAR(60) NOT NULL,
       reason TEXT NOT NULL, duration_minutes INTEGER, expires_at ${dateType},
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
@@ -106,16 +112,18 @@ async function initializeAdminTables() {
       note TEXT NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS account_suspensions (
-      id ${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, starts_at ${dateType} NOT NULL,
-      expires_at ${dateType} NOT NULL, issued_by INTEGER NOT NULL, lifted_at ${dateType},
+      id ${idColumn}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE, reason TEXT NOT NULL, starts_at ${dateType} NOT NULL,
+      expires_at ${dateType} NOT NULL, issued_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT, lifted_at ${dateType},
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS account_bans (
-      id ${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, issued_by INTEGER NOT NULL,
+      id ${idColumn}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason TEXT NOT NULL, issued_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at ${dateType}, revoked_by INTEGER
     )`,
     `CREATE TABLE IF NOT EXISTS account_deletion_requests (
-      id ${idColumn}, user_id INTEGER NOT NULL, requested_by INTEGER NOT NULL,
+      id ${idColumn}, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
       reason TEXT, status VARCHAR(24) NOT NULL DEFAULT 'pending',
       scheduled_for ${dateType}, completed_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
