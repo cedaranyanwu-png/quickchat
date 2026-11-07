@@ -17,7 +17,6 @@ import Explore from './pages/Explore';
 import Discover from './pages/Discover';
 import RSSAdmin from './pages/RSSAdmin';
 import SavedArticles from './pages/SavedArticles';
-import RSSAdmin from './pages/RSSAdmin';
 import Notifications from './pages/Notifications';
 import Messages from './pages/Messages';
 import Videos from './pages/Videos';
@@ -151,7 +150,6 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/discover" element={<Discover openModal={openModal} openVideo={setActiveVideoId} />} />
             <Route path="/admin/rss" element={<RSSAdmin />} />
             <Route path="/saved-articles" element={<SavedArticles />} />
-            <Route path="/admin/rss" element={<RSSAdmin />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/menu" element={<Menu />} />
