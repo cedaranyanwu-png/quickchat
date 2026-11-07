@@ -4,6 +4,7 @@ import { API_BASE_URL, adminRequest } from '../api';
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
+  { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-brands fa-whatsapp', permission: 'notifications.send' },
   { key: 'verification', label: 'User verification', icon: 'fa-circle-check', permission: 'verification.review' },
   { key: 'reports', label: 'Reports & complaints', icon: 'fa-flag', permission: 'reports.view' },
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
@@ -56,6 +57,10 @@ export default function Admin() {
   const [permissions, setPermissions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [backups, setBackups] = useState([]);
+  const [whatsappConfig, setWhatsappConfig] = useState(false);
+  const [whatsappLogs, setWhatsappLogs] = useState([]);
+  const [whatsappForm, setWhatsappForm] = useState({ title: '', message: '' });
+  const [whatsappBusy, setWhatsappBusy] = useState(false);
   const [backupRunning, setBackupRunning] = useState(false);
   const [backupBusy, setBackupBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -108,6 +113,10 @@ export default function Admin() {
         const data = await adminRequest('/admin/backups');
         setBackups(data.backups || []);
         setBackupRunning(Boolean(data.running));
+      } else if (key === 'whatsapp') {
+        const data = await adminRequest('/admin/whatsapp/messages');
+        setWhatsappConfig(Boolean(data.configured));
+        setWhatsappLogs(data.logs || []);
       }
     } catch (err) {
       setError(err.message || 'Unable to load this administration section.');
@@ -201,6 +210,27 @@ export default function Admin() {
       await loadSection('users');
     } catch (err) { setError(err.message); }
     finally { setBusyId(null); }
+  };
+
+  const sendWhatsAppBroadcast = async (event) => {
+    event.preventDefault();
+    if (!whatsappForm.title.trim() || !whatsappForm.message.trim()) return;
+    if (!window.confirm('Send this WhatsApp notification to all verified users who opted in to QuickChat WhatsApp notifications?')) return;
+    setWhatsappBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await adminRequest('/admin/whatsapp/messages', {
+        method: 'POST',
+        body: { target: 'all', title: whatsappForm.title.trim(), message: whatsappForm.message.trim() },
+      });
+      setNotice(`WhatsApp processing finished: ${result.accepted || 0} accepted by Meta, ${result.failed || 0} failed, ${result.total || 0} recipients.`);
+      await loadSection('whatsapp');
+    } catch (err) {
+      setError(err.message || 'WhatsApp notification could not be sent.');
+    } finally {
+      setWhatsappBusy(false);
+    }
   };
 
   const createPlatformBackup = async () => {
@@ -314,6 +344,25 @@ export default function Admin() {
         {error && <div role="alert" className="mb-5 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700"><i className="fa-solid fa-circle-exclamation mt-0.5" /><span className="flex-1">{error}</span><button onClick={() => setError('')}><i className="fa-solid fa-xmark" /></button></div>}
         {notice && <div role="status" className="mb-5 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-800"><i className="fa-solid fa-circle-check" />{notice}<button className="ml-auto" onClick={() => setNotice('')}><i className="fa-solid fa-xmark" /></button></div>}
         {loading && <div className="mb-4 h-1 overflow-hidden rounded-full bg-blue-100"><div className="h-full w-1/3 animate-pulse rounded-full bg-blue-600" /></div>}
+
+        {section === 'whatsapp' && <section>
+          <div className="mb-5"><h2 className="text-lg font-black text-slate-900">WhatsApp notifications</h2><p className="mt-1 text-sm text-slate-500">Send service updates and incident notices outside the QuickChat website.</p></div>
+          <div className="mb-5 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">WhatsApp Cloud API</p><p className={`mt-2 text-sm font-extrabold ${whatsappConfig ? 'text-emerald-700' : 'text-rose-700'}`}>{whatsappConfig ? 'Configured' : 'Not configured'}</p><p className="mt-1 text-xs leading-5 text-slate-500">Requires WHATSAPP_PHONE_NUMBER_ID and WHATSAPP_ACCESS_TOKEN on the server.</p></div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Recipient policy</p><p className="mt-2 text-sm font-extrabold text-slate-900">Verified + opted in</p><p className="mt-1 text-xs leading-5 text-slate-500">Only users with a verified WhatsApp number and notification consent receive broadcasts.</p></div>
+          </div>
+          <form onSubmit={sendWhatsAppBroadcast} className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-7">
+            <div className="mb-5"><h3 className="font-extrabold text-slate-900">Compose service notification</h3><p className="mt-1 text-xs leading-5 text-slate-500">Use this for maintenance windows, outages, incident updates and service restoration notices.</p></div>
+            <label className="mb-4 block text-sm font-bold text-slate-700">Notification title<input value={whatsappForm.title} onChange={(event) => setWhatsappForm((form) => ({ ...form, title: event.target.value }))} maxLength={160} required placeholder="QuickChat service update" className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-emerald-500" /></label>
+            <label className="mb-4 block text-sm font-bold text-slate-700">Message<textarea value={whatsappForm.message} onChange={(event) => setWhatsappForm((form) => ({ ...form, message: event.target.value }))} maxLength={900} rows={5} required placeholder="We are investigating a temporary service interruption. Your account and content remain safe. We will send another update when service is restored." className="mt-2 w-full resize-y rounded-xl border border-slate-200 px-4 py-3 text-sm leading-6 outline-none focus:border-emerald-500" /></label>
+            <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-[11px] text-slate-500">{whatsappForm.message.length}/900 characters · Template approval required in Meta WhatsApp Manager.</p><button disabled={whatsappBusy || !whatsappConfig} className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"><i className="fa-brands fa-whatsapp mr-2" />{whatsappBusy ? 'Processing…' : 'Send to opted-in users'}</button></div>
+          </form>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">Recent WhatsApp activity</h3><p className="mt-1 text-xs text-slate-500">“Accepted” means Meta accepted the API request; it is not a delivery receipt.</p></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Recipient</th><th className="px-4 py-3">Notification</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Time</th></tr></thead><tbody className="divide-y divide-slate-100">{whatsappLogs.map((log) => <tr key={log.id}><td className="px-5 py-3"><p className="font-semibold text-slate-800">{log.recipient_phone || '—'}</p><p className="text-[10px] text-slate-400">User #{log.recipient_user_id || '—'}</p></td><td className="px-4 py-3"><p className="font-bold text-slate-800">{log.title}</p><p className="max-w-md truncate text-xs text-slate-500">{log.message}</p>{log.error && <p className="mt-1 max-w-md text-[10px] text-rose-600">{log.error}</p>}</td><td className="px-4 py-3"><Status value={log.status} /></td><td className="px-4 py-3 text-xs text-slate-500">{formatDate(log.created_at)}</td></tr>)}</tbody></table></div>
+            {!whatsappLogs.length && <p className="p-8 text-center text-sm text-slate-400">No WhatsApp notifications have been sent yet.</p>}
+          </div>
+        </section>}
 
         {section === 'settings' && <section className="max-w-2xl">
           <div className="mb-5"><h2 className="text-lg font-black text-slate-900">Administrator credentials</h2><p className="mt-1 text-sm text-slate-500">Manage the independent username and password used only by this administration portal.</p></div>
