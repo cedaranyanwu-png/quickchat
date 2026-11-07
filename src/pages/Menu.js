@@ -2,15 +2,22 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const items = [
-  { label: 'Profile', description: 'View your profile and posts.', icon: 'fa-solid fa-user', path: '/profile' },
-  { label: 'Communities', description: 'Create, discover, and join communities.', icon: 'fa-solid fa-users', path: '/communities' },
+  { label: 'Live', description: 'Start or discover live sessions.', icon: 'fa-solid fa-tower-broadcast', path: '/live' },
   { label: 'Messages', description: 'Open your conversations.', icon: 'fa-solid fa-envelope', path: '/messages' },
-  { label: 'Videos', description: 'Watch and discover short videos.', icon: 'fa-solid fa-video', path: '/videos' },
+  { label: 'Notifications', description: 'View your latest activity and alerts.', icon: 'fa-solid fa-bell', path: '/notifications' },
+  { label: 'Communities', description: 'Create, discover, and join communities.', icon: 'fa-solid fa-users', path: '/communities' },
   { label: 'People', description: 'Find people to follow.', icon: 'fa-solid fa-user-plus', path: '/follow' },
+  { label: 'Videos', description: 'Watch and discover short videos.', icon: 'fa-solid fa-video', path: '/videos' },
   { label: 'Recommendations', description: 'Discover content and people you may like.', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
   { label: 'Account Booster', description: 'Promote your profile and grow content reach.', icon: 'fa-solid fa-rocket', path: '/account-booster' },
+  { label: 'Ads', description: 'Manage your advertising campaigns.', icon: 'fa-solid fa-bullhorn', path: '/ads' },
+  { label: 'Wallet & earnings', description: 'Manage points, payments, and earnings.', icon: 'fa-solid fa-wallet', path: '/settings/wallet' },
+  { label: 'Verification', description: 'Manage account verification.', icon: 'fa-solid fa-circle-check', path: '/verification' },
+  { label: 'Saved posts', description: 'View your bookmarks and saved posts.', icon: 'fa-solid fa-bookmark', path: '/books' },
+  { label: 'Saved articles', description: 'Read articles you have saved.', icon: 'fa-solid fa-newspaper', path: '/saved-articles' },
+  { label: 'Lists', description: 'Organize accounts and people into lists.', icon: 'fa-solid fa-list', path: '/lists' },
+  { label: 'Nova AI', description: 'Open your QuickChat AI assistant.', icon: 'fa-solid fa-wand-sparkles', path: '/nova' },
   { label: 'RSS Publisher Admin', description: 'Manage RSS feeds and synchronization.', icon: 'fa-solid fa-rss', path: '/admin/rss' },
-  { label: 'Saved posts', description: 'View your bookmarks and saved content.', icon: 'fa-solid fa-bookmark', path: '/books' },
   { label: 'Settings', description: 'Account, notifications, payments, and preferences.', icon: 'fa-solid fa-gear', path: '/settings' },
 ];
 
