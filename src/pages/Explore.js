@@ -6,6 +6,7 @@ import FeedDiscovery from '../components/FeedDiscovery';
 import PostCard from '../components/PostCard';
 import Avatar from '../components/Avatar';
 import BoostModal from '../components/BoostModal';
+import Discover from './Discover';
 
 const LIVE_FEED_POLL_MS = 6000;
 const categoryStyles = [
@@ -61,6 +62,7 @@ export default function Explore({ openModal, openVideo }) {
   };
 
   useEffect(() => {
+    if (activeTab === 'rss') return undefined;
     let active = true;
     let timer;
 
@@ -148,7 +150,7 @@ export default function Explore({ openModal, openVideo }) {
               <i className="fa-solid fa-compass text-sm" />
             </div>
             <div>
-              <h1 className="text-base font-extrabold text-slate-900 leading-tight">Explore & Discover</h1>
+              <h1 className="text-base font-extrabold text-slate-900 leading-tight">Explore</h1>
               <p className="text-[11px] text-slate-500">Curated feeds, hot topics, people & opportunities</p>
             </div>
           </div>
@@ -190,6 +192,7 @@ export default function Explore({ openModal, openVideo }) {
             { id: 'communities', label: 'Communities', icon: 'fa-solid fa-layer-group' },
             { id: 'business', label: 'Business & Services', icon: 'fa-solid fa-briefcase' },
             { id: 'sponsored', label: 'Sponsored', icon: 'fa-solid fa-bullhorn' },
+            { id: 'rss', label: 'RSS Feed', icon: 'fa-solid fa-rss' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -207,6 +210,7 @@ export default function Explore({ openModal, openVideo }) {
         </div>
       </div>
 
+      {activeTab === 'rss' ? <Discover embedded openModal={openModal} openVideo={openVideo} /> : <>
       {/* Selected category pill alert */}
       {selectedCategory && (
         <div className="mx-4 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
@@ -572,6 +576,8 @@ export default function Explore({ openModal, openVideo }) {
           </div>
         )}
       </div>
+
+      </>}
 
       {/* Boost Modal if triggered */}
       {boostTarget && (
