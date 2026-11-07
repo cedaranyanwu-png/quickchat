@@ -116,9 +116,9 @@ router.post('/register', async (req, res) => {
   const password = String(req.body?.password || '');
   const whatsappPhone = whatsapp.normalizePhone(req.body?.whatsappPhone);
 
-  if (!fullName || !username || !email || password.length < 6 || !whatsappPhone || req.body?.whatsappOptIn !== true) {
+  if (!fullName || !username || !email || password.length < 6 || !whatsappPhone) {
     return res.status(400).json({
-      message: 'Enter your name, username, valid email, international WhatsApp number (for example +2348012345678), and a password with at least 6 characters. Accept WhatsApp service notifications to continue.',
+      message: 'Enter your name, username, valid email, international WhatsApp number (for example +2348012345678), and a password with at least 6 characters',
     });
   }
 
@@ -136,7 +136,7 @@ router.post('/register', async (req, res) => {
       await db.insert(
         // Keep the legacy NOT NULL `name` column populated in older SQLite files.
         'INSERT INTO users (fullname, name, username, email, password, googleid, email_verified, whatsapp_phone, whatsapp_phone_verified, whatsapp_notifications_opt_in) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)',
-        [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0, whatsappPhone, req.body.whatsappOptIn ? 1 : 0],
+        [fullName, fullName, username, email, passwordHash, null, emailVerificationOff ? 1 : 0, whatsappPhone, req.body.whatsappOptIn === true ? 1 : 0],
       ),
     );
 
