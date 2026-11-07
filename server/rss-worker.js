@@ -5,7 +5,7 @@ const db = require('./database');
 const { initializePageTables } = require('./schema');
 const { syncEnabledSources } = require('./services/rss-service');
 
-const cronExpression = process.env.RSS_SYNC_CRON || '*/15 * * * *';
+const cronExpression = process.env.RSS_SYNC_CRON || '*/5 * * * *';
 let job;
 let running = false;
 let stopping = false;
