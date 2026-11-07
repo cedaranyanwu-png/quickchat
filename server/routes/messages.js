@@ -1,3 +1,4 @@
+const crypto = require('node:crypto');
 const express = require('express');
 const { db, asyncRoute, clampLimit, notFound, uniqueConstraint } = require('./utils');
 const { notifyUser } = require('../notify');
@@ -82,7 +83,7 @@ router.get('/messages/conversations', asyncRoute(async (req, res) => {
   const conversations = await db.query(
     `SELECT c.id, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture, u.is_synthetic,
             u.automation_status, u.typing_until, u.typing_conversation_id,
-            (SELECT m.text FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
+            (SELECT CASE WHEN COALESCE(m.media_type, '') = 'image' THEN '📷 Photo' WHEN COALESCE(m.media_type, '') = 'audio' THEN '🎤 Voice message' WHEN COALESCE(m.media_type, '') = 'video' THEN '🎬 Video' ELSE m.text END FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message,
             (SELECT m.created_at FROM messages m WHERE m.conversation_id = c.id ORDER BY m.id DESC LIMIT 1) AS last_message_at,
             (SELECT COUNT(*) FROM messages unread WHERE unread.conversation_id = c.id
                AND unread.sender_id <> ? AND unread.is_read = 0) AS unread
@@ -142,7 +143,7 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
 
   const messages = await db.query(
     `SELECT m.id, m.conversation_id, m.sender_id, m.text, m.is_read, m.created_at,
-            m.reply_to_message_id,
+            m.reply_to_message_id, m.media_type, m.media_url,
             replied.id AS replied_id, replied.sender_id AS replied_sender_id, replied.text AS replied_text
        FROM messages m
        LEFT JOIN messages replied ON replied.id = m.reply_to_message_id
@@ -159,6 +160,8 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
       senderId: message.sender_id,
       sender: Number(message.sender_id) === req.user.id ? 'me' : 'them',
       text: message.text,
+      mediaType: message.media_type || null,
+      mediaUrl: message.media_url || null,
       time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: message.created_at,
       replyTo: message.replied_id ? {
@@ -207,26 +210,30 @@ router.post('/messages/conversations/:conversationId/typing', asyncRoute(async (
 router.post('/messages/conversations/:conversationId/messages', asyncRoute(async (req, res) => {
   const conversationId = positiveId(req.params.conversationId);
   const text = String(req.body?.text || '').trim();
+  const mediaUploadId = positiveId(req.body?.mediaUploadId);
   const replyToMessageId = positiveId(req.body?.replyToMessageId);
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
-  if (!text || text.length > 5000) return res.status(400).json({ message: 'Messages must be 1 to 5,000 characters.' });
+  if (text.length > 5000 || (!text && !mediaUploadId)) return res.status(400).json({ message: 'Add a message or attach a supported media file.' });
 
+  let upload = null;
+  if (mediaUploadId) {
+    upload = await db.getOne('SELECT id, filename, mime_type FROM media_uploads WHERE id = ? AND owner_id = ?', [mediaUploadId, req.user.id]);
+    if (!upload) return res.status(404).json({ message: 'The uploaded attachment was not found.' });
+  }
   if (replyToMessageId) {
-    const repliedMessage = await db.getOne(
-      'SELECT id FROM messages WHERE id = ? AND conversation_id = ?',
-      [replyToMessageId, conversationId],
-    );
+    const repliedMessage = await db.getOne('SELECT id FROM messages WHERE id = ? AND conversation_id = ?', [replyToMessageId, conversationId]);
     if (!repliedMessage) return res.status(400).json({ message: 'The message you are replying to is no longer available.' });
   }
 
+  const mediaType = upload ? (upload.mime_type.startsWith('image/') ? 'image' : upload.mime_type.startsWith('audio/') ? 'audio' : 'video') : null;
+  const publicOrigin = (process.env.PUBLIC_API_ORIGIN || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  const mediaUrl = upload ? `${publicOrigin}/uploads/${upload.filename}` : null;
   const message = await db.insert(
-    'INSERT INTO messages (conversation_id, sender_id, text, reply_to_message_id) VALUES (?, ?, ?, ?)',
-    [conversationId, req.user.id, text, replyToMessageId],
+    'INSERT INTO messages (conversation_id, sender_id, text, reply_to_message_id, media_upload_id, media_type, media_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [conversationId, req.user.id, text, replyToMessageId, mediaUploadId, mediaType, mediaUrl],
   );
-  const recipients = await db.query(
-    'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?',
-    [conversationId, req.user.id],
-  );
+  const recipients = await db.query('SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?', [conversationId, req.user.id]);
+  const notificationBody = text || (mediaType === 'image' ? 'Sent a photo' : mediaType === 'audio' ? 'Sent a voice message' : mediaType === 'video' ? 'Sent a video' : 'Sent an attachment');
   for (const recipient of recipients) {
     await notifyUser({
       userId: recipient.user_id,
@@ -235,14 +242,125 @@ router.post('/messages/conversations/:conversationId/messages', asyncRoute(async
       text: 'sent you a message',
       push: {
         title: `New message from ${req.user.fullname || 'a QuickChat member'}`,
-        body: text.length > 140 ? `${text.slice(0, 137)}…` : text,
+        body: notificationBody.length > 140 ? `${notificationBody.slice(0, 137)}…` : notificationBody,
         url: `/messages?userId=${encodeURIComponent(req.user.id)}`,
         tag: `message-${conversationId}`,
       },
     });
   }
-  res.status(201).json({ message: { ...message, sender: 'me' } });
+  res.status(201).json({ message: { ...message, text, media_type: mediaType, media_url: mediaUrl, sender: 'me' } });
 }));
+
+router.post('/messages/calls/start', asyncRoute(async (req, res) => {
+  const conversationId = positiveId(req.body?.conversationId);
+  const mediaType = req.body?.mediaType === 'video' ? 'video' : req.body?.mediaType === 'audio' ? 'audio' : null;
+  if (!conversationId || !mediaType || !await isMember(conversationId, req.user.id)) return res.status(400).json({ message: 'A valid conversation and call type are required.' });
+  const other = await db.getOne(
+    'SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id <> ?',
+    [conversationId, req.user.id],
+  );
+  if (!other) return res.status(404).json({ message: 'The other participant could not be found.' });
+  const existing = await db.getOne(
+    "SELECT id FROM message_calls WHERE (caller_id = ? OR callee_id = ? OR caller_id = ? OR callee_id = ?) AND status IN ('ringing', 'active') AND updated_at_ms > ?",
+    [req.user.id, req.user.id, other.user_id, other.user_id, Date.now() - 120000],
+  );
+  if (existing) return res.status(409).json({ message: 'One of the participants is already in another call.' });
+  const callId = crypto.randomUUID();
+  const now = Date.now();
+  await db.insert(
+    'INSERT INTO message_calls (id, conversation_id, caller_id, callee_id, media_type, status, created_at_ms, updated_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [callId, conversationId, req.user.id, other.user_id, mediaType, 'ringing', now, now],
+  );
+  await db.insert(
+    'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+    [callId, req.user.id, other.user_id, 'invite', JSON.stringify({ conversationId, mediaType, callerId: req.user.id, callerName: req.user.fullname || 'QuickChat member' }), now],
+  );
+  res.status(201).json({ callId, to: other.user_id, mediaType, iceServers: iceServers() });
+}));
+
+router.post('/messages/calls/:callId/signals', asyncRoute(async (req, res) => {
+  const callId = String(req.params.callId || '');
+  const call = await db.getOne('SELECT * FROM message_calls WHERE id = ?', [callId]);
+  if (!call || ![Number(call.caller_id), Number(call.callee_id)].includes(Number(req.user.id))) return notFound(res, 'Call not found.');
+  if (['ended', 'rejected', 'missed'].includes(call.status)) return res.status(409).json({ message: 'This call has already ended.' });
+  const to = Number(req.body?.to);
+  const expected = Number(call.caller_id) === Number(req.user.id) ? Number(call.callee_id) : Number(call.caller_id);
+  const kind = String(req.body?.kind || '');
+  if (to !== expected || !['accept', 'reject', 'offer', 'answer', 'ice', 'end'].includes(kind)) return res.status(400).json({ message: 'Invalid call signal.' });
+  if (['accept', 'reject', 'answer'].includes(kind) && Number(req.user.id) !== Number(call.callee_id)) {
+    return res.status(403).json({ message: 'Only the receiving participant can answer or reject a call.' });
+  }
+  if (kind === 'offer' && Number(req.user.id) !== Number(call.caller_id)) {
+    return res.status(403).json({ message: 'Only the caller can initiate the call offer.' });
+  }
+  const payload = req.body?.payload === undefined ? null : JSON.stringify(req.body.payload);
+  if (payload && payload.length > 16000) return res.status(413).json({ message: 'Call signal is too large.' });
+  const now = Date.now();
+  if (kind === 'accept') await db.update("UPDATE message_calls SET status = 'active', updated_at_ms = ? WHERE id = ?", [now, callId]);
+  if (kind === 'reject') await db.update("UPDATE message_calls SET status = 'rejected', updated_at_ms = ? WHERE id = ?", [now, callId]);
+  if (kind === 'end') await db.update("UPDATE message_calls SET status = 'ended', updated_at_ms = ? WHERE id = ?", [now, callId]);
+  await db.insert(
+    'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+    [callId, req.user.id, to, kind, payload, now],
+  );
+  res.status(201).json({ sent: true });
+}));
+
+router.post('/messages/calls/:callId/heartbeat', asyncRoute(async (req, res) => {
+  const callId = String(req.params.callId || '');
+  const call = await db.getOne('SELECT id, caller_id, callee_id, status FROM message_calls WHERE id = ?', [callId]);
+  if (!call || ![Number(call.caller_id), Number(call.callee_id)].includes(Number(req.user.id))) return notFound(res, 'Call not found.');
+  if (!['ringing', 'active'].includes(call.status)) return res.status(409).json({ message: 'This call is no longer active.' });
+  await db.update('UPDATE message_calls SET updated_at_ms = ? WHERE id = ?', [Date.now(), callId]);
+  res.json({ active: true });
+}));
+
+router.post('/messages/calls/poll', asyncRoute(async (req, res) => {
+  const afterId = Math.max(0, Number.parseInt(req.body?.afterId, 10) || 0);
+  const now = Date.now();
+  const expiredCalls = await db.query("SELECT id, caller_id, callee_id FROM message_calls WHERE status = 'ringing' AND updated_at_ms < ?", [now - 60000]);
+  for (const expired of expiredCalls) {
+    const claimed = await db.update("UPDATE message_calls SET status = 'missed', updated_at_ms = ? WHERE id = ? AND status = 'ringing' AND updated_at_ms < ?", [now, expired.id, now - 60000]);
+    if (!claimed) continue;
+    await db.insert(
+      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+      [expired.id, 0, expired.caller_id, 'missed', null, now],
+    );
+    await db.insert(
+      'INSERT INTO message_call_signals (call_id, from_user_id, to_user_id, kind, payload, created_at_ms) VALUES (?, ?, ?, ?, ?, ?)',
+      [expired.id, 0, expired.callee_id, 'missed', null, now],
+    );
+    await db.delete("DELETE FROM message_call_signals WHERE call_id = ? AND to_user_id = ? AND kind = 'invite'", [expired.id, expired.callee_id]);
+  }
+  const rows = await db.query(
+    'SELECT s.id, s.call_id, s.from_user_id, s.kind, s.payload, c.conversation_id, c.caller_id, c.callee_id, c.media_type, c.status FROM message_call_signals s JOIN message_calls c ON c.id = s.call_id WHERE s.to_user_id = ? AND s.id > ? ORDER BY s.id ASC LIMIT 100',
+    [req.user.id, afterId],
+  );
+  if (rows.length) {
+    const maxId = Math.max(...rows.map((row) => Number(row.id)));
+    await db.delete('DELETE FROM message_call_signals WHERE to_user_id = ? AND id <= ?', [req.user.id, maxId]);
+  }
+  await db.delete('DELETE FROM message_call_signals WHERE created_at_ms < ?', [now - 86400000]);
+  await db.delete('DELETE FROM message_calls WHERE created_at_ms < ?', [now - 1209600000]);
+  res.json({ iceServers: iceServers(), signals: rows.map((row) => ({
+    id: row.id, callId: row.call_id, from: row.from_user_id, kind: row.kind,
+    payload: row.payload ? safeParse(row.payload) : null,
+    conversationId: row.conversation_id, callerId: row.caller_id, calleeId: row.callee_id,
+    mediaType: row.media_type, status: row.status,
+  })) });
+}));
+
+function iceServers() {
+  const stun = String(process.env.WEBRTC_STUN_URLS || 'stun:stun.l.google.com:19302,stun:global.stun.twilio.com:3478').split(',').map((url) => url.trim()).filter(Boolean);
+  const servers = stun.length ? [{ urls: stun }] : [];
+  const turnUrl = String(process.env.WEBRTC_TURN_URL || '').trim();
+  if (turnUrl) servers.push({ urls: turnUrl, username: process.env.WEBRTC_TURN_USERNAME || undefined, credential: process.env.WEBRTC_TURN_CREDENTIAL || undefined });
+  return servers;
+}
+
+function safeParse(value) {
+  try { return JSON.parse(value); } catch (_error) { return null; }
+}
 
 async function isMember(conversationId, userId) {
   return Boolean(await db.getOne(
