@@ -257,9 +257,10 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
 }));
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {
+  const recentWindow = db.type === 'sqlite' ? "datetime('now', '-30 days')" : db.type === 'mysql' ? "DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 30 DAY)" : "CURRENT_TIMESTAMP - INTERVAL '30 days'";
   const counts = await Promise.all([
     db.getCount('SELECT COUNT(*) AS count FROM users'),
-    db.getCount("SELECT COUNT(*) AS count FROM users WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'"),
+    db.getCount(`SELECT COUNT(*) AS count FROM users WHERE created_at >= ${recentWindow}`),
     db.getCount("SELECT COUNT(*) AS count FROM verification_applications WHERE status = 'pending'"),
     db.getCount("SELECT COUNT(*) AS count FROM moderation_reports WHERE status IN ('pending', 'under_review', 'escalated')"),
     db.getCount("SELECT COUNT(*) AS count FROM users u WHERE EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP)"),
@@ -419,6 +420,111 @@ router.post('/admin/reports/:id/resolve', requirePermission('reports.resolve'), 
   await db.update('UPDATE moderation_reports SET status = ?, resolution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, resolution, id]);
   await audit(req, \`report.\${status}\`, 'report', id, resolution, before, { status });
   res.json({ message: \`Report \${status}.\` });
+}));
+
+
+router.post('/verification/application', asyncRoute(async (req, res) => {
+  const category = String(req.body?.category || '').trim().slice(0, 60);
+  const reason = String(req.body?.reason || '').trim().slice(0, 3000);
+  const links = Array.isArray(req.body?.supportingLinks) ? req.body.supportingLinks.slice(0, 5).map((v) => String(v).trim().slice(0, 500)).filter(Boolean) : [];
+  if (!category || !reason) return res.status(400).json({ message: 'Account category and verification reason are required.' });
+  const existing = await db.getOne("SELECT id FROM verification_applications WHERE user_id = ? AND status IN ('pending', 'needs_information')", [req.user.id]);
+  if (existing) return res.status(409).json({ message: 'You already have a verification application awaiting review.' });
+  const application = await db.insert(
+    'INSERT INTO verification_applications (user_id, account_category, reason, supporting_links) VALUES (?, ?, ?, ?)',
+    [req.user.id, category, reason, JSON.stringify(links)],
+  );
+  res.status(201).json({ applicationId: application.id, status: 'pending', message: 'Your verification application has been submitted.' });
+}));
+
+router.post('/reports', asyncRoute(async (req, res) => {
+  const entityType = String(req.body?.entityType || '').trim().toLowerCase();
+  const entityId = String(req.body?.entityId || '').trim().slice(0, 100);
+  const category = String(req.body?.category || '').trim().slice(0, 60);
+  const description = String(req.body?.description || '').trim().slice(0, 3000);
+  if (!['user', 'post', 'comment', 'community', 'message'].includes(entityType) || !entityId || !category) {
+    return res.status(400).json({ message: 'Choose a valid item to report and a report category.' });
+  }
+  const recent = await db.getOne(
+    "SELECT id FROM moderation_reports WHERE reporter_id = ? AND entity_type = ? AND entity_id = ? AND status IN ('pending', 'under_review', 'escalated') AND created_at >= ?",
+    [req.user.id, entityType, entityId, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()],
+  );
+  if (recent) return res.status(409).json({ message: 'You have already submitted a report for this item.' });
+  const report = await db.insert(
+    'INSERT INTO moderation_reports (reporter_id, entity_type, entity_id, category, description) VALUES (?, ?, ?, ?, ?)',
+    [req.user.id, entityType, entityId, category, description],
+  );
+  res.status(201).json({ reportId: report.id, status: 'pending', message: 'Your report has been submitted for review.' });
+}));
+
+router.post('/admin/users/:id/suspend', requirePermission('users.suspend'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 2000);
+  const durationHours = Number(req.body?.durationHours);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !reason || !Number.isFinite(durationHours) || durationHours < 1 || durationHours > 8760) {
+    return res.status(400).json({ message: 'Provide a user, reason and suspension duration between 1 hour and 365 days.' });
+  }
+  if (userId === req.user.id && await hasRole(userId, 'super_admin')) return res.status(400).json({ message: 'You cannot suspend your own Super Administrator account.' });
+  const target = await db.getOne('SELECT id, username FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  if (await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'A Super Administrator account cannot be suspended through this action.' });
+  const expiresAt = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+  await db.update('UPDATE account_suspensions SET lifted_at = CURRENT_TIMESTAMP WHERE user_id = ? AND lifted_at IS NULL', [userId]);
+  const suspension = await db.insert(
+    'INSERT INTO account_suspensions (user_id, reason, starts_at, expires_at, issued_by) VALUES (?, ?, CURRENT_TIMESTAMP, ?, ?)',
+    [userId, reason, expiresAt, req.user.id],
+  );
+  await db.insert('INSERT INTO moderation_actions (actor_id, target_user_id, action, reason, duration_minutes, expires_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [req.user.id, userId, 'suspend', reason, durationHours * 60, expiresAt]);
+  await audit(req, 'user.suspended', 'user', userId, reason, null, { expiresAt });
+  res.status(201).json({ message: 'Account suspended.', suspensionId: suspension.id, expiresAt });
+}));
+
+router.post('/admin/users/:id/ban', requirePermission('users.ban'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A valid user and ban reason are required.' });
+  if (await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'Super Administrator accounts are protected from bans.' });
+  const target = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  const existing = await db.getOne('SELECT id FROM account_bans WHERE user_id = ? AND revoked_at IS NULL', [userId]);
+  if (existing) return res.status(409).json({ message: 'This account is already banned.' });
+  const ban = await db.insert('INSERT INTO account_bans (user_id, reason, issued_by) VALUES (?, ?, ?)', [userId, reason, req.user.id]);
+  await db.insert('INSERT INTO moderation_actions (actor_id, target_user_id, action, reason) VALUES (?, ?, ?, ?)', [req.user.id, userId, 'ban', reason]);
+  await audit(req, 'user.banned', 'user', userId, reason, null, { banId: ban.id });
+  res.status(201).json({ message: 'Account permanently banned.', banId: ban.id });
+}));
+
+router.post('/admin/users/:id/restore', requirePermission('users.restore'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A user and restoration reason are required.' });
+  const before = {
+    suspensions: await db.getCount('SELECT COUNT(*) AS count FROM account_suspensions WHERE user_id = ? AND lifted_at IS NULL', [userId]),
+    bans: await db.getCount('SELECT COUNT(*) AS count FROM account_bans WHERE user_id = ? AND revoked_at IS NULL', [userId]),
+  };
+  await db.update('UPDATE account_suspensions SET lifted_at = CURRENT_TIMESTAMP WHERE user_id = ? AND lifted_at IS NULL', [userId]);
+  await db.update('UPDATE account_bans SET revoked_at = CURRENT_TIMESTAMP, revoked_by = ? WHERE user_id = ? AND revoked_at IS NULL', [req.user.id, userId]);
+  await audit(req, 'user.restored', 'user', userId, reason, before, { suspensions: 0, bans: 0 });
+  res.json({ message: 'Account restrictions have been lifted.' });
+}));
+
+router.post('/admin/users/:id/deletion-request', requirePermission('users.delete'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A user and deletion reason are required.' });
+  if (await hasRole(userId, 'super_admin')) return res.status(403).json({ message: 'The Super Administrator account is protected.' });
+  const target = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  const pending = await db.getOne("SELECT id FROM account_deletion_requests WHERE user_id = ? AND status = 'pending'", [userId]);
+  if (pending) return res.status(409).json({ message: 'A deletion request is already pending.' });
+  const scheduledFor = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const request = await db.insert(
+    'INSERT INTO account_deletion_requests (user_id, requested_by, reason, scheduled_for) VALUES (?, ?, ?, ?)',
+    [userId, req.user.id, reason, scheduledFor],
+  );
+  await audit(req, 'user.deletion_requested', 'user', userId, reason, null, { requestId: request.id, scheduledFor });
+  res.status(201).json({ message: 'Deletion request scheduled for review. No account data has been deleted.', requestId: request.id, scheduledFor });
 }));
 
 module.exports = { router, initializeAdminTables, getPermissions, requirePermission, audit };
