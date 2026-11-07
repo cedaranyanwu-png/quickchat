@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { apiRequest, uploadMedia } from '../api';
 import Avatar from '../components/Avatar';
+import VerifiedBadge from '../components/VerifiedBadge';
 
 export default function Messages() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -513,7 +514,7 @@ export default function Messages() {
             <h3 className="px-4 pb-2 pt-5 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Followers &amp; following</h3>
             {contacts.map((contact) => <button key={`contact-${contact.id}`} onClick={() => startConversation(contact)} disabled={startingConversation} className="flex w-full items-center gap-3 border-b border-slate-100 p-3 text-left hover:bg-slate-50 disabled:opacity-60">
               <span className="relative h-[38px] w-[38px] shrink-0"><Avatar name={contact.name} picture={contact.picture} size={38} />{contact.online && <span aria-label="Online" title="Online" className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</span>
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{contact.name}</strong><span className="text-xs text-slate-500">{contact.online ? 'Online · ' : ''}{contact.handle}</span></span>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{contact.name} <VerifiedBadge verified={contact.verified} /></strong><span className="text-xs text-slate-500">{contact.online ? 'Online · ' : ''}{contact.handle}</span></span>
               <span className="text-[10px] text-blue-700">{contact.following && contact.follower ? 'Follows you' : contact.following ? 'Following' : 'Follower'}</span>
             </button>)}
             {contacts.length === 0 && <p className="px-4 py-2 text-xs text-slate-400">People you follow or who follow you will appear here.</p>}
@@ -523,7 +524,7 @@ export default function Messages() {
             <h3 className="px-4 pb-2 pt-5 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">People</h3>
             {additionalUsers.map((user) => <button key={`person-${user.id}`} onClick={() => startConversation(user)} disabled={startingConversation} className="flex w-full items-center gap-3 border-b border-slate-100 p-3 text-left hover:bg-slate-50 disabled:opacity-60">
               <Avatar name={user.name} picture={user.picture} size={38} />
-              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{user.name}</strong><span className="text-xs text-slate-500">{user.handle}</span></span>
+              <span className="min-w-0 flex-1"><strong className="block truncate text-xs text-slate-900">{user.name} <VerifiedBadge verified={user.verified} /></strong><span className="text-xs text-slate-500">{user.handle}</span></span>
               <span className="text-xs text-blue-700">Message</span>
             </button>)}
           </section>}
@@ -535,7 +536,7 @@ export default function Messages() {
           <header className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white p-3">
             <button type="button" onClick={() => setActiveId(null)} aria-label="Back to conversations" className="text-slate-500 lg:hidden"><i className="fa-solid fa-arrow-left" /></button>
             <span className="relative h-9 w-9 shrink-0"><Avatar name={activeConversation.name} picture={activeConversation.picture} size={36} />{activeUserOnline && <span aria-label="Online" title="Online" className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />}</span>
-            <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name}</h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
+            <div className="min-w-0 flex-1"><h3 className="truncate text-sm font-bold text-slate-900">{activeConversation.name} <VerifiedBadge verified={activeConversation.verified} /></h3><p className="text-xs text-slate-500">{activeStatus.typing ? 'Typing…' : activeUserOnline ? 'Online' : ' '}</p></div>
             <div className="flex shrink-0 items-center gap-1">
               <button type="button" onClick={() => startCall('audio')} disabled={Boolean(call)} title="Voice call" aria-label="Start voice call" className="grid h-9 w-9 place-items-center rounded-full text-emerald-700 hover:bg-emerald-50 disabled:opacity-40"><i className="fa-solid fa-phone" /></button>
               <button type="button" onClick={() => startCall('video')} disabled={Boolean(call)} title="Video call" aria-label="Start video call" className="grid h-9 w-9 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-solid fa-video" /></button>
