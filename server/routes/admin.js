@@ -299,6 +299,9 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
   const users = await db.query(
     `SELECT u.id, u.username, u.fullname, u.email, u.avatar_url, u.picture,
             u.created_at, u.verified, u.verified_at,
+            CASE WHEN EXISTS (SELECT 1 FROM account_bans b WHERE b.user_id = u.id AND b.revoked_at IS NULL) THEN 'banned'
+                 WHEN EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP'}) THEN 'suspended'
+                 ELSE 'active' END AS account_status,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
             (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
             (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS posts
