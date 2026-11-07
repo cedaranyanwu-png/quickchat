@@ -359,7 +359,6 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
               </div>
             )}
             {!readOnly && !image && item.videoId && <button onClick={() => openVideo?.(item.videoId)} className="mt-2 px-3 py-2 rounded-lg bg-slate-100 text-blue-700 text-xs font-bold">Open video</button>}
-            {!readOnly && !image && !video && item.videoId && <button onClick={() => openVideo?.(item.videoId)} className="mt-2 px-3 py-2 rounded-lg bg-slate-100 text-blue-700 text-xs font-bold">Open video</button>}
           </AdultContentGate>
         )}
 
