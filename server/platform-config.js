@@ -41,7 +41,7 @@ async function initializePlatformConfig() {
     paid_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
   )`);
   await db.query(`CREATE TABLE IF NOT EXISTS admin_platform_settings (
-    setting_key VARCHAR(100) PRIMARY KEY,
+    id ${idColumn}, setting_key VARCHAR(100) NOT NULL UNIQUE,
     setting_value TEXT NOT NULL,
     updated_by INTEGER,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
