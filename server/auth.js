@@ -143,19 +143,16 @@ router.post('/register', async (req, res) => {
     if (!user) throw new Error('The account was created but could not be loaded.');
     await createWelcomeNotification(user.id);
     const whatsappDelivery = await sendWhatsappVerification(user.id, whatsappPhone);
-    if (emailVerificationOff) return sendSession(res, user, 201, 'Account created');
-    const delivery = await sendVerificationEmail(user);
     return res.status(201).json({
-      message: delivery.delivered
-        ? 'Account created. Check your email to verify your address before signing in.'
-        : 'Account created, but the verification email could not be delivered. Use “Resend verification” to try again.',
+      message: whatsappDelivery.delivered
+        ? 'Account created. Open the verification link sent to your WhatsApp number to activate QuickChat.'
+        : 'Account created, but WhatsApp could not send the verification link yet. Configure WhatsApp delivery or request another link.',
       requiresVerification: true,
       email: user.email,
-      emailSent: Boolean(delivery.delivered),
+      whatsappPhone,
       whatsappSent: Boolean(whatsappDelivery.delivered),
       whatsappStatus: whatsappDelivery.status,
-      delivery: delivery.provider,
-      ...(!isProduction && !delivery.delivered ? { previewUrl: delivery.verificationUrl } : {}),
+      ...(!isProduction && !whatsappDelivery.delivered ? { previewUrl: whatsappDelivery.verificationUrl } : {}),
     });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -181,15 +178,11 @@ router.post('/login', async (req, res) => {
     if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Email or password is incorrect.' });
     }
-    if (Number(user.whatsapp_phone_verified || 0) === 0 && user.whatsapp_phone) {
-      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
+    if (!user.whatsapp_phone) {
+      return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
     }
-    if (!emailVerificationOff && Number(user.email_verified) === 0) {
-      return res.status(403).json({
-        code: 'EMAIL_NOT_VERIFIED',
-        message: 'Verify your email before signing in. Check your inbox or request a new verification link.',
-        email: user.email,
-      });
+    if (Number(user.whatsapp_phone_verified || 0) !== 1) {
+      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
     }
     return sendSession(res, user, 200, 'Login successful');
   } catch (error) {
@@ -263,6 +256,12 @@ router.post('/google', async (req, res) => {
       );
       user.email_verified = 1;
     }
+    if (!user.whatsapp_phone) {
+      return res.status(403).json({ code: 'WHATSAPP_PHONE_REQUIRED', message: 'Add a WhatsApp number to activate your QuickChat account.', email: user.email });
+    }
+    if (Number(user.whatsapp_phone_verified || 0) !== 1) {
+      return res.status(403).json({ code: 'WHATSAPP_NOT_VERIFIED', message: 'Verify your WhatsApp number before signing in.', email: user.email });
+    }
     if (createdAccount) await createWelcomeNotification(user.id);
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
@@ -321,6 +320,63 @@ router.post('/resend-verification', async (req, res) => {
   }
 });
 
+
+router.post('/whatsapp/start', async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  const phone = whatsapp.normalizePhone(req.body?.whatsappPhone);
+  if (!email || !password || !phone) return res.status(400).json({ message: 'Enter your account email, password and WhatsApp number in international format.' });
+  try {
+    const user = normalizeUser(await db.getOne('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [email]));
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: 'Email or password is incorrect.' });
+    }
+    if (Number(user.whatsapp_phone_verified || 0) === 1 && user.whatsapp_phone === phone) {
+      return res.json({ verified: true, message: 'This WhatsApp number is already verified.' });
+    }
+    await db.update('UPDATE users SET whatsapp_phone = ?, whatsapp_phone_verified = 0 WHERE id = ?', [phone, user.id]);
+    const delivery = await sendWhatsappVerification(user.id, phone);
+    return res.json({
+      message: delivery.delivered ? 'Verification link sent to your WhatsApp. Open it to activate your account.' : 'WhatsApp could not send the link. Check the number and WhatsApp API configuration, then try again.',
+      whatsappSent: Boolean(delivery.delivered),
+      status: delivery.status,
+      ...(!isProduction && !delivery.delivered ? { previewUrl: delivery.verificationUrl } : {}),
+    });
+  } catch (error) {
+    console.error('[Auth] WhatsApp setup failed:', error.message);
+    return res.status(500).json({ message: 'Could not start WhatsApp verification.' });
+  }
+});
+
+router.post('/google/whatsapp/start', async (req, res) => {
+  const token = req.body?.token;
+  const phone = whatsapp.normalizePhone(req.body?.whatsappPhone);
+  if (!token || !phone) return res.status(400).json({ message: 'A Google sign-in token and valid WhatsApp number are required.' });
+  if (!googleClientId) return res.status(503).json({ message: 'Google sign-in is not configured.' });
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: token, audience: googleClientId });
+    const payload = ticket.getPayload();
+    const email = normalizeEmail(payload?.email);
+    const googleId = payload?.sub;
+    if (!email || !googleId || payload?.email_verified !== true) return res.status(401).json({ message: 'Google did not provide a verified email address.' });
+    const user = normalizeUser(await db.getOne('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [email]));
+    if (!user || user.googleId !== googleId) return res.status(401).json({ message: 'Complete Google sign-in again before adding a WhatsApp number.' });
+    if (user.whatsapp_phone && user.whatsapp_phone !== phone && Number(user.whatsapp_phone_verified || 0) === 1) {
+      return res.status(409).json({ message: 'This account already has a verified WhatsApp number. Contact support to change it.' });
+    }
+    await db.update('UPDATE users SET whatsapp_phone = ?, whatsapp_phone_verified = 0 WHERE id = ?', [phone, user.id]);
+    const delivery = await sendWhatsappVerification(user.id, phone);
+    return res.json({
+      message: delivery.delivered ? 'Verification link sent to your WhatsApp. Open it to activate your account.' : 'WhatsApp could not send the link. Check the number and WhatsApp API configuration, then try again.',
+      whatsappSent: Boolean(delivery.delivered),
+      status: delivery.status,
+      ...(!isProduction && !delivery.delivered ? { previewUrl: delivery.verificationUrl } : {}),
+    });
+  } catch (error) {
+    console.error('[Auth] Google WhatsApp setup failed:', error.message);
+    return res.status(401).json({ message: 'Could not start WhatsApp verification.' });
+  }
+});
 
 router.post('/whatsapp/resend', async (req, res) => {
   const email = normalizeEmail(req.body?.email);
@@ -455,11 +511,11 @@ function sendSession(res, user, status, message, extra = {}) {
 async function sendWhatsappVerification(userId, phone) {
   const token = issueToken();
   await db.update('UPDATE users SET whatsapp_verification_token = ?, whatsapp_verification_expires = ? WHERE id = ?', [hashToken(token), tokenExpiry(30), userId]);
-  const url = `${appBaseUrl()}/verify-whatsapp?token=${encodeURIComponent(token)}`;
-  try { return await whatsapp.sendVerification(phone, url); }
+  const verificationUrl = `${appBaseUrl()}/verify-whatsapp?token=${encodeURIComponent(token)}`;
+  try { return { ...(await whatsapp.sendVerification(phone, verificationUrl)), verificationUrl }; }
   catch (error) {
     console.error('[Auth] WhatsApp verification delivery failed:', error.message);
-    return { delivered: false, status: 'failed', error: error.message };
+    return { delivered: false, status: 'failed', error: error.message, verificationUrl };
   }
 }
 
