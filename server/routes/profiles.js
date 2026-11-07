@@ -5,9 +5,10 @@ const {
 const { normalizeSelectedInterests } = require('../algorithm');
 const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
+const { getVerificationFeePoints } = require('../platform-config');
 
 // One-time price of the verified badge, paid from the user's points wallet.
-const VERIFICATION_POINTS = Math.max(100, Math.min(1000000, Number.parseInt(process.env.VERIFICATION_POINTS || '2000', 10) || 2000));
+const DEFAULT_VERIFICATION_POINTS = 2000;
 
 const router = express.Router();
 
@@ -109,18 +110,20 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
     [req.user.id],
   );
   if (!row) return notFound(res, 'User not found.');
+  const verificationPoints = await getVerificationFeePoints();
   res.json({
     verified: Boolean(Number(row.verified || 0)),
     verifiedAt: row.verified_at || null,
     verificationMethod: row.verification_method || null,
-    planPrice: String(VERIFICATION_POINTS),
-    planPoints: VERIFICATION_POINTS,
+    planPrice: String(verificationPoints),
+    planPoints: verificationPoints,
     currency: 'NGN',
     pointsBalance: await currentBalance(req.user.id),
   });
 }));
 
 router.post('/verification/upgrade', asyncRoute(async (req, res) => {
+  const verificationPoints = await getVerificationFeePoints();
   const user = await db.getOne('SELECT id, verified FROM users WHERE id = ?', [req.user.id]);
   if (!user) return notFound(res, 'User not found.');
   if (Number(user.verified || 0) === 1) {
@@ -130,15 +133,15 @@ router.post('/verification/upgrade', asyncRoute(async (req, res) => {
   // Charge the badge from the points wallet. The balance guard lives in the UPDATE,
   // so two concurrent requests cannot both buy the badge.
   const reference = `verification_${req.user.id}_${Date.now()}`;
-  const spent = await spendPoints(req.user.id, VERIFICATION_POINTS, {
+  const spent = await spendPoints(req.user.id, verificationPoints, {
     kind: 'verification_purchase',
     reference,
   });
   if (!spent.ok) {
     return res.status(402).json({
-      message: `Verification costs ${VERIFICATION_POINTS.toLocaleString()} points. Your wallet has ${Number(spent.balance || 0).toLocaleString()} — top up your wallet to continue.`,
+      message: `Verification costs ${verificationPoints.toLocaleString()} points. Your wallet has ${Number(spent.balance || 0).toLocaleString()} — top up your wallet to continue.`,
       balance: spent.balance || 0,
-      required: VERIFICATION_POINTS,
+      required: verificationPoints,
     });
   }
 
@@ -151,7 +154,7 @@ router.post('/verification/upgrade', asyncRoute(async (req, res) => {
   );
   if (!changed) {
     // Someone else verified the account mid-flight: refund this purchase.
-    await creditPoints(req.user.id, VERIFICATION_POINTS, {
+    await creditPoints(req.user.id, verificationPoints, {
       kind: 'verification_refund',
       reference: `${reference}_refund`,
     }).catch(() => {});
