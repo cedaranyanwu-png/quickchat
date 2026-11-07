@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom';
 const navItems = [
   { name: 'Home', icon: 'fa-solid fa-house', path: '/home' },
   { name: 'Explore', icon: 'fa-solid fa-compass', path: '/explore' },
-  { name: 'Recs', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
   { name: 'Profile', icon: 'fa-solid fa-user', path: '/profile' },
   { name: 'Menu', icon: 'fa-solid fa-bars', path: '/menu' },
 ];
