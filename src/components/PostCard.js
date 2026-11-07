@@ -452,7 +452,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
 
         {showReplies && !readOnly && (!item.isAdult || adultContentConfirmed) && (
           <div className="mt-3 border-t border-slate-100 pt-2">
-            {replies.map((reply) => <p key={reply.id} className="text-xs text-slate-600 py-1"><strong className="text-slate-900">{reply.fullname || reply.username || 'User'}</strong>{' '}{reply.body}</p>)}
+            {replies.map((reply) => <p key={reply.id} className="text-xs text-slate-600 py-1"><strong className="text-slate-900">{reply.fullname || reply.username || 'User'} <VerifiedBadge verified={reply.verified} /></strong>{' '}{reply.body}</p>)}
             {replies.length > 0 && Number(item.replies || 0) > replies.length && <p className="py-1 text-[11px] text-slate-400">Showing the latest {replies.length} replies.</p>}
             <form onSubmit={sendReply} className="flex gap-2 mt-2">
               <input value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="Write a reply" className="flex-1 border border-slate-200 rounded-full px-3 py-1.5 text-xs outline-none focus:border-blue-600" />
