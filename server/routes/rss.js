@@ -64,7 +64,7 @@ router.get('/rss/articles', asyncRoute(async (req, res) => {
   const rows = await db.query(
     'SELECT a.*, s.name AS source_name, EXISTS(SELECT 1 FROM saved_articles sa WHERE sa.article_id = a.id AND sa.user_id = ?) AS saved FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' +
       where + ' ORDER BY COALESCE(a.published_at, a.imported_at) DESC, a.id DESC LIMIT ? OFFSET ?',
-    [req.user.id, ...params.slice(1), limit, offset],
+    [req.user.id, ...params, limit, offset],
   );
   const count = await db.getOne(
     'SELECT COUNT(*) AS total FROM rss_articles a JOIN rss_sources s ON s.id = a.source_id WHERE ' + where,
