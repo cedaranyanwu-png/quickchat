@@ -72,10 +72,11 @@ router.patch('/notifications/read', asyncRoute(async (req, res) => {
 router.get('/communities', asyncRoute(async (req, res) => {
   const query = String(req.query.q || '').trim().slice(0, 100);
   const filter = query ? 'WHERE LOWER(c.name) LIKE LOWER(?) OR LOWER(c.category) LIKE LOWER(?)' : '';
-  const params = query ? [req.user.id, req.user.id, req.user.id, `%${query}%`, `%${query}%`, clampLimit(req.query.limit, 50, 100)]
-    : [req.user.id, req.user.id, req.user.id, clampLimit(req.query.limit, 50, 100)];
+  const params = query ? [req.user.id, req.user.id, req.user.id, req.user.id, `%${query}%`, `%${query}%`, clampLimit(req.query.limit, 50, 100)]
+    : [req.user.id, req.user.id, req.user.id, req.user.id, clampLimit(req.query.limit, 50, 100)];
   const rows = await db.query(
-    `SELECT c.id, c.slug, c.name, c.description, c.category, c.created_at, c.monthly_price, c.price_currency,
+    `SELECT c.id, c.slug, c.name, c.description, c.category, c.created_by, c.created_at, c.monthly_price, c.price_currency,
+            COALESCE((SELECT mine.role FROM community_members mine WHERE mine.community_id = c.id AND mine.user_id = ?), 'member') AS member_role,
             (SELECT COUNT(*) FROM community_members cm WHERE cm.community_id = c.id) AS members,
             EXISTS(SELECT 1 FROM community_members mine WHERE mine.community_id = c.id AND mine.user_id = ?) AS joined,
             CASE WHEN c.created_by = ? OR c.monthly_price IS NULL
@@ -92,6 +93,9 @@ router.get('/communities', asyncRoute(async (req, res) => {
     category: row.category || '',
     members: Number(row.members || 0),
     joined: Boolean(row.joined),
+    isOwner: Number(row.created_by) === Number(req.user.id),
+    isModerator: row.member_role === 'moderator',
+    canModerate: Number(row.created_by) === Number(req.user.id) || row.member_role === 'moderator',
     canAccess: Boolean(row.can_access),
     canPost: Boolean(row.joined) || (Boolean(row.can_access) && Boolean(row.monthly_price)),
     isPaid: Boolean(row.monthly_price),
@@ -104,11 +108,14 @@ router.get('/communities', asyncRoute(async (req, res) => {
 router.get('/communities/:communityId/posts', asyncRoute(async (req, res) => {
   const communityId = positiveId(req.params.communityId);
   const community = communityId ? await db.getOne(
-    'SELECT id, name, slug, description, category, created_by, monthly_price, price_currency FROM communities WHERE id = ?',
-    [communityId],
+    `SELECT c.id, c.name, c.slug, c.description, c.category, c.created_by, c.monthly_price, c.price_currency,
+            COALESCE((SELECT cm.role FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = ?), 'member') AS member_role
+       FROM communities c WHERE c.id = ?`,
+    [req.user.id, communityId],
   ) : null;
   if (!community) return notFound(res, 'Community not found.');
   const isOwner = Number(community.created_by) === Number(req.user.id);
+  const isModerator = community.member_role === 'moderator';
   const entitlement = community.monthly_price && !isOwner
     ? await db.getOne(
       `SELECT id FROM content_subscriptions WHERE entity_type = 'community' AND entity_id = ? AND subscriber_id = ?
@@ -122,6 +129,8 @@ router.get('/communities/:communityId/posts', asyncRoute(async (req, res) => {
     description: community.description || '', category: community.category || '',
     isPaid: Boolean(community.monthly_price), monthlyPrice: community.monthly_price || null,
     currency: community.price_currency || 'NGN', canAccess,
+    isOwner, isModerator, canModerate: isOwner || isModerator,
+    role: isOwner ? 'owner' : community.member_role,
   };
   if (!canAccess) return res.json({ community: communityInfo, posts: [], requiresSubscription: true });
   const rows = await db.query(
@@ -160,7 +169,7 @@ router.post('/communities', asyncRoute(async (req, res) => {
     'INSERT INTO communities (slug, name, description, category, created_by, monthly_price, price_currency) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [slug, name, description, category, req.user.id, paidCents ? centsToPrice(paidCents) : null, paidCents ? 'NGN' : null],
   );
-  await db.query('INSERT INTO community_members (community_id, user_id) VALUES (?, ?)', [community.id, req.user.id]);
+  await db.query("INSERT INTO community_members (community_id, user_id, role) VALUES (?, ?, 'owner')", [community.id, req.user.id]);
   res.status(201).json({ community: { ...community, slug, joined: true, members: 1 } });
 }));
 
@@ -182,6 +191,157 @@ router.delete('/communities/:communityId/join', asyncRoute(async (req, res) => {
   if (!communityId) return res.status(400).json({ message: 'Invalid community ID.' });
   await db.delete('DELETE FROM community_members WHERE community_id = ? AND user_id = ?', [communityId, req.user.id]);
   res.json({ joined: false });
+}));
+
+// Community administration is separate from platform-wide administration.
+router.get('/communities/:communityId/moderation', asyncRoute(async (req, res) => {
+  const communityId = positiveId(req.params.communityId);
+  const access = communityId ? await getCommunityAccess(communityId, req.user.id) : null;
+  if (!access) return notFound(res, 'Community not found.');
+  if (!access.canModerate) return res.status(403).json({ message: 'Only this community owner or its moderators can access moderation.' });
+
+  const members = await db.query(
+    `SELECT cm.user_id, cm.role, cm.joined_at, u.fullname, u.username, u.avatar_url, u.picture
+       FROM community_members cm JOIN users u ON u.id = cm.user_id
+      WHERE cm.community_id = ? ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'moderator' THEN 1 ELSE 2 END, cm.joined_at ASC`,
+    [communityId],
+  );
+  const reports = await db.query(
+    `SELECT r.id, r.target_type, r.target_id, r.reason, r.status, r.created_at,
+            reporter.fullname AS reporter_name, reporter.username AS reporter_username,
+            COALESCE(p.body, reply.body) AS target_text,
+            COALESCE(p.author_id, reply.author_id) AS target_author_id,
+            target_user.username AS target_author_username
+       FROM community_reports r
+       JOIN users reporter ON reporter.id = r.reporter_id
+       LEFT JOIN posts p ON r.target_type = 'post' AND p.id = r.target_id AND p.community_id = r.community_id
+       LEFT JOIN post_replies reply ON r.target_type = 'comment' AND reply.id = r.target_id
+       LEFT JOIN posts parent_post ON parent_post.id = reply.post_id AND parent_post.community_id = r.community_id
+       LEFT JOIN users target_user ON target_user.id = COALESCE(p.author_id, reply.author_id)
+      WHERE r.community_id = ? AND r.status = 'pending'
+      ORDER BY r.created_at DESC LIMIT 100`,
+    [communityId],
+  );
+  res.json({
+    community: { id: access.id, name: access.name, isOwner: access.isOwner, role: access.role },
+    members: members.map((member) => ({
+      id: member.user_id, name: member.fullname || member.username, username: member.username,
+      picture: member.avatar_url || member.picture || null, role: member.role, joinedAt: member.joined_at,
+    })),
+    reports: reports.filter((report) => report.target_text !== null).map((report) => ({
+      id: report.id, targetType: report.target_type, targetId: report.target_id,
+      reason: report.reason, status: report.status, createdAt: report.created_at,
+      reporter: report.reporter_name || report.reporter_username,
+      targetText: report.target_text, targetAuthor: report.target_author_username,
+    })),
+  });
+}));
+
+router.post('/communities/:communityId/reports', asyncRoute(async (req, res) => {
+  const communityId = positiveId(req.params.communityId);
+  const targetType = String(req.body?.targetType || '').toLowerCase();
+  const targetId = positiveId(req.body?.targetId);
+  const reason = String(req.body?.reason || '').trim().slice(0, 500);
+  const access = communityId ? await getCommunityAccess(communityId, req.user.id) : null;
+  if (!access) return notFound(res, 'Community not found.');
+  if (!['post', 'comment'].includes(targetType) || !targetId || !reason) {
+    return res.status(400).json({ message: 'Choose a valid community post or comment and provide a reason.' });
+  }
+  const target = targetType === 'post'
+    ? await db.getOne('SELECT id FROM posts WHERE id = ? AND community_id = ?', [targetId, communityId])
+    : await db.getOne(
+      'SELECT r.id FROM post_replies r JOIN posts p ON p.id = r.post_id WHERE r.id = ? AND p.community_id = ?',
+      [targetId, communityId],
+    );
+  if (!target) return notFound(res, 'The reported content is not in this community.');
+  try {
+    await db.insert(
+      'INSERT INTO community_reports (community_id, reporter_id, target_type, target_id, reason) VALUES (?, ?, ?, ?, ?)',
+      [communityId, req.user.id, targetType, targetId, reason],
+    );
+  } catch (error) {
+    if (!uniqueConstraint(error)) throw error;
+    return res.status(409).json({ message: 'You have already reported this content.' });
+  }
+  res.status(201).json({ submitted: true, message: 'Report sent to the community moderation team.' });
+}));
+
+router.patch('/communities/:communityId/members/:userId/role', asyncRoute(async (req, res) => {
+  const communityId = positiveId(req.params.communityId);
+  const userId = positiveId(req.params.userId);
+  const role = String(req.body?.role || '').toLowerCase();
+  const access = communityId ? await getCommunityAccess(communityId, req.user.id) : null;
+  if (!access) return notFound(res, 'Community not found.');
+  if (!access.isOwner) return res.status(403).json({ message: 'Only the community owner can appoint or remove moderators.' });
+  if (!userId || !['member', 'moderator'].includes(role)) return res.status(400).json({ message: 'Choose a valid member and role.' });
+  if (userId === Number(access.created_by)) return res.status(400).json({ message: 'The community owner role cannot be changed.' });
+  const member = await db.getOne('SELECT role FROM community_members WHERE community_id = ? AND user_id = ?', [communityId, userId]);
+  if (!member) return notFound(res, 'Community member not found.');
+  await db.update('UPDATE community_members SET role = ? WHERE community_id = ? AND user_id = ?', [role, communityId, userId]);
+  await db.insert(
+    'INSERT INTO community_moderation_actions (community_id, actor_id, target_user_id, target_type, target_id, action) VALUES (?, ?, ?, ?, ?, ?)',
+    [communityId, req.user.id, userId, 'member', userId, role === 'moderator' ? 'appoint_moderator' : 'remove_moderator'],
+  );
+  res.json({ updated: true, role });
+}));
+
+router.delete('/communities/:communityId/members/:userId', asyncRoute(async (req, res) => {
+  const communityId = positiveId(req.params.communityId);
+  const userId = positiveId(req.params.userId);
+  const access = communityId ? await getCommunityAccess(communityId, req.user.id) : null;
+  if (!access) return notFound(res, 'Community not found.');
+  if (!access.canModerate) return res.status(403).json({ message: 'You do not have permission to remove community members.' });
+  if (!userId || userId === Number(access.created_by)) return res.status(400).json({ message: 'The community owner cannot be removed.' });
+  const member = await db.getOne('SELECT role FROM community_members WHERE community_id = ? AND user_id = ?', [communityId, userId]);
+  if (!member) return notFound(res, 'Community member not found.');
+  if (member.role === 'moderator' && !access.isOwner) return res.status(403).json({ message: 'Only the owner can remove another moderator.' });
+  await db.delete('DELETE FROM community_members WHERE community_id = ? AND user_id = ?', [communityId, userId]);
+  await db.insert(
+    'INSERT INTO community_moderation_actions (community_id, actor_id, target_user_id, target_type, target_id, action) VALUES (?, ?, ?, ?, ?, ?)',
+    [communityId, req.user.id, userId, 'member', userId, 'remove_member'],
+  );
+  res.json({ removed: true });
+}));
+
+router.patch('/communities/:communityId/reports/:reportId', asyncRoute(async (req, res) => {
+  const communityId = positiveId(req.params.communityId);
+  const reportId = positiveId(req.params.reportId);
+  const action = String(req.body?.action || '').toLowerCase();
+  const access = communityId ? await getCommunityAccess(communityId, req.user.id) : null;
+  if (!access) return notFound(res, 'Community not found.');
+  if (!access.canModerate) return res.status(403).json({ message: 'You do not have permission to review community reports.' });
+  if (!reportId || !['dismiss', 'remove_content'].includes(action)) return res.status(400).json({ message: 'Choose a valid moderation action.' });
+  const report = await db.getOne(
+    "SELECT id, target_type, target_id FROM community_reports WHERE id = ? AND community_id = ? AND status = 'pending'",
+    [reportId, communityId],
+  );
+  if (!report) return notFound(res, 'Pending report not found.');
+  if (action === 'remove_content') {
+    if (report.target_type === 'post') {
+      const post = await db.getOne('SELECT id, video_id FROM posts WHERE id = ? AND community_id = ?', [report.target_id, communityId]);
+      if (post) {
+        await db.delete('DELETE FROM post_replies WHERE post_id = ?', [post.id]);
+        await db.delete('DELETE FROM post_likes WHERE post_id = ?', [post.id]);
+        await db.delete('DELETE FROM post_reposts WHERE post_id = ?', [post.id]);
+        await db.delete('DELETE FROM bookmarks WHERE post_id = ?', [post.id]);
+        await db.delete('DELETE FROM posts WHERE id = ? AND community_id = ?', [post.id, communityId]);
+      }
+    } else {
+      await db.delete(
+        'DELETE FROM post_replies WHERE id = ? AND post_id IN (SELECT id FROM posts WHERE community_id = ?)',
+        [report.target_id, communityId],
+      );
+    }
+  }
+  await db.update(
+    'UPDATE community_reports SET status = ?, reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP WHERE id = ? AND community_id = ?',
+    [action === 'dismiss' ? 'dismissed' : 'actioned', req.user.id, reportId, communityId],
+  );
+  await db.insert(
+    'INSERT INTO community_moderation_actions (community_id, actor_id, target_type, target_id, action) VALUES (?, ?, ?, ?, ?)',
+    [communityId, req.user.id, report.target_type, report.target_id, action],
+  );
+  res.json({ reviewed: true, action });
 }));
 
 router.get('/lists', asyncRoute(async (req, res) => {
@@ -307,6 +467,21 @@ router.delete('/posts/:postId/bookmark', asyncRoute(async (req, res) => {
   await db.delete('DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?', [req.user.id, postId]);
   res.json({ bookmarked: false });
 }));
+
+async function getCommunityAccess(communityId, userId) {
+  const row = await db.getOne(
+    `SELECT c.id, c.name, c.created_by,
+            COALESCE(cm.role, 'member') AS member_role
+       FROM communities c
+       LEFT JOIN community_members cm ON cm.community_id = c.id AND cm.user_id = ?
+      WHERE c.id = ?`,
+    [userId, communityId],
+  );
+  if (!row) return null;
+  const isOwner = Number(row.created_by) === Number(userId);
+  const role = isOwner ? 'owner' : row.member_role;
+  return { ...row, isOwner, role, canModerate: isOwner || role === 'moderator' };
+}
 
 function toList(row) {
   return {
