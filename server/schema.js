@@ -63,6 +63,10 @@ async function initializePageTables() {
       id ${idColumn}, video_id INTEGER NOT NULL, author_id INTEGER NOT NULL, body TEXT NOT NULL,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS video_likes (
+      video_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (video_id, user_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS conversations (
       id ${idColumn}, pair_key VARCHAR(100) NOT NULL UNIQUE, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
