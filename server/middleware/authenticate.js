@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const db = require('../database');
+const { getOwnerSecurity } = require('../admin-owner');
 
 const JWT_SECRET = process.env.JWT_SECRET || (
   process.env.NODE_ENV === 'production' ? '' : 'quickchat-local-development-secret'
@@ -28,6 +29,11 @@ async function authenticate(req, res, next) {
     const expiryCondition = db.type === 'sqlite' ? 'datetime(expires_at) > CURRENT_TIMESTAMP' : 'expires_at > CURRENT_TIMESTAMP';
     const activeSuspension = await db.getOne(`SELECT id, expires_at FROM account_suspensions WHERE user_id = ? AND lifted_at IS NULL AND ${expiryCondition} ORDER BY expires_at DESC LIMIT 1`, [userId]);
     if (activeSuspension) return res.status(403).json({ message: 'This account is temporarily suspended until the restriction expires.' });
+    const ownerSecurity = await getOwnerSecurity(userId);
+    const passwordChangeAllowed = req.method === 'POST' && req.originalUrl.split('?')[0] === '/api/admin/security/change-password';
+    if (Number(ownerSecurity?.must_change_password) === 1 && !passwordChangeAllowed) {
+      return res.status(428).json({ code: 'PASSWORD_CHANGE_REQUIRED', message: 'Change your initial administrator password before using QuickChat.' });
+    }
     req.user = { id: userId, username: session.username };
     return next();
   } catch (error) {
