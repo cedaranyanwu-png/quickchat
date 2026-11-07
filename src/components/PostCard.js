@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { API_BASE_URL, apiRequest, resolveMediaUrl } from '../api';
 import Avatar from './Avatar';
 import ShareMenu from './ShareMenu';
@@ -343,10 +343,23 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
           </div>
         )}
 
-        {showPostMeta && (item.communityName || item.category) && (
+        {item.communityName && item.communityId && (
           <div className="mt-1 flex flex-wrap gap-1.5">
-            {item.communityName && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700"><i className="fa-solid fa-users mr-1" />{item.communityName}</span>}
-            {item.category && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{item.category}</span>}
+            <Link
+              to={`/communities/${encodeURIComponent(item.communityId)}`}
+              onClick={(event) => event.stopPropagation()}
+              className="inline-flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700 no-underline hover:border-blue-300 hover:bg-blue-100"
+              aria-label={`View ${item.communityName} community`}
+            >
+              <i className="fa-solid fa-users" />
+              <span>Posted in {item.communityName}</span>
+              <i className="fa-solid fa-arrow-right text-[9px]" />
+            </Link>
+          </div>
+        )}
+        {showPostMeta && item.category && (
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{item.category}</span>
           </div>
         )}
 
