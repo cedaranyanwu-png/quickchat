@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { API_BASE_URL, adminRequest } from '../api';
 import AdminModeration from './AdminModeration';
+import AdminConfiguration from './AdminConfiguration';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
@@ -11,6 +12,7 @@ const NAV = [
   { key: 'roles', label: 'Roles & permissions', icon: 'fa-shield-halved', permission: 'roles.view' },
   { key: 'audit', label: 'Audit logs', icon: 'fa-clock-rotate-left', permission: 'audit_logs.view' },
   { key: 'backups', label: 'Backup & recovery', icon: 'fa-database', permission: 'backups.view' },
+  { key: 'configuration', label: 'Platform configuration', icon: 'fa-sliders', permission: 'settings.manage' },
   { key: 'settings', label: 'Admin settings', icon: 'fa-gear', permission: 'settings.manage' },
 ];
 
@@ -341,6 +343,7 @@ export default function Admin() {
         </section>}
 
         {section === 'moderation' && <AdminModeration />}
+        {section === 'configuration' && <AdminConfiguration />}
 
         {section === 'users' && <section>
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">User directory</h2><p className="mt-1 text-sm text-slate-500">Search and review existing QuickChat accounts.</p></div><div className="flex w-full gap-2 sm:w-auto"><input value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && loadSection('users', 1, search)} placeholder="Search name, username or email" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 sm:w-72" /><button onClick={() => { setUserPage(1); loadSection('users', 1, search); }} className="rounded-xl bg-slate-900 px-4 text-sm font-bold text-white">Search</button></div></div>
