@@ -415,9 +415,6 @@ router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncR
   const target = await db.getOne('SELECT id, verified FROM users WHERE id = ?', [userId]);
   if (!target) return res.status(404).json({ message: 'User not found.' });
   if (Number(target.verified)) return res.status(409).json({ message: 'This account is already verified.' });
-  if (!(await hasPaidVerificationFee(userId))) {
-    return res.status(402).json({ message: 'The user must complete the current verification fee before an administrator can award the badge.' });
-  }
   await db.update("UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = 'admin_review' WHERE id = ?", [userId]);
   const badge = await db.getOne("SELECT id FROM verification_badges WHERE badge_key = 'verified_individual' AND is_active = 1");
   if (badge) {
@@ -425,7 +422,7 @@ router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncR
     if (!existing) await db.insert('INSERT INTO user_badges (user_id, badge_id, assigned_by) VALUES (?, ?, ?)', [userId, badge.id, req.user.id]);
   }
   await audit(req, 'user.verified_by_admin', 'user', userId, note, { verified: 0 }, { verified: 1, method: 'admin_review' });
-  res.json({ message: 'User verified after confirmed verification-fee payment.' });
+  res.json({ message: 'User verified directly by QuickChat administration.' });
 }));
 
 router.get('/admin/verifications', requirePermission('verification.review'), asyncRoute(async (req, res) => {
