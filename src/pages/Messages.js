@@ -327,6 +327,8 @@ export default function Messages() {
     const current = callRef.current;
     if (!current || current.status !== 'incoming') return;
     try {
+      const access = await apiRequest('/messages/access');
+      if (!access.active) { setDayPassOffer(true); return; }
       const stream = await navigator.mediaDevices.getUserMedia(current.mediaType === 'video'
         ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
         : { audio: true });
