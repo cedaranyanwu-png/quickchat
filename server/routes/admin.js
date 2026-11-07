@@ -158,7 +158,7 @@ async function initializeAdminTables() {
     if (owner && role) {
       await db.query(
         'INSERT INTO admin_user_roles (user_id, role_id, assigned_by, is_active) VALUES (?, ?, ?, 1) ' +
-        (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE is_active = 1' : 'ON CONFLICT(user_id, role_id) DO UPDATE SET is_active = 1'),
+        (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE user_id = user_id' : 'ON CONFLICT(user_id, role_id) DO NOTHING'),
         [owner.id, role.id, owner.id],
       );
     }
@@ -540,7 +540,8 @@ router.put('/admin/roles/:id', requirePermission('roles.edit'), asyncRoute(async
   if (!Number.isSafeInteger(roleId) || roleId < 1 || !name) return res.status(400).json({ message: 'A valid role and name are required.' });
   const role = await db.getOne('SELECT * FROM admin_roles WHERE id = ?', [roleId]);
   if (!role) return res.status(404).json({ message: 'Role not found.' });
-  if (Number(role.is_system) && !(await hasRole(req.user.id, 'super_admin'))) return res.status(403).json({ message: 'Only the Super Administrator can modify system roles.' });
+  if (role.role_key === 'super_admin') return res.status(403).json({ message: 'The Super Administrator permission set is protected from modification.' });
+  if (Number(role.is_system)) return res.status(403).json({ message: 'System roles cannot be modified. Create a custom role instead.' });
   const actorPermissions = await getPermissions(req.user.id);
   if (requested.some((permission) => !actorPermissions.includes('*') && !actorPermissions.includes(permission))) {
     return res.status(403).json({ message: 'You cannot grant permissions you do not hold.' });
@@ -590,6 +591,12 @@ router.post('/admin/admins/:id/roles', requirePermission('admins.manage'), async
       return res.status(403).json({ message: 'You cannot assign a role with permissions higher than your own.' });
     }
     assignments.push(role);
+  }
+  const targetIsSuperAdmin = await hasRole(userId, 'super_admin');
+  if (targetIsSuperAdmin && !roleKeys.includes('super_admin')) {
+    const activeCount = await db.getCount("SELECT COUNT(*) AS count FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE r.role_key = 'super_admin' AND ur.is_active = 1 AND r.is_active = 1");
+    if (activeCount <= 1) return res.status(409).json({ message: 'The last active Super Administrator cannot be demoted.' });
+    if (userId === req.user.id) return res.status(400).json({ message: 'You cannot remove your own Super Administrator access.' });
   }
   const before = await db.query('SELECT r.role_key FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE ur.user_id = ? AND ur.is_active = 1', [userId]);
   await db.update('UPDATE admin_user_roles SET is_active = 0 WHERE user_id = ?', [userId]);
