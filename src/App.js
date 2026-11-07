@@ -140,7 +140,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         </div>
         <main className="h-screen flex-1 bg-white" style={isVideosPage || isMessagesPage ? { overflow: 'hidden' } : { overflowY: 'auto' }}>
           <PushNotificationPrompt />
-          {!isVideosPage && <div className="lg:hidden"><TopNav /></div>}
+          <div className="lg:hidden"><TopNav /></div>
           <Routes>
             <Route path="/home" element={<Home refreshKey={feedRevision} openModal={openModal} onOpenPost={openPostModal} openVideo={setActiveVideoId} />} />
             <Route path="/explore" element={<Explore openModal={openModal} openVideo={setActiveVideoId} />} />
@@ -171,7 +171,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
           </Routes>
         </main>
         {showRightSidebar && <div className="hidden h-screen flex-shrink-0 lg:block"><RightSidebar /></div>}
-        {!isVideosPage && <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden"><BottomNav /></div>}
+        <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden"><BottomNav /></div>
         {!isVideosPage && !isMessagesPage && <div className="fixed bottom-20 right-4 z-40 lg:hidden"><FAB onOpenPost={openPostModal} /></div>}
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
