@@ -183,9 +183,27 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
     };
   });
 
-  // Sort by final score
+  // Sort by final score, while keeping a creator's newest video uploads
+  // visible after the feed refresh. Without this small freshness guarantee,
+  // an interest-ranked page can immediately push a just-published video out.
   if (tab.toLowerCase() !== 'following') {
     scoredPosts.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
+
+  let feedCandidates = scoredPosts;
+  if (tab.toLowerCase() === 'all') {
+    const recentOwnVideos = scoredPosts
+      .filter((post) => {
+        if (Number(post.authorId) !== Number(userId) || post.type !== 'video') return false;
+        const createdAt = new Date(post.createdAt || 0).getTime();
+        return Number.isFinite(createdAt) && Date.now() - createdAt <= 24 * 60 * 60 * 1000;
+      })
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, 3);
+    if (recentOwnVideos.length) {
+      const pinnedIds = new Set(recentOwnVideos.map((post) => String(post.id)));
+      feedCandidates = [...recentOwnVideos, ...scoredPosts.filter((post) => !pinnedIds.has(String(post.id)))];
+    }
   }
 
   // PROCESS B: Blending, Diversification & Frequency Capping
@@ -195,8 +213,8 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
   let adIndex = 0;
   let organicCountSinceLastAd = 0;
 
-  for (let i = 0; i < scoredPosts.length; i++) {
-    blendedFeed.push(scoredPosts[i]);
+  for (let i = 0; i < feedCandidates.length; i++) {
+    blendedFeed.push(feedCandidates[i]);
     organicCountSinceLastAd++;
 
     // Inject sponsored ad every 5 posts if eligible
