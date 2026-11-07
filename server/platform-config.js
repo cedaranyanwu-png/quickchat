@@ -1,6 +1,35 @@
+const crypto = require('node:crypto');
 const db = require('./database');
 
 const DEFAULT_VERIFICATION_FEE = 2000;
+const SECRET_KEYS = [
+  'FLW_SECRET_KEY', 'FLW_SECRET_HASH', 'FLW_WEBHOOK_URL', 'PUBLIC_APP_URL',
+  'GOOGLE_DRIVE_CLIENT_ID', 'GOOGLE_DRIVE_CLIENT_SECRET', 'GOOGLE_DRIVE_REFRESH_TOKEN', 'GOOGLE_DRIVE_FOLDER_ID',
+];
+
+function encryptionKey() {
+  const raw = String(process.env.ADMIN_CONFIG_ENCRYPTION_KEY || '').trim();
+  if (!raw) {
+    const error = new Error('Set ADMIN_CONFIG_ENCRYPTION_KEY in the server environment before saving gateway credentials.');
+    error.status = 503;
+    throw error;
+  }
+  return /^[a-f0-9]{64}$/i.test(raw) ? Buffer.from(raw, 'hex') : crypto.createHash('sha256').update(raw).digest();
+}
+
+function encrypt(value) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey(), iv);
+  const ciphertext = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
+  return [iv.toString('base64'), cipher.getAuthTag().toString('base64'), ciphertext.toString('base64')].join('.');
+}
+
+function decrypt(value) {
+  const [iv, tag, ciphertext] = String(value).split('.');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64'));
+  decipher.setAuthTag(Buffer.from(tag, 'base64'));
+  return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64')), decipher.final()]).toString('utf8');
+}
 
 async function initializePlatformConfig() {
   await db.query(`CREATE TABLE IF NOT EXISTS admin_platform_settings (
@@ -9,6 +38,13 @@ async function initializePlatformConfig() {
     updated_by INTEGER,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
+  const secrets = await db.query("SELECT setting_key, setting_value FROM admin_platform_settings WHERE setting_key LIKE 'secret:%'");
+  for (const row of secrets) {
+    const key = String(row.setting_key).slice(7);
+    if (!SECRET_KEYS.includes(key)) continue;
+    try { process.env[key] = decrypt(row.setting_value); }
+    catch (error) { console.error('[AdminConfig] Could not decrypt stored configuration for', key, error.message); }
+  }
 }
 
 async function getVerificationFeePoints() {
@@ -24,13 +60,33 @@ async function setVerificationFeePoints(value, adminId) {
     error.status = 400;
     throw error;
   }
-  const existing = await db.getOne("SELECT setting_key FROM admin_platform_settings WHERE setting_key = 'verification_fee_points'");
-  if (existing) {
-    await db.update("UPDATE admin_platform_settings SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = 'verification_fee_points'", [String(amount), adminId]);
-  } else {
-    await db.insert("INSERT INTO admin_platform_settings (setting_key, setting_value, updated_by) VALUES ('verification_fee_points', ?, ?)", [String(amount), adminId]);
-  }
+  await saveSetting('verification_fee_points', String(amount), adminId);
   return amount;
 }
 
-module.exports = { initializePlatformConfig, getVerificationFeePoints, setVerificationFeePoints, DEFAULT_VERIFICATION_FEE };
+async function saveSetting(key, value, adminId) {
+  const existing = await db.getOne('SELECT setting_key FROM admin_platform_settings WHERE setting_key = ?', [key]);
+  if (existing) await db.update('UPDATE admin_platform_settings SET setting_value = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?', [value, adminId, key]);
+  else await db.insert('INSERT INTO admin_platform_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?)', [key, value, adminId]);
+}
+
+async function saveSecretSettings(values, adminId) {
+  const entries = Object.entries(values || {}).filter(([key, value]) => SECRET_KEYS.includes(key) && value !== undefined && value !== null && String(value).trim() !== '');
+  if (!entries.length) return [];
+  // Validate key availability before writing any credential rows.
+  encryptionKey();
+  for (const [key, value] of entries) {
+    const text = String(value).trim();
+    if (text.length > 4096) {
+      const error = new Error(`${key} is too long.`);
+      error.status = 400;
+      throw error;
+    }
+    const encrypted = encrypt(text);
+    await saveSetting(`secret:${key}`, encrypted, adminId);
+    process.env[key] = text;
+  }
+  return entries.map(([key]) => key);
+}
+
+module.exports = { initializePlatformConfig, getVerificationFeePoints, setVerificationFeePoints, saveSecretSettings, DEFAULT_VERIFICATION_FEE, SECRET_KEYS };
