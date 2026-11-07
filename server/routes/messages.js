@@ -57,6 +57,18 @@ router.post('/messages/access/day-pass', asyncRoute(async (req, res) => {
   res.status(201).json({ active: true, expiresAt, balance: await currentBalance(req.user.id) });
 }));
 
+router.get('/messages/conversations/:conversationId/access', asyncRoute(async (req, res) => {
+  const conversationId = positiveId(req.params.conversationId);
+  if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  const creator = await db.getOne(
+    'SELECT u.id, s.enabled, s.price_points FROM conversation_members cm JOIN users u ON u.id = cm.user_id LEFT JOIN creator_chat_settings s ON s.user_id = u.id WHERE cm.conversation_id = ? AND cm.user_id <> ? LIMIT 1',
+    [conversationId, req.user.id],
+  );
+  if (!creator || Number(creator.enabled || 0) !== 1 || Number(creator.id) === Number(req.user.id)) return res.json({ requiresUnlock: false, unlocked: true });
+  const unlocked = await db.getOne('SELECT id FROM paid_chat_unlocks WHERE conversation_id = ? AND buyer_id = ? AND creator_id = ?', [conversationId, req.user.id, creator.id]);
+  res.json({ requiresUnlock: true, unlocked: Boolean(unlocked), pricePoints: Number(creator.price_points || 100) });
+}));
+
 router.post('/messages/conversations/:conversationId/unlock', asyncRoute(async (req, res) => {
   const conversationId = positiveId(req.params.conversationId);
   if (!conversationId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
@@ -79,6 +91,7 @@ router.post('/messages/conversations/:conversationId/unlock', asyncRoute(async (
     await creditPoints(creator.id, points, { kind: 'paid_chat_earning', reference: `${reference}_creator` });
     await db.insert('INSERT INTO paid_chat_unlocks (conversation_id, buyer_id, creator_id, points) VALUES (?, ?, ?, ?)', [conversationId, req.user.id, creator.id, points]);
   } catch (error) {
+    await spendPoints(creator.id, points, { kind: 'paid_chat_creator_rollback', reference: `${reference}_creator_rollback` });
     await creditPoints(req.user.id, points, { kind: 'paid_chat_refund', reference: `${reference}_refund` });
     throw error;
   }
