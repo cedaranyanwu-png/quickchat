@@ -5,6 +5,7 @@ import AdFeedSlot from '../components/AdFeedSlot';
 import FeedDiscovery from '../components/FeedDiscovery';
 import PostCard from '../components/PostCard';
 import Avatar from '../components/Avatar';
+import VerifiedBadge from '../components/VerifiedBadge';
 import BoostModal from '../components/BoostModal';
 import Discover from './Discover';
 
@@ -262,7 +263,7 @@ export default function Explore({ openModal, openVideo }) {
               >
                 <Avatar name={user.name} picture={user.picture} size={36} />
                 <div className="min-w-0 flex-1">
-                  <strong className="block text-xs text-slate-900 font-bold truncate">{user.name}</strong>
+                  <strong className="block text-xs text-slate-900 font-bold truncate">{user.name} <VerifiedBadge verified={user.verified} /></strong>
                   <span className="block text-[11px] text-slate-500 truncate">@{String(user.username).replace(/^@/, '')}</span>
                 </div>
                 <button className="px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-semibold transition">
@@ -378,7 +379,7 @@ export default function Explore({ openModal, openVideo }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <strong className="block text-xs font-bold text-slate-900 truncate">
-                        {user.name || user.fullName}
+                        {user.name || user.fullName} <VerifiedBadge verified={user.verified} />
                       </strong>
                       {user.isBoosted && (
                         <span className="text-[9px] font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full border border-amber-300">
