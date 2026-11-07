@@ -56,6 +56,13 @@ function toPost(row) {
     type: fields.kind || 'text',
     category: fields.category || null,
     sourceLink: isPaywalled ? null : fields.source_link || null,
+    linkedArticle: !isPaywalled && fields.rss_article_id ? {
+      id: Number(fields.rss_article_id),
+      title: fields.rss_article_title || '',
+      publisher: fields.rss_article_publisher || '',
+      url: fields.rss_article_url || '',
+      imageUrl: fields.rss_article_image_url || null,
+    } : null,
     visibility,
     isPaywalled,
     paywallType: isPaywalled ? visibility : null,

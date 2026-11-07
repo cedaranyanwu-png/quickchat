@@ -153,6 +153,19 @@ export default function VideoModal({ videoId, onClose }) {
     } catch (requestError) { setError(requestError.message); }
   };
 
+  const toggleVideoLike = async (videoId) => {
+    const current = videos.find((video) => String(video.id) === String(videoId));
+    if (!current) return;
+    try {
+      const result = await apiRequest(`/videos/${videoId}/likes`, { method: current.liked ? 'DELETE' : 'POST' });
+      setVideos((rows) => rows.map((video) => String(video.id) === String(videoId)
+        ? { ...video, liked: result.liked, likes: result.likes }
+        : video));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  };
+
   const toggleReelPlayback = (event) => {
     const player = event.currentTarget.querySelector('video');
     if (!player) return;
@@ -170,6 +183,7 @@ export default function VideoModal({ videoId, onClose }) {
     {/* Mobile uses a native full-height snap scroller; only the visible reel plays. */}
     <div ref={reelFeedRef} className="lg:hidden absolute inset-0 h-[100dvh] overflow-y-auto snap-y snap-mandatory overscroll-y-contain bg-black" style={{ scrollbarWidth: 'none' }}>
       {videos.map((video) => <section key={video.id} data-reel-id={video.id} className="relative h-[100dvh] min-h-[100svh] w-full snap-start snap-always overflow-hidden bg-black" onClick={toggleReelPlayback} onDoubleClick={(event) => handleVideoDoubleTap(video, event)}>
+      {videos.map((video) => <section key={video.id} data-reel-id={video.id} className="relative h-[100dvh] min-h-[100svh] w-full snap-start snap-always overflow-hidden bg-black" onClick={toggleReelPlayback} onDoubleClick={(event) => { event.stopPropagation(); toggleVideoLike(video.id); }}>
         <video src={video.videoUrl} poster={video.thumbnail || undefined} muted playsInline loop preload="metadata" className="absolute inset-0 w-full h-full object-cover" aria-label={video.title}/>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[42%] bg-gradient-to-t from-black/90 via-black/35 to-transparent"/>
         <div className="absolute left-4 right-16 bottom-8 text-white pointer-events-none">
@@ -185,6 +199,13 @@ export default function VideoModal({ videoId, onClose }) {
           </button>
           <button onClick={(event) => { event.stopPropagation(); setSelectedId(video.id); setShowMobileComments(true); }} className="flex flex-col items-center gap-1"><i className="fa-regular fa-comment text-2xl"/><span className="text-[10px]">{String(selectedId) === String(video.id) ? comments.length : ''}</span></button>
           <button onClick={(event) => { event.stopPropagation(); navigator.clipboard?.writeText(window.location.origin + `/share/video/${video.id}`).catch(() => {}); }} className="flex flex-col items-center gap-1"><i className="fa-solid fa-share text-xl"/><span className="text-[10px]">Share</span></button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); toggleVideoLike(video.id); }} className="flex flex-col items-center gap-1" aria-label={video.liked ? 'Unlike video' : 'Like video'}>
+            <i className={`fa-heart text-2xl ${video.liked ? 'fa-solid text-red-400' : 'fa-regular'}`} />
+            <span className="text-[10px]">{video.likes || 0}</span>
+          </button>
+          <button onClick={(event) => { event.stopPropagation(); setSelectedId(video.id); setShowMobileComments(true); }} className="flex flex-col items-center gap-1">
+            <i className="fa-regular fa-comment text-2xl"/><span className="text-[10px]">{String(selectedId) === String(video.id) ? comments.length : ''}</span>
+          </button>
           <span className="flex flex-col items-center gap-1 text-xs"><i className="fa-solid fa-eye text-xl"/>{video.views}</span>
         </div>
         {showLikeBurst && String(selectedId) === String(video.id) && <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center"><i className="fa-solid fa-heart text-7xl text-white drop-shadow-[0_4px_18px_rgba(0,0,0,.55)] animate-ping" /></div>}

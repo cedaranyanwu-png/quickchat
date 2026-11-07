@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL, apiRequest } from '../api';
+import { API_BASE_URL, apiRequest, resolveMediaUrl } from '../api';
 import Avatar from './Avatar';
 import ShareMenu from './ShareMenu';
 import BoostModal from './BoostModal';
@@ -47,6 +47,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
     setItem(post);
     setMediaIndex(0);
   }, [post]);
+  useEffect(() => { setItem(post); setMediaIndex(0); }, [post]);
 
   useEffect(() => {
     const timestamp = postTimestamp(item.createdAt);
@@ -229,9 +230,14 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
 
   // --- Render Standard or Boosted Post ---
   const username = String(item.username || item.handle || '').replace(/^@/, '');
-  const media = Array.isArray(item.media) ? item.media : [];
-  const video = media.find((entry) => entry.type === 'video');
-  const image = media.find((entry) => entry.type === 'image');
+  const media = (Array.isArray(item.media) ? item.media : []).map((entry) => ({
+    ...entry,
+    url: resolveMediaUrl(entry?.url),
+    thumbnailUrl: resolveMediaUrl(entry?.thumbnailUrl),
+    type: String(entry?.type || entry?.mimeType || '').toLowerCase().startsWith('video') || /\\.(mp4|webm|mov)(?:[?#]|$)/i.test(String(entry?.url || '')) ? 'video' : 'image',
+  })).filter((entry) => entry.url);
+  const image = media[mediaIndex] || media[0];
+  const hasMedia = media.length > 0;
   const isAuthor = currentUser?.id && item.authorId && Number(currentUser.id) === Number(item.authorId);
 
   let sourceHost = '';
@@ -366,6 +372,14 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
         ) : (
           <AdultContentGate isAdult={item.isAdult}>
             {item.text && <p className="text-sm text-slate-800 mt-1 whitespace-pre-wrap break-words">{item.text}</p>}
+            {item.linkedArticle?.url && <a href={item.linkedArticle.url} target="_blank" rel="noopener noreferrer" className="mt-3 flex overflow-hidden rounded-xl border border-slate-200 bg-slate-50 no-underline hover:border-blue-200">
+              {item.linkedArticle.imageUrl && <img src={item.linkedArticle.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-24 w-24 flex-shrink-0 object-cover" />}
+              <span className="min-w-0 flex-1 p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-blue-700">Discussing an external article</span>
+                <strong className="mt-1 block line-clamp-2 text-xs leading-5 text-slate-900">{item.linkedArticle.title}</strong>
+                <span className="mt-1 block truncate text-[10px] text-slate-500">{item.linkedArticle.publisher} · Read original <i className="fa-solid fa-arrow-up-right-from-square ml-1" /></span>
+              </span>
+            </a>}
             {showPostMeta && item.sourceLink && <a href={item.sourceLink} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"><i className="fa-solid fa-arrow-up-right-from-square" />Source: {sourceHost}</a>}
             {showPostMeta && item.hashtags?.length > 0 && <div className="mt-1 flex flex-wrap gap-x-2">{item.hashtags.map((tag) => <span key={tag} className="text-xs font-semibold text-blue-700">#{tag}</span>)}</div>}
             {media.length > 0 && (
@@ -419,11 +433,35 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
                       ))}
                     </div>
                     <span className="absolute right-2 top-2 z-10 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">{mediaIndex + 1}/{media.length}</span>
+            {hasMedia && (
+              <div className="mt-2 relative overflow-hidden rounded-xl border border-slate-200 bg-black">
+                {image.type === 'video'
+                  ? <button type="button" onClick={() => openModal?.({ type: 'video', url: image.url })} className="block w-full overflow-hidden border-0 bg-black p-0">
+                      <video src={image.url} poster={image.thumbnailUrl || undefined} controls playsInline className="w-full max-h-[460px] bg-black object-contain" />
+                    </button>
+                  : readOnly
+                    ? <img src={image.url} alt={`Post attachment ${mediaIndex + 1}`} className="w-full max-h-[460px] object-contain" />
+                    : <button type="button" onClick={() => openModal?.(image.url)} className="block w-full overflow-hidden border-0 bg-transparent p-0">
+                        <img src={image.url} alt={`Post attachment ${mediaIndex + 1}`} className="w-full max-h-[460px] object-contain" />
+                      </button>}
+                {media.length > 1 && (
+                  <>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex((current) => (current - 1 + media.length) % media.length); }} className="absolute left-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white shadow" aria-label="Previous attachment">
+                      <i className="fa-solid fa-chevron-left text-xs" />
+                    </button>
+                    <button type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex((current) => (current + 1) % media.length); }} className="absolute right-2 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white shadow" aria-label="Next attachment">
+                      <i className="fa-solid fa-chevron-right text-xs" />
+                    </button>
+                    <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1.5 rounded-full bg-black/45 px-2 py-1">
+                      {media.map((entry, index) => <button key={entry.url || index} type="button" onClick={(event) => { event.stopPropagation(); setMediaIndex(index); }} aria-label={`Show attachment ${index + 1}`} className={`h-1.5 w-1.5 rounded-full ${index === mediaIndex ? 'bg-white' : 'bg-white/45'}`} />)}
+                    </div>
+                    <span className="absolute right-2 top-2 rounded-full bg-black/55 px-2 py-1 text-[10px] font-bold text-white">{mediaIndex + 1}/{media.length}</span>
                   </>
                 )}
               </div>
             )}
             {!media.length && !readOnly && item.videoId && <button onClick={() => openVideo?.(item.videoId)} className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-blue-700">Open video</button>
+            {!readOnly && !image && item.videoId && <button onClick={() => openVideo?.(item.videoId)} className="mt-2 px-3 py-2 rounded-lg bg-slate-100 text-blue-700 text-xs font-bold">Open video</button>}
           </AdultContentGate>
         )}
 

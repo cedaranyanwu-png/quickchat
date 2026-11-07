@@ -8,6 +8,7 @@
     "start:api": "node --use-system-ca index.js",
     "dev": "node --use-system-ca --watch index.js",
     "ai-poster:start": "node --use-system-ca ai-poster.js",
+    "rss-worker:start": "node --use-system-ca rss-worker.js",
     "email:test": "node --use-system-ca test-email.js"
   },
   "keywords": [],

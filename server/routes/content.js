@@ -1,6 +1,6 @@
 const express = require('express');
 const {
-  db, asyncRoute, clampLimit, notFound, toPost, uniqueConstraint,
+  db, asyncRoute, clampLimit, notFound, parseJSON, toPost, uniqueConstraint,
 } = require('./utils');
 const {
   detectPostInterests, filterPostsByInterest, loadInterestProfile, normalizeSelectedInterests, rankPeople, rankPosts,
@@ -13,13 +13,14 @@ const { getRecommendedFeed } = require('../services/recommendation-engine');
 const { analyzeContent } = require('../services/content-classifier');
 
 const router = express.Router();
+let videoLibrarySyncPromise = null;
 const CATEGORIES = ['Technology', 'Programming', 'Artificial Intelligence', 'Business', 'Entrepreneurship', 'Education', 'Comedy', 'Music', 'Gaming', 'Sports', 'Fashion', 'Science', 'Digital Marketing', 'Design', 'Photography', 'Entertainment', 'Health and Fitness', 'Finance'];
 const PREMIUM_POST_PRICE_NGN = '500.00';
 
 const POST_SELECT = `
   SELECT p.id, p.author_id, p.body, p.kind, p.category, p.hashtags, p.target_interests, p.source_link,
          p.visibility, p.price_amount, p.price_currency, p.topics, p.keywords, p.audience_signals,
-         p.community_id, c.name AS community_name, p.media, p.video_id, p.created_at,
+         p.community_id, c.name AS community_name, p.rss_article_id, ra.title AS rss_article_title, ra.publisher AS rss_article_publisher, ra.article_url AS rss_article_url, ra.image_url AS rss_article_image_url, p.media, p.video_id, p.created_at,
          u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified,
          u.creator_membership_price AS author_fan_price, u.creator_membership_currency AS author_fan_currency,
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
@@ -34,7 +35,7 @@ const POST_SELECT = `
            OR (p.visibility = 'fans' AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'creator' AND cs.entity_id = p.author_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            OR (p.community_id IS NOT NULL AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'community' AND cs.entity_id = p.community_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            THEN 1 ELSE 0 END AS can_view
-    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id`;
+    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id LEFT JOIN rss_articles ra ON ra.id = p.rss_article_id`;
 
 // Free communities and paid communities the reader belongs to may surface in the
 // main feeds. Paid community posts stay out until the reader has an active pass.
@@ -252,16 +253,21 @@ router.get('/discover', asyncRoute(async (req, res) => {
       WHERE category IS NOT NULL AND category <> '' GROUP BY category ORDER BY post_count DESC LIMIT 6`,
   );
   const trendingRows = await db.query(
-    `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname,
+    `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.source_link, p.media, p.video_id, p.created_at,
+            p.hashtags, p.target_interests, p.visibility, u.fullname, u.username, u.avatar_url, u.picture, u.verified,
             (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
+            EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
+            EXISTS(SELECT 1 FROM bookmarks mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS bookmarked,
+            EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
             ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) * 2 +
              (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) * 3 +
              (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) * 2) AS engagement_score
        FROM posts p JOIN users u ON u.id = p.author_id
       WHERE p.community_id IS NULL AND COALESCE(p.visibility, 'public') = 'public' AND TRIM(p.body) <> ''
       ORDER BY engagement_score DESC, p.created_at DESC, p.id DESC LIMIT 5`,
+    [req.user.id, req.user.id, req.user.id],
   );
   const mediaRows = await db.query(
     `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname
@@ -418,7 +424,7 @@ router.post('/posts', asyncRoute(async (req, res) => {
   const communityId = req.body?.communityId === null || req.body?.communityId === undefined || req.body?.communityId === ''
     ? null
     : positiveId(req.body.communityId);
-  const videoId = positiveId(req.body?.videoId);
+  let videoId = positiveId(req.body?.videoId);
   if (!body && media.length === 0 && !videoId) {
     return res.status(400).json({ message: 'Write something or attach media before posting.' });
   }
@@ -448,7 +454,21 @@ router.post('/posts', asyncRoute(async (req, res) => {
     } catch (_err) {}
   }
 
-  const type = videoId || media.some((item) => item.type === 'video') ? 'video' : media.length ? 'image' : 'text';
+  // Keep the feed post and the dedicated Videos library in sync. A video
+  // attached through the regular composer is also registered in the videos
+  // table, which powers video likes, comments, views, and the Videos page.
+  const attachedVideos = media.filter((item) => item.type === 'video');
+  if (visibility === 'public' && !communityId && !videoId && attachedVideos.length) {
+    for (const item of attachedVideos) {
+      const insertedVideo = await db.insert(
+        'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
+        [req.user.id, (body || 'Video').slice(0, 180), body, item.url, item.thumbnailUrl || null, ''],
+      );
+      if (!videoId && insertedVideo?.id) videoId = Number(insertedVideo.id);
+    }
+  }
+
+  const type = videoId || attachedVideos.length ? 'video' : media.length ? 'image' : 'text';
   const result = await db.insert(
     'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [req.user.id, body, type, category, JSON.stringify(hashtags), JSON.stringify(targetInterests), communityId, JSON.stringify(media), videoId, visibility, priceAmount, priceAmount ? 'NGN' : null, JSON.stringify(topics), JSON.stringify(keywords), JSON.stringify(audienceSignals)],
@@ -569,6 +589,13 @@ router.post('/posts/:postId/replies', asyncRoute(async (req, res) => {
 }));
 
 router.get('/videos', asyncRoute(async (req, res) => {
+  if (!videoLibrarySyncPromise) {
+    videoLibrarySyncPromise = syncVideoLibrary().catch((error) => {
+      videoLibrarySyncPromise = null;
+      throw error;
+    });
+  }
+  await videoLibrarySyncPromise;
   const videos = await db.query(
     `SELECT v.id, v.title, v.description, v.video_url, v.thumbnail_url, v.duration, v.views, v.created_at,
             u.id AS creator_id, u.fullname AS creator, u.username, u.avatar_url, u.picture,
@@ -605,8 +632,18 @@ router.post('/videos', asyncRoute(async (req, res) => {
     [req.user.id, title, String(req.body?.description || '').slice(0, 5000), videoUrl,
       validMediaUrl(req.body?.thumbnailUrl), String(req.body?.duration || '').slice(0, 20)],
   );
+  // A video published from the Videos page is also a normal public post.
+  // This makes it discoverable in Home/Explore and keeps both entry points
+  // backed by the same uploaded media URL.
+  const media = [{ type: 'video', url: videoUrl, ...(validMediaUrl(req.body?.thumbnailUrl) ? { thumbnailUrl: validMediaUrl(req.body?.thumbnailUrl) } : {}) }];
+  const postText = String(req.body?.description || title).trim().slice(0, 5000);
+  await db.insert(
+    'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [req.user.id, postText, 'video', null, '[]', '[]', null, JSON.stringify(media), Number(inserted.id), 'public', null, null, '[]', '[]', '[]'],
+  );
   const video = await db.getOne(
-    `SELECT v.*, u.fullname AS creator, u.username, u.avatar_url, u.picture
+    `SELECT v.*, u.fullname AS creator, u.username, u.avatar_url, u.picture,
+            0 AS like_count, 0 AS liked
        FROM videos v JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
     [inserted.id],
   );
@@ -624,6 +661,7 @@ router.post('/videos/:videoId/likes', asyncRoute(async (req, res) => {
   const videoId = positiveId(req.params.videoId);
   if (!videoId) return res.status(400).json({ message: 'Invalid video ID.' });
   const video = await db.getOne('SELECT id, user_id FROM videos WHERE id = ?', [videoId]);
+  const video = videoId ? await db.getOne('SELECT id, user_id FROM videos WHERE id = ?', [videoId]) : null;
   if (!video) return notFound(res, 'Video not found.');
   const existing = await db.getOne('SELECT user_id FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
   if (!existing) {
@@ -634,6 +672,7 @@ router.post('/videos/:videoId/likes', asyncRoute(async (req, res) => {
   }
   const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
   res.json({ liked: true, likes });
+  res.json({ liked: true, likes: await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]) });
 }));
 
 router.delete('/videos/:videoId/likes', asyncRoute(async (req, res) => {
@@ -644,6 +683,7 @@ router.delete('/videos/:videoId/likes', asyncRoute(async (req, res) => {
   await db.delete('DELETE FROM video_likes WHERE video_id = ? AND user_id = ?', [videoId, req.user.id]);
   const likes = await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]);
   res.json({ liked: false, likes });
+  res.json({ liked: false, likes: await db.getCount('SELECT COUNT(*) AS count FROM video_likes WHERE video_id = ?', [videoId]) });
 }));
 
 router.get('/videos/:videoId/comments', asyncRoute(async (req, res) => {
@@ -676,11 +716,70 @@ router.post('/videos/:videoId/comments', asyncRoute(async (req, res) => {
   res.status(201).json({ comment });
 }));
 
+// Backfill both sides of the feed/library relationship for videos created
+// before the unified publishing flow was introduced. New uploads are synced
+// during publishing; this keeps older records visible without duplicating them.
+async function syncVideoLibrary() {
+  const existingPosts = await db.query(
+    `SELECT p.id, p.author_id, p.body, p.media, p.video_id
+       FROM posts p
+      WHERE p.visibility = 'public' AND p.community_id IS NULL
+        AND p.media IS NOT NULL AND p.media <> '' AND p.media <> '[]'
+      ORDER BY p.created_at DESC, p.id DESC LIMIT 1000`,
+  );
+  const postVideoKeys = new Set();
+
+  for (const post of existingPosts) {
+    const attachments = normalizeMedia(parseJSON(post.media, []))
+      .filter((item) => item.type === 'video');
+    let firstVideoId = positiveId(post.video_id);
+    for (const item of attachments) {
+      const key = `${post.author_id}:${item.url}`;
+      postVideoKeys.add(key);
+      let existing = await db.getOne(
+        'SELECT id FROM videos WHERE user_id = ? AND video_url = ? ORDER BY id DESC LIMIT 1',
+        [post.author_id, item.url],
+      );
+      if (!existing) {
+        const inserted = await db.insert(
+          'INSERT INTO videos (user_id, title, description, video_url, thumbnail_url, duration) VALUES (?, ?, ?, ?, ?, ?)',
+          [post.author_id, post.body ? String(post.body).slice(0, 180) : 'Video', post.body || '', item.url, item.thumbnailUrl || null, ''],
+        );
+        existing = inserted?.id ? { id: inserted.id } : null;
+      }
+      if (!firstVideoId && existing?.id) firstVideoId = Number(existing.id);
+    }
+    if (!post.video_id && firstVideoId) {
+      await db.update('UPDATE posts SET video_id = ? WHERE id = ? AND video_id IS NULL', [firstVideoId, post.id]);
+    }
+  }
+
+  // Older uploads made directly from the Videos page have a videos row but
+  // no matching feed post. Add one only when the URL is not already in a post.
+  const legacyVideos = await db.query(
+    `SELECT v.id, v.user_id, v.title, v.description, v.video_url, v.thumbnail_url
+       FROM videos v ORDER BY v.created_at DESC LIMIT 1000`,
+  );
+  for (const video of legacyVideos) {
+    const key = `${video.user_id}:${video.video_url}`;
+    if (postVideoKeys.has(key)) continue;
+    const linkedPost = await db.getOne('SELECT id FROM posts WHERE video_id = ? LIMIT 1', [video.id]);
+    if (linkedPost) continue;
+    const media = [{ type: 'video', url: video.video_url, ...(video.thumbnail_url ? { thumbnailUrl: video.thumbnail_url } : {}) }];
+    await db.insert(
+      'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [video.user_id, String(video.description || video.title || 'Video').slice(0, 5000), 'video', null, '[]', '[]', null, JSON.stringify(media), Number(video.id), 'public', null, null, '[]', '[]', '[]'],
+    );
+    postVideoKeys.add(key);
+  }
+}
+
 function normalizeMedia(value) {
   if (!Array.isArray(value)) return [];
   return value.slice(0, 4).map((item) => {
     const url = validMediaUrl(item?.url);
-    const type = item?.type === 'video' ? 'video' : 'image';
+    const rawType = String(item?.type || item?.mimeType || '').toLowerCase();
+    const type = rawType === 'video' || rawType.startsWith('video/') || /\.(mp4|webm|mov)(?:[?#]|$)/i.test(String(item?.url || '')) ? 'video' : 'image';
     const thumbnailUrl = type === 'video' ? validMediaUrl(item?.thumbnailUrl) : null;
     return url ? { type, url, ...(thumbnailUrl ? { thumbnailUrl } : {}) } : null;
   }).filter(Boolean);

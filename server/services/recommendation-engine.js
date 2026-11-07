@@ -18,7 +18,7 @@ const CONFIGURABLE_WEIGHTS = {
 const POST_SELECT = `
   SELECT p.id, p.author_id, p.body, p.kind, p.category, p.hashtags, p.target_interests, p.source_link,
          p.visibility, p.price_amount, p.price_currency, p.topics, p.keywords, p.audience_signals,
-         p.community_id, c.name AS community_name, p.media, p.video_id, p.created_at,
+         p.community_id, c.name AS community_name, p.rss_article_id, ra.title AS rss_article_title, ra.publisher AS rss_article_publisher, ra.article_url AS rss_article_url, ra.image_url AS rss_article_image_url, p.media, p.video_id, p.created_at,
          u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified,
          u.creator_membership_price AS author_fan_price, u.creator_membership_currency AS author_fan_currency,
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
@@ -33,7 +33,7 @@ const POST_SELECT = `
            OR (p.visibility = 'fans' AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'creator' AND cs.entity_id = p.author_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            OR (p.community_id IS NOT NULL AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'community' AND cs.entity_id = p.community_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            THEN 1 ELSE 0 END AS can_view
-    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id`;
+    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id LEFT JOIN rss_articles ra ON ra.id = p.rss_article_id`;
 
 const COMMUNITY_ACCESS = `(p.community_id IS NULL OR c.monthly_price IS NULL OR c.created_by = ?
   OR EXISTS (SELECT 1 FROM content_subscriptions cs
@@ -183,9 +183,27 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
     };
   });
 
-  // Sort by final score
+  // Sort by final score, while keeping a creator's newest video uploads
+  // visible after the feed refresh. Without this small freshness guarantee,
+  // an interest-ranked page can immediately push a just-published video out.
   if (tab.toLowerCase() !== 'following') {
     scoredPosts.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
+
+  let feedCandidates = scoredPosts;
+  if (tab.toLowerCase() === 'all') {
+    const recentOwnVideos = scoredPosts
+      .filter((post) => {
+        if (Number(post.authorId) !== Number(userId) || post.type !== 'video') return false;
+        const createdAt = new Date(post.createdAt || 0).getTime();
+        return Number.isFinite(createdAt) && Date.now() - createdAt <= 24 * 60 * 60 * 1000;
+      })
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .slice(0, 3);
+    if (recentOwnVideos.length) {
+      const pinnedIds = new Set(recentOwnVideos.map((post) => String(post.id)));
+      feedCandidates = [...recentOwnVideos, ...scoredPosts.filter((post) => !pinnedIds.has(String(post.id)))];
+    }
   }
 
   // PROCESS B: Blending, Diversification & Frequency Capping
@@ -195,8 +213,8 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
   let adIndex = 0;
   let organicCountSinceLastAd = 0;
 
-  for (let i = 0; i < scoredPosts.length; i++) {
-    blendedFeed.push(scoredPosts[i]);
+  for (let i = 0; i < feedCandidates.length; i++) {
+    blendedFeed.push(feedCandidates[i]);
     organicCountSinceLastAd++;
 
     // Inject sponsored ad every 5 posts if eligible

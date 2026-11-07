@@ -14,6 +14,8 @@ import PostModal from './components/PostModal';
 // Pages
 import Home from './pages/Home';
 import Explore from './pages/Explore';
+import RSSAdmin from './pages/RSSAdmin';
+import SavedArticles from './pages/SavedArticles';
 import Notifications from './pages/Notifications';
 import Messages from './pages/Messages';
 import Videos from './pages/Videos';
@@ -39,6 +41,7 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import Admin from './pages/Admin';
 import Menu from './pages/Menu';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
@@ -125,6 +128,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
+  // Keep the governance dashboard separate without shadowing the RSS admin route.
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  }
+
   if (isLiveWatchPage) {
     return <Routes><Route path="/live/:sessionId" element={<Live />} /><Route path="*" element={<Navigate to="/live" replace />} /></Routes>;
   }
@@ -140,12 +148,16 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         </div>
         <main className="h-screen flex-1 bg-white" style={isVideosPage || isMessagesPage ? { overflow: 'hidden' } : { overflowY: 'auto' }}>
           <PushNotificationPrompt />
-          {!isVideosPage && <div className="lg:hidden"><TopNav /></div>}
+          <div className="lg:hidden"><TopNav /></div>
           <Routes>
             <Route path="/home" element={<Home refreshKey={feedRevision} openModal={openModal} onOpenPost={openPostModal} openVideo={setActiveVideoId} />} />
             <Route path="/explore" element={<Explore openModal={openModal} openVideo={setActiveVideoId} />} />
+            <Route path="/discover" element={<Navigate to="/explore?tab=rss" replace />} />
+            <Route path="/admin/rss" element={<RSSAdmin />} />
+            <Route path="/saved-articles" element={<SavedArticles />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/messages" element={<Messages />} />
+            <Route path="/menu" element={<Menu />} />
             <Route path="/nova" element={<NovaAI />} />
             <Route path="/live" element={<Live />} />
             <Route path="/follow" element={<Follow />} />
@@ -163,6 +175,8 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
               onAuthenticated(false);
             }} />} />
             <Route path="/menu" element={<Menu onLogout={() => onAuthenticated(false)} />} />
+              onAuthenticated(false);
+            }} />} />
             <Route path="/settings/wallet" element={<Wallet />} />
             <Route path="/wallet" element={<Navigate to="/settings/wallet" replace />} />
             <Route path="/verification" element={<Verification />} />
@@ -173,7 +187,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
           </Routes>
         </main>
         {showRightSidebar && <div className="hidden h-screen flex-shrink-0 lg:block"><RightSidebar /></div>}
-        {!isVideosPage && <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden"><BottomNav /></div>}
+        <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden"><BottomNav /></div>
         {!isVideosPage && !isMessagesPage && <div className="fixed bottom-20 right-4 z-40 lg:hidden"><FAB onOpenPost={openPostModal} /></div>}
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
@@ -182,6 +196,11 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
           {modalImage.type === 'video'
             ? <video src={modalImage.src} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black shadow-2xl" onClick={(event) => event.stopPropagation()} />
             : <img src={modalImage.src} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />}
+        {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-3 sm:p-6" onClick={closeModal}>
+          <button className="absolute right-4 top-4 z-10 grid h-10 w-10 place-items-center rounded-full bg-black/50 text-xl text-white" onClick={closeModal} aria-label="Close media"><i className="fa-solid fa-xmark" /></button>
+          {typeof modalImage === 'string'
+            ? <img src={modalImage} alt="Full view" className="max-h-full max-w-full rounded-lg object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />
+            : <video src={modalImage.url} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black object-contain shadow-2xl" onClick={(event) => event.stopPropagation()} />}
         </div>}
       </div>
     </UnreadCountsProvider>

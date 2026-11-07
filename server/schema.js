@@ -17,7 +17,7 @@ async function initializePageTables() {
       id ${idColumn}, author_id INTEGER NOT NULL, body TEXT NOT NULL,
       kind VARCHAR(20) NOT NULL DEFAULT 'text', category VARCHAR(80), media TEXT, video_id INTEGER,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, reach_mode VARCHAR(20) NOT NULL DEFAULT 'interest',
-      hashtags TEXT, target_interests TEXT, community_id INTEGER, source_link ${sourceLinkType},
+      hashtags TEXT, target_interests TEXT, community_id INTEGER, source_link ${sourceLinkType}, rss_article_id INTEGER,
       visibility VARCHAR(20) NOT NULL DEFAULT 'public', price_amount VARCHAR(32), price_currency VARCHAR(3)
     )`,
     `CREATE TABLE IF NOT EXISTS communities (
@@ -260,6 +260,21 @@ async function initializePageTables() {
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
   ];
+  statements.push(
+    "CREATE TABLE IF NOT EXISTS rss_sources (id " + idColumn + ", name VARCHAR(150) NOT NULL, feed_url VARCHAR(512) NOT NULL, publisher_name VARCHAR(150), publisher_url VARCHAR(512), region VARCHAR(40), categories TEXT, enabled INTEGER NOT NULL DEFAULT 0, auto_sync INTEGER NOT NULL DEFAULT 1, sync_interval_minutes INTEGER NOT NULL DEFAULT 15, etag VARCHAR(512), last_modified VARCHAR(120), last_sync_at " + dateType + ", last_success_at " + dateType + ", last_error TEXT, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, updated_at " + dateType + " DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS rss_articles (id " + idColumn + ", source_id INTEGER NOT NULL, publisher VARCHAR(150), guid VARCHAR(512), guid_hash VARCHAR(64) NOT NULL, url_hash VARCHAR(64) NOT NULL, article_url VARCHAR(2048) NOT NULL, title VARCHAR(300) NOT NULL, excerpt TEXT, image_url VARCHAR(2048), category VARCHAR(80), keywords TEXT, published_at " + dateType + ", imported_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, status VARCHAR(20) NOT NULL DEFAULT 'published')",
+    "CREATE TABLE IF NOT EXISTS rss_categories (id " + idColumn + ", name VARCHAR(80) NOT NULL, slug VARCHAR(100) NOT NULL UNIQUE, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS rss_sync_logs (id " + idColumn + ", source_id INTEGER NOT NULL, status VARCHAR(20) NOT NULL, fetched_count INTEGER NOT NULL DEFAULT 0, imported_count INTEGER NOT NULL DEFAULT 0, duplicate_count INTEGER NOT NULL DEFAULT 0, error_message TEXT, started_at " + dateType + ", finished_at " + dateType + ")",
+    "CREATE TABLE IF NOT EXISTS article_interactions (id " + idColumn + ", article_id INTEGER NOT NULL, user_id INTEGER NOT NULL, action VARCHAR(20) NOT NULL, dwell_ms INTEGER NOT NULL DEFAULT 0, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS hidden_rss_sources (user_id INTEGER NOT NULL, source_id INTEGER NOT NULL, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, source_id))",
+    "CREATE TABLE IF NOT EXISTS saved_articles (user_id INTEGER NOT NULL, article_id INTEGER NOT NULL, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, article_id))",
+    "CREATE TABLE IF NOT EXISTS rss_article_discussions (article_id INTEGER NOT NULL, user_id INTEGER NOT NULL, post_id INTEGER NOT NULL, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (article_id, user_id), UNIQUE (post_id))",
+    "CREATE TABLE IF NOT EXISTS user_interests (user_id INTEGER NOT NULL, interest_key VARCHAR(80) NOT NULL, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, interest_key))",
+    "CREATE TABLE IF NOT EXISTS notification_preferences (user_id INTEGER NOT NULL, category VARCHAR(40) NOT NULL, channel VARCHAR(20) NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, updated_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, category, channel))",
+    "CREATE TABLE IF NOT EXISTS daily_questions (id " + idColumn + ", prompt VARCHAR(500) NOT NULL, category VARCHAR(80), status VARCHAR(20) NOT NULL DEFAULT 'draft', publish_at " + dateType + ", end_at " + dateType + ", created_by INTEGER, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS daily_question_responses (id " + idColumn + ", question_id INTEGER NOT NULL, user_id INTEGER NOT NULL, answer TEXT NOT NULL, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP, UNIQUE (question_id, user_id))",
+    "CREATE TABLE IF NOT EXISTS retention_events (id " + idColumn + ", user_id INTEGER NOT NULL, event_name VARCHAR(50) NOT NULL, session_id VARCHAR(100), metadata TEXT, created_at " + dateType + " DEFAULT CURRENT_TIMESTAMP)"
+  );
 
   for (const statement of statements) await db.query(statement);
   await addMissingPostColumns();
@@ -353,6 +368,7 @@ async function addMissingPostColumns() {
     topics: 'TEXT',
     keywords: 'TEXT',
     audience_signals: 'TEXT',
+    rss_article_id: 'INTEGER',
   };
   for (const [column, type] of Object.entries(columnTypes)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE posts ADD COLUMN ${column} ${type}`);
@@ -394,6 +410,20 @@ async function ensureIndexes() {
     ['boosted_promotions_user_idx', 'boosted_promotions (user_id, status)', false],
     ['boosted_promotions_post_idx', 'boosted_promotions (post_id, status)', false],
     ['recommendation_feedback_user_idx', 'recommendation_feedback (user_id, item_type, action)', false],
+    ['rss_sources_enabled_idx', 'rss_sources (enabled, auto_sync, last_sync_at)', false],
+    ['posts_rss_article_idx', 'posts (rss_article_id)', false],
+    ['user_interests_user_idx', 'user_interests (user_id, interest_key)', false],
+    ['saved_articles_user_idx', 'saved_articles (user_id, created_at)', false],
+    ['hidden_rss_sources_user_idx', 'hidden_rss_sources (user_id, source_id)', false],
+    ['rss_article_discussions_article_idx', 'rss_article_discussions (article_id, post_id)', false],
+    ['rss_sources_feed_url_unique_idx', 'rss_sources (feed_url)', true],
+    ['rss_articles_source_guid_unique_idx', 'rss_articles (source_id, guid_hash)', true],
+    ['rss_articles_url_hash_unique_idx', 'rss_articles (url_hash)', true],
+    ['rss_articles_category_date_idx', 'rss_articles (category, published_at)', false],
+    ['rss_sync_logs_source_idx', 'rss_sync_logs (source_id, id)', false],
+    ['article_interactions_user_idx', 'article_interactions (user_id, article_id, action)', false],
+    ['retention_events_user_date_idx', 'retention_events (user_id, created_at)', false],
+    ['daily_questions_status_date_idx', 'daily_questions (status, publish_at)', false],
     ['business_profiles_category_idx', 'business_profiles (business_category)', false],
   ];
   for (const [name, target, unique] of indexes) {
