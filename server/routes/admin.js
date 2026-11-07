@@ -32,13 +32,13 @@ const DEFAULT_ROLES = [
 async function initializeAdminTables() {
   const statements = [
     \`CREATE TABLE IF NOT EXISTS admin_roles (
-      id \${idColumn}, role_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
+      id ${idColumn}, role_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
       description TEXT, is_system INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS admin_permissions (
-      id \${idColumn}, permission_key VARCHAR(100) NOT NULL UNIQUE, description VARCHAR(255),
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      id ${idColumn}, permission_key VARCHAR(100) NOT NULL UNIQUE, description VARCHAR(255),
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS admin_role_permissions (
       role_id INTEGER NOT NULL, permission_id INTEGER NOT NULL,
@@ -46,83 +46,83 @@ async function initializeAdminTables() {
     )\`,
     \`CREATE TABLE IF NOT EXISTS admin_user_roles (
       user_id INTEGER NOT NULL, role_id INTEGER NOT NULL, assigned_by INTEGER,
-      assigned_at \${dateType} DEFAULT CURRENT_TIMESTAMP, is_active INTEGER NOT NULL DEFAULT 1,
+      assigned_at ${dateType} DEFAULT CURRENT_TIMESTAMP, is_active INTEGER NOT NULL DEFAULT 1,
       PRIMARY KEY (user_id, role_id)
     )\`,
     \`CREATE TABLE IF NOT EXISTS admin_permission_overrides (
       user_id INTEGER NOT NULL, permission_id INTEGER NOT NULL, allowed INTEGER NOT NULL,
-      assigned_by INTEGER, created_at \${dateType} DEFAULT CURRENT_TIMESTAMP,
+      assigned_by INTEGER, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (user_id, permission_id)
     )\`,
     \`CREATE TABLE IF NOT EXISTS admin_audit_logs (
-      id \${idColumn}, admin_user_id INTEGER NOT NULL, action VARCHAR(120) NOT NULL,
+      id ${idColumn}, admin_user_id INTEGER NOT NULL, action VARCHAR(120) NOT NULL,
       target_type VARCHAR(60), target_id VARCHAR(100), previous_state TEXT, new_state TEXT,
-      reason TEXT, request_id VARCHAR(120), created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      reason TEXT, request_id VARCHAR(120), created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS verification_applications (
-      id \${idColumn}, user_id INTEGER NOT NULL, account_category VARCHAR(60) NOT NULL,
+      id ${idColumn}, user_id INTEGER NOT NULL, account_category VARCHAR(60) NOT NULL,
       reason TEXT NOT NULL, supporting_links TEXT, evidence_reference TEXT,
       status VARCHAR(24) NOT NULL DEFAULT 'pending', reviewer_id INTEGER, review_note TEXT,
-      reviewed_at \${dateType}, created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      reviewed_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS verification_badges (
-      id \${idColumn}, badge_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
+      id ${idColumn}, badge_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
       description TEXT, entity_type VARCHAR(24) NOT NULL DEFAULT 'user', is_active INTEGER NOT NULL DEFAULT 1
     )\`,
     \`CREATE TABLE IF NOT EXISTS user_badges (
-      id \${idColumn}, user_id INTEGER NOT NULL, badge_id INTEGER NOT NULL, assigned_by INTEGER,
-      expires_at \${dateType}, created_at \${dateType} DEFAULT CURRENT_TIMESTAMP,
-      revoked_at \${dateType}, revoked_by INTEGER
+      id ${idColumn}, user_id INTEGER NOT NULL, badge_id INTEGER NOT NULL, assigned_by INTEGER,
+      expires_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      revoked_at ${dateType}, revoked_by INTEGER
     )\`,
     \`CREATE TABLE IF NOT EXISTS community_verification_applications (
-      id \${idColumn}, community_id INTEGER NOT NULL, owner_id INTEGER NOT NULL,
+      id ${idColumn}, community_id INTEGER NOT NULL, owner_id INTEGER NOT NULL,
       reason TEXT NOT NULL, supporting_links TEXT, status VARCHAR(24) NOT NULL DEFAULT 'pending',
-      reviewer_id INTEGER, review_note TEXT, reviewed_at \${dateType},
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      reviewer_id INTEGER, review_note TEXT, reviewed_at ${dateType},
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS community_badges (
-      id \${idColumn}, badge_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
+      id ${idColumn}, badge_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
       description TEXT, is_active INTEGER NOT NULL DEFAULT 1
     )\`,
     \`CREATE TABLE IF NOT EXISTS community_user_badges (
-      id \${idColumn}, community_id INTEGER NOT NULL, badge_id INTEGER NOT NULL, assigned_by INTEGER,
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at \${dateType}, revoked_by INTEGER
+      id ${idColumn}, community_id INTEGER NOT NULL, badge_id INTEGER NOT NULL, assigned_by INTEGER,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at ${dateType}, revoked_by INTEGER
     )\`,
     \`CREATE TABLE IF NOT EXISTS moderation_reports (
-      id \${idColumn}, reporter_id INTEGER NOT NULL, entity_type VARCHAR(30) NOT NULL,
+      id ${idColumn}, reporter_id INTEGER NOT NULL, entity_type VARCHAR(30) NOT NULL,
       entity_id VARCHAR(100) NOT NULL, category VARCHAR(60) NOT NULL, description TEXT,
       assigned_to INTEGER, priority VARCHAR(20) NOT NULL DEFAULT 'normal',
       status VARCHAR(24) NOT NULL DEFAULT 'pending', resolution TEXT,
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP, updated_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS moderation_actions (
-      id \${idColumn}, actor_id INTEGER NOT NULL, target_user_id INTEGER,
+      id ${idColumn}, actor_id INTEGER NOT NULL, target_user_id INTEGER,
       entity_type VARCHAR(30), entity_id VARCHAR(100), action VARCHAR(60) NOT NULL,
-      reason TEXT NOT NULL, duration_minutes INTEGER, expires_at \${dateType},
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      reason TEXT NOT NULL, duration_minutes INTEGER, expires_at ${dateType},
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS moderation_notes (
-      id \${idColumn}, report_id INTEGER NOT NULL, author_id INTEGER NOT NULL,
-      note TEXT NOT NULL, created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      id ${idColumn}, report_id INTEGER NOT NULL, author_id INTEGER NOT NULL,
+      note TEXT NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS account_suspensions (
-      id \${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, starts_at \${dateType} NOT NULL,
-      expires_at \${dateType} NOT NULL, issued_by INTEGER NOT NULL, lifted_at \${dateType},
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      id ${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, starts_at ${dateType} NOT NULL,
+      expires_at ${dateType} NOT NULL, issued_by INTEGER NOT NULL, lifted_at ${dateType},
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS account_bans (
-      id \${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, issued_by INTEGER NOT NULL,
-      created_at \${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at \${dateType}, revoked_by INTEGER
+      id ${idColumn}, user_id INTEGER NOT NULL, reason TEXT NOT NULL, issued_by INTEGER NOT NULL,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, revoked_at ${dateType}, revoked_by INTEGER
     )\`,
     \`CREATE TABLE IF NOT EXISTS account_deletion_requests (
-      id \${idColumn}, user_id INTEGER NOT NULL, requested_by INTEGER NOT NULL,
+      id ${idColumn}, user_id INTEGER NOT NULL, requested_by INTEGER NOT NULL,
       reason TEXT, status VARCHAR(24) NOT NULL DEFAULT 'pending',
-      scheduled_for \${dateType}, completed_at \${dateType}, created_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      scheduled_for ${dateType}, completed_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
     \`CREATE TABLE IF NOT EXISTS moderation_policies (
-      id \${idColumn}, policy_key VARCHAR(80) NOT NULL UNIQUE, title VARCHAR(160) NOT NULL,
+      id ${idColumn}, policy_key VARCHAR(80) NOT NULL UNIQUE, title VARCHAR(160) NOT NULL,
       description TEXT, guidance TEXT, is_active INTEGER NOT NULL DEFAULT 1,
-      updated_by INTEGER, updated_at \${dateType} DEFAULT CURRENT_TIMESTAMP
+      updated_by INTEGER, updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )\`,
   ];
   for (const statement of statements) await db.query(statement);
@@ -135,7 +135,7 @@ async function initializeAdminTables() {
     await db.query(
       'INSERT INTO admin_roles (role_key, name, description, is_system) VALUES (?, ?, ?, ?) ' +
       (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE name = VALUES(name)' : 'ON CONFLICT(role_key) DO NOTHING'),
-      [role.key, role.name, \`System role: \${role.name}\`, 1],
+      [role.key, role.name, \`System role: ${role.name}\`, 1],
     );
     const savedRole = await db.getOne('SELECT id FROM admin_roles WHERE role_key = ?', [role.key]);
     if (role.permissions[0] === '*') {
@@ -176,7 +176,7 @@ async function initializeAdminTables() {
       const match = statement.match(/CREATE INDEX IF NOT EXISTS (\\w+) ON (\\w+)\\(([^)]+)\\)/i);
       if (!match) continue;
       const exists = await db.getOne('SELECT index_name FROM information_schema.statistics WHERE table_schema = DATABASE() AND index_name = ?', [match[1]]);
-      if (!exists) await db.query(\`CREATE INDEX \${match[1]} ON \${match[2]}(\${match[3]})\`);
+      if (!exists) await db.query(\`CREATE INDEX ${match[1]} ON ${match[2]}(${match[3]})\`);
     } else await db.query(statement);
   }
 }
@@ -290,19 +290,19 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
   const params = [];
   if (search) {
     where.push('(LOWER(u.username) LIKE LOWER(?) OR LOWER(u.fullname) LIKE LOWER(?) OR LOWER(u.email) LIKE LOWER(?))');
-    params.push(\`%\${search}%\`, \`%\${search}%\`, \`%\${search}%\`);
+    params.push(\`%${search}%\`, \`%${search}%\`, \`%${search}%\`);
   }
   if (status === 'verified') where.push('u.verified = 1');
   if (status === 'unverified') where.push('u.verified = 0');
-  const filter = where.length ? \`WHERE \${where.join(' AND ')}\` : '';
-  const total = await db.getCount(\`SELECT COUNT(*) AS count FROM users u \${filter}\`, params);
+  const filter = where.length ? \`WHERE ${where.join(' AND ')}\` : '';
+  const total = await db.getCount(\`SELECT COUNT(*) AS count FROM users u ${filter}\`, params);
   const users = await db.query(
     \`SELECT u.id, u.username, u.fullname, u.email, u.avatar_url, u.picture,
             u.created_at, u.verified, u.verified_at,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
             (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
             (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS posts
-       FROM users u \${filter} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?\`,
+       FROM users u ${filter} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?\`,
     [...params, limit, (page - 1) * limit],
   );
   res.json({ users, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
@@ -379,8 +379,8 @@ router.post('/admin/verifications/:id/decision', requirePermission('verification
   if (decision === 'approved') {
     await db.update('UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = ? WHERE id = ?', ['reviewed', application.user_id]);
   }
-  await audit(req, \`verification.\${decision}\`, 'user', application.user_id, note, { status: application.status }, { status: decision });
-  res.json({ message: \`Verification \${decision.replace('_', ' ')}.\` });
+  await audit(req, \`verification.${decision}\`, 'user', application.user_id, note, { status: application.status }, { status: decision });
+  res.json({ message: \`Verification ${decision.replace('_', ' ')}.\` });
 }));
 
 router.get('/admin/reports', requirePermission('reports.view'), asyncRoute(async (req, res) => {
@@ -418,8 +418,8 @@ router.post('/admin/reports/:id/resolve', requirePermission('reports.resolve'), 
   const before = await db.getOne('SELECT status FROM moderation_reports WHERE id = ?', [id]);
   if (!before) return res.status(404).json({ message: 'Report not found.' });
   await db.update('UPDATE moderation_reports SET status = ?, resolution = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, resolution, id]);
-  await audit(req, \`report.\${status}\`, 'report', id, resolution, before, { status });
-  res.json({ message: \`Report \${status}.\` });
+  await audit(req, \`report.${status}\`, 'report', id, resolution, before, { status });
+  res.json({ message: \`Report ${status}.\` });
 }));
 
 
@@ -576,7 +576,7 @@ router.post('/admin/admins/:id/roles', requirePermission('admins.manage'), async
   const assignments = [];
   for (const key of roleKeys) {
     const role = await db.getOne('SELECT id, role_key FROM admin_roles WHERE role_key = ? AND is_active = 1', [key]);
-    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: \${key}\` });
+    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: ${key}\` });
     if (key === 'super_admin' && !(await hasRole(req.user.id, 'super_admin'))) return res.status(403).json({ message: 'Only a Super Administrator can grant Super Administrator access.' });
     const rolePermissions = await db.query(
       'SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?',
@@ -625,7 +625,7 @@ router.post('/admin/admins/:id/reactivate', requirePermission('admins.manage'), 
   const actorPermissions = await getPermissions(req.user.id);
   for (const key of roleKeys) {
     const role = await db.getOne('SELECT id FROM admin_roles WHERE role_key = ? AND is_active = 1', [key]);
-    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: \${key}\` });
+    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: ${key}\` });
     const rolePermissions = await db.query('SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?', [role.id]);
     if (rolePermissions.some((p) => !actorPermissions.includes('*') && !actorPermissions.includes(p.permission_key))) return res.status(403).json({ message: 'You cannot grant permissions higher than your own.' });
     await db.query(
