@@ -20,7 +20,7 @@ const PREMIUM_POST_PRICE_NGN = '500.00';
 const POST_SELECT = `
   SELECT p.id, p.author_id, p.body, p.kind, p.category, p.hashtags, p.target_interests, p.source_link,
          p.visibility, p.price_amount, p.price_currency, p.topics, p.keywords, p.audience_signals,
-         p.community_id, c.name AS community_name, p.media, p.video_id, p.created_at,
+         p.community_id, c.name AS community_name, p.rss_article_id, ra.title AS rss_article_title, ra.publisher AS rss_article_publisher, ra.article_url AS rss_article_url, ra.image_url AS rss_article_image_url, p.media, p.video_id, p.created_at,
          u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified,
          u.creator_membership_price AS author_fan_price, u.creator_membership_currency AS author_fan_currency,
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
@@ -35,7 +35,7 @@ const POST_SELECT = `
            OR (p.visibility = 'fans' AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'creator' AND cs.entity_id = p.author_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            OR (p.community_id IS NOT NULL AND EXISTS(SELECT 1 FROM content_subscriptions cs WHERE cs.entity_type = 'community' AND cs.entity_id = p.community_id AND cs.subscriber_id = ? AND cs.status = 'active' AND cs.current_period_end > CURRENT_TIMESTAMP))
            THEN 1 ELSE 0 END AS can_view
-    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id`;
+    FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id LEFT JOIN rss_articles ra ON ra.id = p.rss_article_id`;
 
 // Free communities and paid communities the reader belongs to may surface in the
 // main feeds. Paid community posts stay out until the reader has an active pass.
