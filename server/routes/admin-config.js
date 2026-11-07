@@ -37,7 +37,7 @@ router.put('/admin/configuration/gateways', requirePermission('settings.manage')
 router.put('/admin/configuration/verification-fee', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const previous = await getVerificationFeeNaira();
   const amount = await setVerificationFeeNaira(req.body?.amountNaira, req.user.id);
-  await audit(req, 'configuration.verification_fee_updated', 'platform_setting', 'verification_fee_points', 'Verification price changed', { amountNaira: previous }, { amountNaira: amount });
+  await audit(req, 'configuration.verification_fee_updated', 'platform_setting', 'verification_fee_ngn', 'Verification price changed', { amountNaira: previous }, { amountNaira: amount });
   res.json({ message: 'Verification price updated.', verificationFeeNaira: amount });
 }));
 
