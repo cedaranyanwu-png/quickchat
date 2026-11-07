@@ -13,6 +13,7 @@ const { getRecommendedFeed } = require('../services/recommendation-engine');
 const { analyzeContent } = require('../services/content-classifier');
 
 const router = express.Router();
+let videoLibrarySyncPromise = null;
 const CATEGORIES = ['Technology', 'Programming', 'Artificial Intelligence', 'Business', 'Entrepreneurship', 'Education', 'Comedy', 'Music', 'Gaming', 'Sports', 'Fashion', 'Science', 'Digital Marketing', 'Design', 'Photography', 'Entertainment', 'Health and Fitness', 'Finance'];
 const PREMIUM_POST_PRICE_NGN = '500.00';
 
@@ -583,7 +584,13 @@ router.post('/posts/:postId/replies', asyncRoute(async (req, res) => {
 }));
 
 router.get('/videos', asyncRoute(async (req, res) => {
-  await syncVideoLibrary();
+  if (!videoLibrarySyncPromise) {
+    videoLibrarySyncPromise = syncVideoLibrary().catch((error) => {
+      videoLibrarySyncPromise = null;
+      throw error;
+    });
+  }
+  await videoLibrarySyncPromise;
   const videos = await db.query(
     `SELECT v.id, v.title, v.description, v.video_url, v.thumbnail_url, v.duration, v.views, v.created_at,
             u.id AS creator_id, u.fullname AS creator, u.username, u.avatar_url, u.picture,
