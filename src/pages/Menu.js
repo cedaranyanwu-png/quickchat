@@ -2,12 +2,15 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const items = [
+  { label: 'Profile', description: 'View your profile and posts.', icon: 'fa-solid fa-user', path: '/profile' },
   { label: 'Communities', description: 'Create, discover, and join communities.', icon: 'fa-solid fa-users', path: '/communities' },
   { label: 'Messages', description: 'Open your conversations.', icon: 'fa-solid fa-envelope', path: '/messages' },
   { label: 'Videos', description: 'Watch and discover short videos.', icon: 'fa-solid fa-video', path: '/videos' },
   { label: 'People', description: 'Find people to follow.', icon: 'fa-solid fa-user-plus', path: '/follow' },
-  { label: 'Saved posts', description: 'View your bookmarked posts.', icon: 'fa-solid fa-bookmark', path: '/books' },
-  { label: 'Settings', description: 'Account, notifications, payouts, and preferences.', icon: 'fa-solid fa-gear', path: '/settings' },
+  { label: 'Recommendations', description: 'Discover content and people you may like.', icon: 'fa-solid fa-wand-magic-sparkles', path: '/recommendations' },
+  { label: 'RSS Publisher Admin', description: 'Manage RSS feeds and synchronization.', icon: 'fa-solid fa-rss', path: '/admin/rss' },
+  { label: 'Saved posts', description: 'View your bookmarks and saved content.', icon: 'fa-solid fa-bookmark', path: '/books' },
+  { label: 'Settings', description: 'Account, notifications, payments, and preferences.', icon: 'fa-solid fa-gear', path: '/settings' },
 ];
 
 export default function Menu({ onLogout }) {
@@ -27,8 +30,8 @@ export default function Menu({ onLogout }) {
           <i className="fa-solid fa-arrow-left" />
         </button>
         <div>
-          <h1 className="text-base font-extrabold text-slate-900">Menu</h1>
-          <p className="text-[11px] text-slate-500">Everything QuickChat keeps outside the main navigation.</p>
+          <h1 className="text-base font-extrabold text-slate-900">QuickChat menu</h1>
+          <p className="text-[11px] text-slate-500">Your communities, content, and account tools.</p>
         </div>
       </header>
 
@@ -37,8 +40,8 @@ export default function Menu({ onLogout }) {
           <div className="flex items-center gap-3">
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-blue-700"><i className="fa-solid fa-bars" /></span>
             <div>
-              <h2 className="text-sm font-extrabold">QuickChat menu</h2>
-              <p className="mt-1 text-xs text-slate-300">Communities, settings, saved content, and more.</p>
+              <h2 className="text-sm font-extrabold">Everything in one place</h2>
+              <p className="mt-1 text-xs text-slate-300">Quick access to the rest of QuickChat.</p>
             </div>
           </div>
         </div>
@@ -56,45 +59,10 @@ export default function Menu({ onLogout }) {
           ))}
         </div>
 
-        <p className="mt-4 px-1 text-[11px] leading-5 text-slate-500">
-          To keep the mobile menu focused, logout is available from <strong>Settings</strong>.
-        </p>
+        <button type="button" onClick={logout} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-50">
+          <i className="fa-solid fa-right-from-bracket" /> Log out
+        </button>
       </section>
-import { Link } from 'react-router-dom';
-
-const items = [
-  ['Communities', 'fa-solid fa-users', '/communities', 'Create a community or join existing spaces.'],
-  ['Profile', 'fa-solid fa-user', '/profile', 'View your profile and posts.'],
-  ['Messages', 'fa-solid fa-envelope', '/messages', 'Open your conversations.'],
-  ['Videos', 'fa-solid fa-video', '/videos', 'Watch and upload short-form videos.'],
-  ['People', 'fa-solid fa-user-plus', '/follow', 'Find people to follow.'],
-  ['Recommendations', 'fa-solid fa-wand-magic-sparkles', '/recommendations', 'Tune into content and people you may like.'],
-  ['RSS Publisher Admin', 'fa-solid fa-rss', '/admin/rss', 'Manage verified news feeds and synchronization.'],
-  ['Books', 'fa-solid fa-bookmark', '/books', 'Saved posts and bookmarks.'],
-  ['Settings', 'fa-solid fa-gear', '/settings', 'Account, notifications, payments and logout.'],
-];
-
-export default function Menu() {
-  return (
-    <div className="mx-auto min-h-screen max-w-2xl pb-24 lg:pb-8">
-      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur">
-        <h1 className="text-lg font-extrabold text-slate-900">QuickChat Menu</h1>
-        <p className="mt-1 text-xs text-slate-500">Everything that does not fit in the main mobile navigation.</p>
-      </header>
-      <div className="grid gap-2 p-4 sm:grid-cols-2">
-        {items.map(([name, icon, path, description]) => (
-          <Link key={path} to={path} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 no-underline shadow-sm transition hover:border-blue-200 hover:bg-blue-50/40">
-            <span className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
-              <i className={icon} />
-            </span>
-            <span className="min-w-0 flex-1">
-              <strong className="block text-sm text-slate-900">{name}</strong>
-              <span className="mt-0.5 block text-xs leading-5 text-slate-500">{description}</span>
-            </span>
-            <i className="fa-solid fa-chevron-right text-xs text-slate-400" />
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }
