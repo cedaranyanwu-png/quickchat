@@ -24,7 +24,7 @@ const PERMISSIONS = [
 const DEFAULT_ROLES = [
   { name: 'Super Administrator', key: 'super_admin', permissions: ['*'] },
   { name: 'Administrator', key: 'admin', permissions: PERMISSIONS.filter((p) => !['roles.create', 'roles.delete', 'permissions.assign', 'admins.manage', 'settings.manage'].includes(p)) },
-  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
+  { name: 'Moderator', key: 'moderator', permissions: ['dashboard.view', 'posts.view', 'posts.remove', 'posts.restore', 'comments.remove', 'reports.view', 'reports.assign', 'reports.resolve', 'moderation.manage', 'users.view'] },
   { name: 'Verification Officer', key: 'verification_officer', permissions: ['dashboard.view', 'users.view', 'users.verify', 'communities.view', 'communities.verify', 'verification.review', 'badges.assign', 'badges.revoke'] },
   { name: 'Community Manager', key: 'community_manager', permissions: ['dashboard.view', 'communities.view', 'communities.edit', 'communities.suspend', 'communities.verify', 'reports.view', 'reports.resolve'] },
   { name: 'Support Agent', key: 'support_agent', permissions: ['dashboard.view', 'users.view', 'reports.view', 'reports.resolve'] },
