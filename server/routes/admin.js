@@ -402,8 +402,8 @@ router.get('/admin/audit-logs', requirePermission('audit_logs.view'), asyncRoute
 async function hasPaidVerificationFee(userId) {
   const fee = await getVerificationFeePoints();
   return Boolean(await db.getOne(
-    "SELECT id FROM point_transactions WHERE user_id = ? AND kind = 'verification_purchase' AND amount <= ? ORDER BY id DESC LIMIT 1",
-    [userId, -fee],
+    "SELECT id FROM verification_fee_payments WHERE user_id = ? AND status = 'paid' AND currency = 'NGN' AND amount = ? ORDER BY id DESC LIMIT 1",
+    [userId, `${fee}.00`],
   ));
 }
 
