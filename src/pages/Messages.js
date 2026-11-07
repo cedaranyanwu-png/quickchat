@@ -323,6 +323,12 @@ export default function Messages() {
                     >
                       <i className="fa-solid fa-reply text-xs" />
                     </button>
+                    {isSwiped && (
+                      <div className={`absolute top-1/2 z-0 w-48 -translate-y-1/2 rounded-xl border border-blue-100 bg-white px-3 py-2 text-left shadow-sm ${isMine ? 'right-full mr-2' : 'left-full ml-2'}`}>
+                        <span className="block text-[10px] font-extrabold uppercase tracking-wide text-blue-700">Replying to</span>
+                        <span className="mt-0.5 block truncate text-xs text-slate-600">{message.text}</span>
+                      </div>
+                    )}
                     <div className={`relative z-10 ${isMine ? 'bg-blue-700 text-white' : 'bg-slate-100 text-slate-900'} rounded-2xl px-3 py-2 shadow-sm`}>
                       {message.replyTo && (
                         <button
