@@ -14,6 +14,8 @@ import PostModal from './components/PostModal';
 // Pages
 import Home from './pages/Home';
 import Explore from './pages/Explore';
+import RSSAdmin from './pages/RSSAdmin';
+import SavedArticles from './pages/SavedArticles';
 import Notifications from './pages/Notifications';
 import Messages from './pages/Messages';
 import Videos from './pages/Videos';
@@ -126,7 +128,10 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   if (!isAuthenticated) return <Navigate to="/login" replace />;
 
-  if (location.pathname.startsWith('/admin')) return <Routes><Route path="/admin/*" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  // Keep the governance dashboard separate without shadowing the RSS admin route.
+  if (location.pathname.replace(/\/+$/, '') === '/admin') {
+    return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
+  }
 
   if (isLiveWatchPage) {
     return <Routes><Route path="/live/:sessionId" element={<Live />} /><Route path="*" element={<Navigate to="/live" replace />} /></Routes>;
@@ -147,6 +152,9 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
           <Routes>
             <Route path="/home" element={<Home refreshKey={feedRevision} openModal={openModal} onOpenPost={openPostModal} openVideo={setActiveVideoId} />} />
             <Route path="/explore" element={<Explore openModal={openModal} openVideo={setActiveVideoId} />} />
+            <Route path="/discover" element={<Navigate to="/explore?tab=rss" replace />} />
+            <Route path="/admin/rss" element={<RSSAdmin />} />
+            <Route path="/saved-articles" element={<SavedArticles />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/menu" element={<Menu />} />
