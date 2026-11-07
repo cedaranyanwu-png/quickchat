@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
+import { resolveMediaUrl } from '../api';
 
 // User photos come from profile data. Initials are only the fallback when an
 // account has not uploaded an avatar yet.
 export default function Avatar({ name = '', picture, size = 36, className = '' }) {
   const [failedPicture, setFailedPicture] = useState(null);
+  const pictureUrl = resolveMediaUrl(picture);
   const initials = String(name).trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase();
-  return picture && failedPicture !== picture ? (
+  return pictureUrl && failedPicture !== pictureUrl ? (
     <img
-      src={picture}
+      src={pictureUrl}
       alt={name ? `${name} profile` : 'Profile'}
       className={`rounded-full object-cover flex-shrink-0 ${className}`}
       style={{ width: size, height: size }}
-      onError={() => setFailedPicture(picture)}
+      onError={() => setFailedPicture(pictureUrl)}
     />
   ) : (
     <div
