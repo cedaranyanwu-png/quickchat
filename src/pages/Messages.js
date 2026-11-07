@@ -29,6 +29,10 @@ export default function Messages() {
   const [callError, setCallError] = useState('');
   const [callMuted, setCallMuted] = useState(false);
   const [callCameraOff, setCallCameraOff] = useState(false);
+  const [paidChatAccess, setPaidChatAccess] = useState(null);
+  const [unlockingChat, setUnlockingChat] = useState(false);
+  const [dayPassOffer, setDayPassOffer] = useState(false);
+  const [dayPassBusy, setDayPassBusy] = useState(false);
   const touchStartRef = useRef(null);
   const endOfMessagesRef = useRef(null);
   const openedUserRef = useRef('');
@@ -61,6 +65,7 @@ export default function Messages() {
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) return;
     const result = await apiRequest(`/messages/conversations/${conversationId}/messages`);
+    setPaidChatAccess(result.locked ? { requiresUnlock: true, unlocked: false, pricePoints: Number(result.pricePoints || 100) } : { requiresUnlock: false, unlocked: true });
     setMessages(result.messages || []);
   }, []);
 
@@ -105,7 +110,7 @@ export default function Messages() {
   }, [search]);
 
   useEffect(() => {
-    if (!activeId) { setMessages([]); return undefined; }
+    if (!activeId) { setMessages([]); setPaidChatAccess(null); return undefined; }
     let active = true;
     const refresh = async () => {
       try {
@@ -198,6 +203,28 @@ export default function Messages() {
     if (file) void sendAttachment(file);
   };
 
+  const unlockPaidChat = async () => {
+    if (!activeId || unlockingChat) return;
+    setUnlockingChat(true); setError('');
+    try {
+      await apiRequest(`/messages/conversations/${activeId}/unlock`, { method: 'POST' });
+      setPaidChatAccess({ requiresUnlock: true, unlocked: true });
+      await loadMessages(activeId);
+    } catch (unlockError) { setError(unlockError.message); }
+    finally { setUnlockingChat(false); }
+  };
+
+  const buyDayPass = async () => {
+    if (dayPassBusy) return;
+    setDayPassBusy(true); setCallError('');
+    try {
+      await apiRequest('/messages/access/day-pass', { method: 'POST' });
+      setDayPassOffer(false);
+      setCallError('Your 24-hour advanced chat pass is active. Start your call again.');
+    } catch (passError) { setCallError(passError.message); }
+    finally { setDayPassBusy(false); }
+  };
+
   const startRecording = async (mode) => {
     if (!activeId || recordingMode || typeof MediaRecorder === 'undefined') return;
     try {
@@ -279,6 +306,8 @@ export default function Messages() {
     if (!activeId || !activeConversation || callRef.current) return;
     setCallError('');
     try {
+      const access = await apiRequest('/messages/access');
+      if (!access.active) { setDayPassOffer(true); return; }
       const stream = await navigator.mediaDevices.getUserMedia(mediaType === 'video'
         ? { audio: true, video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } } }
         : { audio: true });
@@ -543,7 +572,15 @@ export default function Messages() {
             </div>
           </header>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-24 lg:pb-24">
-            {messages.map((message) => {
+            {paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked && (
+              <div className="mx-auto max-w-sm rounded-2xl border border-amber-200 bg-amber-50 p-4 text-center">
+                <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-white text-amber-600"><i className="fa-solid fa-lock" /></span>
+                <h3 className="mt-2 text-sm font-extrabold text-slate-900">Unlock this creator’s chat</h3>
+                <p className="mt-1 text-xs leading-5 text-slate-600">This creator charges {Number(paidChatAccess.pricePoints || 100).toLocaleString()} points for a conversation. Once unlocked, you can continue chatting without paying again.</p>
+                <button type="button" onClick={unlockPaidChat} disabled={unlockingChat} className="mt-3 rounded-full bg-blue-700 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50">{unlockingChat ? 'Unlocking…' : `Unlock for ${Number(paidChatAccess.pricePoints || 100).toLocaleString()} points`}</button>
+              </div>
+            )}
+            {paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked ? null : messages.map((message) => {
               const isMine = message.sender === 'me';
               const isSwiped = swipedMessageId === message.id;
               const isMenuOpen = replyMenuId === message.id;
@@ -638,9 +675,9 @@ export default function Messages() {
 
         <form onSubmit={sendMessage} className="absolute inset-x-0 bottom-0 z-30 flex min-h-16 shrink-0 items-center gap-1.5 border-t border-slate-200 bg-white px-2 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
           <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={handleImageSelected} className="hidden" />
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!activeId || uploadingMedia || Boolean(recordingMode)} title="Send image" aria-label="Send image" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-regular fa-image text-lg" /></button>
-          <button type="button" onClick={() => recordingMode === 'voice' ? stopRecording() : startRecording('voice')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'voice')} title={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} aria-label={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'voice' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'voice' ? 'fa-stop' : 'fa-microphone'}`} /></button>
-          <button type="button" onClick={() => recordingMode === 'video' ? stopRecording() : startRecording('video')} disabled={!activeId || uploadingMedia || (recordingMode && recordingMode !== 'video')} title={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} aria-label={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'video' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'video' ? 'fa-stop' : 'fa-video'}`} /></button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={!activeId || Boolean(paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked) || uploadingMedia || Boolean(recordingMode)} title="Send image" aria-label="Send image" className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-blue-700 hover:bg-blue-50 disabled:opacity-40"><i className="fa-regular fa-image text-lg" /></button>
+          <button type="button" onClick={() => recordingMode === 'voice' ? stopRecording() : startRecording('voice')} disabled={!activeId || Boolean(paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked) || uploadingMedia || (recordingMode && recordingMode !== 'voice')} title={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} aria-label={recordingMode === 'voice' ? 'Stop voice recording' : 'Record voice message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'voice' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'voice' ? 'fa-stop' : 'fa-microphone'}`} /></button>
+          <button type="button" onClick={() => recordingMode === 'video' ? stopRecording() : startRecording('video')} disabled={!activeId || Boolean(paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked) || uploadingMedia || (recordingMode && recordingMode !== 'video')} title={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} aria-label={recordingMode === 'video' ? 'Stop video recording' : 'Record video message'} className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${recordingMode === 'video' ? 'animate-pulse bg-red-100 text-red-600' : 'text-slate-600 hover:bg-slate-100'} disabled:opacity-40`}><i className={`fa-solid ${recordingMode === 'video' ? 'fa-stop' : 'fa-video'}`} /></button>
           {recordingMode && <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold text-red-600"><span className="h-2 w-2 animate-pulse rounded-full bg-red-600" />REC</span>}
           {uploadingMedia && <span className="shrink-0 text-[10px] font-semibold text-blue-700">Uploading…</span>}
           <div className="absolute inset-x-0 bottom-full border-t border-slate-100 bg-white px-3 py-2 shadow-sm">
@@ -667,11 +704,22 @@ export default function Messages() {
             className="h-11 min-w-0 flex-1 rounded-full border border-slate-200 bg-slate-100 px-4 text-sm text-slate-900 outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-70"
             aria-label="Write a message"
           />
-          <button type="submit" disabled={!activeId || !messageInput.trim() || sending} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-700 text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" aria-label={sending ? 'Sending message' : 'Send message'} title={sending ? 'Sending…' : 'Send message'}>
+          <button type="submit" disabled={!activeId || Boolean(paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked) || !messageInput.trim() || sending} className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-blue-700 text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50" aria-label={sending ? 'Sending message' : 'Send message'} title={sending ? 'Sending…' : 'Send message'}>
             <i className={`fa-solid ${sending ? 'fa-circle-notch fa-spin' : 'fa-paper-plane'} text-sm`} />
           </button>
         </form>
       </section>
+      {dayPassOffer && <div className="fixed inset-0 z-[115] grid place-items-center bg-slate-950/70 p-4">
+        <div className="w-full max-w-sm rounded-3xl bg-white p-5 shadow-2xl">
+          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-700"><i className="fa-solid fa-headset text-xl" /></span>
+          <h3 className="mt-3 text-lg font-extrabold text-slate-900">Advanced chat pass</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-600">Voice and video calls require a 24-hour pass costing 1,000 points. Your call audio and video are not recorded or saved by QuickChat.</p>
+          <div className="mt-4 flex gap-2">
+            <button type="button" onClick={() => setDayPassOffer(false)} className="flex-1 rounded-full border border-slate-300 px-4 py-2.5 text-xs font-bold text-slate-700">Not now</button>
+            <button type="button" onClick={buyDayPass} disabled={dayPassBusy} className="flex-1 rounded-full bg-blue-700 px-4 py-2.5 text-xs font-bold text-white disabled:opacity-50">{dayPassBusy ? 'Activating…' : 'Pay 1,000 points'}</button>
+          </div>
+        </div>
+      </div>}
       {call && <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/70 p-3">
         <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
           <div className="bg-slate-950 px-6 py-7 text-center text-white">
