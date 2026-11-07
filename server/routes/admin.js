@@ -527,4 +527,115 @@ router.post('/admin/users/:id/deletion-request', requirePermission('users.delete
   res.status(201).json({ message: 'Deletion request scheduled for review. No account data has been deleted.', requestId: request.id, scheduledFor });
 }));
 
+
+router.put('/admin/roles/:id', requirePermission('roles.edit'), asyncRoute(async (req, res) => {
+  const roleId = Number(req.params.id);
+  const name = String(req.body?.name || '').trim().slice(0, 120);
+  const description = String(req.body?.description || '').trim().slice(0, 1000);
+  const requested = Array.isArray(req.body?.permissions) ? [...new Set(req.body.permissions.map(String))] : [];
+  if (!Number.isSafeInteger(roleId) || roleId < 1 || !name) return res.status(400).json({ message: 'A valid role and name are required.' });
+  const role = await db.getOne('SELECT * FROM admin_roles WHERE id = ?', [roleId]);
+  if (!role) return res.status(404).json({ message: 'Role not found.' });
+  if (Number(role.is_system) && !(await hasRole(req.user.id, 'super_admin'))) return res.status(403).json({ message: 'Only the Super Administrator can modify system roles.' });
+  const actorPermissions = await getPermissions(req.user.id);
+  if (requested.some((permission) => !actorPermissions.includes('*') && !actorPermissions.includes(permission))) {
+    return res.status(403).json({ message: 'You cannot grant permissions you do not hold.' });
+  }
+  const before = await db.query('SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?', [roleId]);
+  await db.update('UPDATE admin_roles SET name = ?, description = ? WHERE id = ?', [name, description, roleId]);
+  await db.delete('DELETE FROM admin_role_permissions WHERE role_id = ?', [roleId]);
+  for (const permission of requested) {
+    const row = await db.getOne('SELECT id FROM admin_permissions WHERE permission_key = ?', [permission]);
+    if (row) await insertRolePermission(roleId, row.id);
+  }
+  await audit(req, 'role.updated', 'role', roleId, 'Role permissions updated', before, requested);
+  res.json({ message: 'Role updated.' });
+}));
+
+router.delete('/admin/roles/:id', requirePermission('roles.delete'), asyncRoute(async (req, res) => {
+  const roleId = Number(req.params.id);
+  if (!Number.isSafeInteger(roleId) || roleId < 1) return res.status(400).json({ message: 'Invalid role ID.' });
+  const role = await db.getOne('SELECT * FROM admin_roles WHERE id = ?', [roleId]);
+  if (!role) return res.status(404).json({ message: 'Role not found.' });
+  if (Number(role.is_system)) return res.status(403).json({ message: 'System roles cannot be deleted.' });
+  const assigned = await db.getCount('SELECT COUNT(*) AS count FROM admin_user_roles WHERE role_id = ? AND is_active = 1', [roleId]);
+  if (assigned) return res.status(409).json({ message: 'Remove this role from all administrators before deleting it.' });
+  await db.delete('DELETE FROM admin_role_permissions WHERE role_id = ?', [roleId]);
+  await db.delete('DELETE FROM admin_roles WHERE id = ?', [roleId]);
+  await audit(req, 'role.deleted', 'role', roleId, 'Custom role deleted', role, null);
+  res.json({ message: 'Role deleted.' });
+}));
+
+router.post('/admin/admins/:id/roles', requirePermission('admins.manage'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const roleKeys = Array.isArray(req.body?.roleKeys) ? [...new Set(req.body.roleKeys.map(String))] : [];
+  if (!Number.isSafeInteger(userId) || userId < 1 || !roleKeys.length) return res.status(400).json({ message: 'Choose at least one valid role.' });
+  const target = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
+  if (!target) return res.status(404).json({ message: 'User not found.' });
+  const actorPermissions = await getPermissions(req.user.id);
+  const assignments = [];
+  for (const key of roleKeys) {
+    const role = await db.getOne('SELECT id, role_key FROM admin_roles WHERE role_key = ? AND is_active = 1', [key]);
+    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: \${key}\` });
+    if (key === 'super_admin' && !(await hasRole(req.user.id, 'super_admin'))) return res.status(403).json({ message: 'Only a Super Administrator can grant Super Administrator access.' });
+    const rolePermissions = await db.query(
+      'SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?',
+      [role.id],
+    );
+    if (rolePermissions.some((p) => !actorPermissions.includes('*') && !actorPermissions.includes(p.permission_key))) {
+      return res.status(403).json({ message: 'You cannot assign a role with permissions higher than your own.' });
+    }
+    assignments.push(role);
+  }
+  const before = await db.query('SELECT r.role_key FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE ur.user_id = ? AND ur.is_active = 1', [userId]);
+  await db.update('UPDATE admin_user_roles SET is_active = 0 WHERE user_id = ?', [userId]);
+  for (const role of assignments) {
+    await db.query(
+      'INSERT INTO admin_user_roles (user_id, role_id, assigned_by, is_active) VALUES (?, ?, ?, 1) ' +
+      (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE assigned_by = VALUES(assigned_by), is_active = 1' : 'ON CONFLICT(user_id, role_id) DO UPDATE SET assigned_by = excluded.assigned_by, is_active = 1'),
+      [userId, role.id, req.user.id],
+    );
+  }
+  await audit(req, 'admin.roles_assigned', 'user', userId, 'Administrative roles updated', before, roleKeys);
+  res.json({ message: 'Administrative roles updated.' });
+}));
+
+router.post('/admin/admins/:id/deactivate', requirePermission('admins.manage'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 1000);
+  if (!Number.isSafeInteger(userId) || userId < 1 || !reason) return res.status(400).json({ message: 'A valid administrator and reason are required.' });
+  const isSuperAdmin = await hasRole(userId, 'super_admin');
+  if (isSuperAdmin) {
+    const activeCount = await db.getCount(
+      "SELECT COUNT(*) AS count FROM admin_user_roles ur JOIN admin_roles r ON r.id = ur.role_id WHERE r.role_key = 'super_admin' AND ur.is_active = 1 AND r.is_active = 1",
+    );
+    if (activeCount <= 1) return res.status(409).json({ message: 'The last active Super Administrator cannot be deactivated.' });
+    if (userId === req.user.id) return res.status(400).json({ message: 'You cannot deactivate your own Super Administrator access.' });
+  }
+  const before = await db.query('SELECT role_id FROM admin_user_roles WHERE user_id = ? AND is_active = 1', [userId]);
+  await db.update('UPDATE admin_user_roles SET is_active = 0 WHERE user_id = ?', [userId]);
+  await audit(req, 'admin.deactivated', 'user', userId, reason, before, []);
+  res.json({ message: 'Administrative access deactivated.' });
+}));
+
+router.post('/admin/admins/:id/reactivate', requirePermission('admins.manage'), asyncRoute(async (req, res) => {
+  const userId = Number(req.params.id);
+  const roleKeys = Array.isArray(req.body?.roleKeys) ? [...new Set(req.body.roleKeys.map(String))] : [];
+  if (!Number.isSafeInteger(userId) || userId < 1 || !roleKeys.length) return res.status(400).json({ message: 'Choose the roles to reactivate.' });
+  const actorPermissions = await getPermissions(req.user.id);
+  for (const key of roleKeys) {
+    const role = await db.getOne('SELECT id FROM admin_roles WHERE role_key = ? AND is_active = 1', [key]);
+    if (!role) return res.status(400).json({ message: \`Unknown or inactive role: \${key}\` });
+    const rolePermissions = await db.query('SELECT p.permission_key FROM admin_role_permissions rp JOIN admin_permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?', [role.id]);
+    if (rolePermissions.some((p) => !actorPermissions.includes('*') && !actorPermissions.includes(p.permission_key))) return res.status(403).json({ message: 'You cannot grant permissions higher than your own.' });
+    await db.query(
+      'INSERT INTO admin_user_roles (user_id, role_id, assigned_by, is_active) VALUES (?, (SELECT id FROM admin_roles WHERE role_key = ?), ?, 1) ' +
+      (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE assigned_by = VALUES(assigned_by), is_active = 1' : 'ON CONFLICT(user_id, role_id) DO UPDATE SET assigned_by = excluded.assigned_by, is_active = 1'),
+      [userId, key, req.user.id],
+    );
+  }
+  await audit(req, 'admin.reactivated', 'user', userId, 'Administrative access reactivated', null, roleKeys);
+  res.json({ message: 'Administrative access reactivated.' });
+}));
+
 module.exports = { router, initializeAdminTables, getPermissions, requirePermission, audit };
