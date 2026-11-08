@@ -28,7 +28,7 @@ self.addEventListener('install', (event) => {
     if (indexResponse) {
       const html = await indexResponse.clone().text();
       const assetPaths = Array.from(html.matchAll(/(?:src|href)=["']([^"']+)["']/g))
-        .map((match) => match[1])
+        .map((match) => new URL(match[1], self.location.origin).pathname)
         .filter((path) => path.startsWith('/static/'));
       const staticCache = await caches.open(STATIC_CACHE);
       await Promise.all(assetPaths.map(async (path) => {
