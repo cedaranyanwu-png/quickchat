@@ -41,11 +41,20 @@ export async function apiRequest(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
-    ...requestOptions,
-    headers,
-    ...(body === undefined ? {} : { body: isRawBody || isFormBody ? body : JSON.stringify(body) }),
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+      ...requestOptions,
+      headers,
+      ...(body === undefined ? {} : { body: isRawBody || isFormBody ? body : JSON.stringify(body) }),
+    });
+  } catch (networkError) {
+    if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
+    }
+    throw new Error('QuickChat could not reach the server. Check your connection and try again.');
+  }
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && token) {
@@ -67,11 +76,20 @@ export async function adminRequest(path, options = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
 
-  const response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
-    ...requestOptions,
-    headers,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+      ...requestOptions,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch (networkError) {
+    if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
+    }
+    throw new Error('QuickChat could not reach the server. Check your connection and try again.');
+  }
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) localStorage.removeItem('adminToken');
