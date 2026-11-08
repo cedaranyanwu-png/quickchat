@@ -20,6 +20,7 @@ export default function Sidebar({ onOpenPost, onLogout }) {
     ['Notifications', 'fa-solid fa-bell', '/notifications'],
     ['Messages', 'fa-solid fa-envelope', '/messages'],
     ['Live', 'fa-solid fa-tower-broadcast', '/live'],
+    ['Wallet & earnings', 'fa-solid fa-wallet', '/settings/wallet'],
     ['Videos', 'fa-solid fa-video', '/videos'],
     ['Communities', 'fa-solid fa-users', '/communities'],
     ['People', 'fa-solid fa-user-plus', '/follow'],
