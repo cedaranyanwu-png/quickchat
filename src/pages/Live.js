@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import Avatar from '../components/Avatar';
+import VerifiedBadge from '../components/VerifiedBadge';
 import LiveStudio from '../components/LiveStudio';
 import LiveWatch from '../components/LiveWatch';
 
@@ -231,7 +232,7 @@ function LiveHub() {
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">Creator & referral rewards</p>
             <p className="mt-1 text-2xl font-extrabold text-slate-900">{Number(wallet?.rewardPoints || 0).toLocaleString()} <span className="text-xs font-bold text-slate-400">reward pts</span></p>
-            <p className="text-[11px] text-slate-500">100 reward points = ₦1 · Purchased points are separate.</p>
+            <p className="text-[11px] text-slate-500">Only points earned when another user spends points on your monetized content can be converted. Verification bonuses are for spending, not cash withdrawal.</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-bold uppercase text-slate-400">Withdrawable</p>
@@ -302,7 +303,7 @@ function LiveHub() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <p className="truncate text-sm font-extrabold">{session.host?.name}</p>
+                      <p className="truncate text-sm font-extrabold">{session.host?.name} <VerifiedBadge verified={session.host?.verified} /></p>
                       {session.isMine && <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[9px] font-bold text-amber-200">Yours</span>}
                     </div>
                     <p className="truncate text-[11px] text-white/60">{session.title}</p>
