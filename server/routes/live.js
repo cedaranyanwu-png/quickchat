@@ -254,7 +254,7 @@ router.get('/live/wallet', asyncRoute(async (req, res) => {
     cashBalance: (withdrawableKobo / 100).toFixed(2),
     conversionRate: { points: POINTS_PER_NAIRA, naira: 1 },
     referralCode: `QC${req.user.id}`,
-    referralLink: `${String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\\/$/, '')}/register?ref=QC${req.user.id}`,
+    referralLink: `${String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '')}/register?ref=QC${req.user.id}`,
     referralRewardPoints: REFERRAL_REWARD_POINTS,
     currency: 'NGN',
     welcomePoints: welcomePoints(),
