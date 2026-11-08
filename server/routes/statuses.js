@@ -9,14 +9,17 @@ router.get('/statuses', asyncRoute(async (req, res) => {
     `SELECT s.id, s.user_id, s.status_type, s.text, s.media_url, s.background_color,
             s.created_at, s.expires_at,
             u.fullname, u.username, u.avatar_url, u.picture, u.verified,
-            CASE WHEN sv.viewer_id IS NULL THEN 0 ELSE 1 END AS viewed
+            CASE WHEN sv.viewer_id IS NULL THEN 0 ELSE 1 END AS viewed,
+            (SELECT COUNT(*) FROM status_likes sl WHERE sl.status_id = s.id) AS likes,
+            (SELECT COUNT(*) FROM status_comments sc WHERE sc.status_id = s.id) AS comment_count,
+            CASE WHEN EXISTS (SELECT 1 FROM status_likes sl WHERE sl.status_id = s.id AND sl.user_id = ?) THEN 1 ELSE 0 END AS liked
        FROM statuses s
        JOIN users u ON u.id = s.user_id
        LEFT JOIN status_views sv ON sv.status_id = s.id AND sv.viewer_id = ?
       WHERE s.expires_at > CURRENT_TIMESTAMP
       ORDER BY CASE WHEN s.user_id = ? THEN 0 ELSE 1 END,
                s.created_at ASC, s.id ASC`,
-    [req.user.id, req.user.id],
+    [req.user.id, req.user.id, req.user.id],
   );
 
   const groups = new Map();
@@ -42,6 +45,9 @@ router.get('/statuses', asyncRoute(async (req, res) => {
       createdAt: row.created_at,
       expiresAt: row.expires_at,
       viewed: Boolean(Number(row.viewed || 0)),
+      likes: Number(row.likes || 0),
+      commentCount: Number(row.comment_count || 0),
+      liked: Boolean(Number(row.liked || 0)),
     });
   }
 
@@ -111,6 +117,78 @@ router.post('/statuses/:statusId/views', asyncRoute(async (req, res) => {
     }
   }
   res.json({ viewed: true });
+}));
+
+
+router.post('/statuses/:statusId/likes', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  if (!Number.isSafeInteger(statusId) || statusId < 1) return res.status(400).json({ message: 'Invalid status ID.' });
+  const status = await db.getOne('SELECT id, user_id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
+  if (!status) return notFound(res, 'This status is no longer available.');
+  await db.insert('INSERT INTO status_likes (status_id, user_id) VALUES (?, ?) ON CONFLICT (status_id, user_id) DO NOTHING', [statusId, req.user.id]);
+  const row = await db.getOne('SELECT COUNT(*) AS likes FROM status_likes WHERE status_id = ?', [statusId]);
+  res.json({ liked: true, likes: Number(row?.likes || 0) });
+}));
+
+router.delete('/statuses/:statusId/likes', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  if (!Number.isSafeInteger(statusId) || statusId < 1) return res.status(400).json({ message: 'Invalid status ID.' });
+  await db.delete('DELETE FROM status_likes WHERE status_id = ? AND user_id = ?', [statusId, req.user.id]);
+  const row = await db.getOne('SELECT COUNT(*) AS likes FROM status_likes WHERE status_id = ?', [statusId]);
+  res.json({ liked: false, likes: Number(row?.likes || 0) });
+}));
+
+router.get('/statuses/:statusId/comments', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  const status = await db.getOne('SELECT id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
+  if (!status) return notFound(res, 'This status is no longer available.');
+  const comments = await db.query(
+    `SELECT c.id, c.body, c.created_at, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture
+       FROM status_comments c JOIN users u ON u.id = c.user_id
+      WHERE c.status_id = ? ORDER BY c.id ASC`, [statusId],
+  );
+  res.json({ comments });
+}));
+
+router.post('/statuses/:statusId/comments', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  const body = String(req.body?.text || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(statusId) || statusId < 1) return res.status(400).json({ message: 'Invalid status ID.' });
+  if (!body) return res.status(400).json({ message: 'Write a comment first.' });
+  const status = await db.getOne('SELECT id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
+  if (!status) return notFound(res, 'This status is no longer available.');
+  const inserted = await db.insert('INSERT INTO status_comments (status_id, user_id, body) VALUES (?, ?, ?)', [statusId, req.user.id, body]);
+  const comment = await db.getOne(
+    `SELECT c.id, c.body, c.created_at, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture
+       FROM status_comments c JOIN users u ON u.id = c.user_id WHERE c.id = ?`, [inserted.id],
+  );
+  res.status(201).json({ comment });
+}));
+
+router.get('/statuses/:statusId/viewers', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  const status = await db.getOne('SELECT id, user_id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
+  if (!status) return notFound(res, 'This status is no longer available.');
+  if (Number(status.user_id) !== Number(req.user.id)) return res.status(403).json({ message: 'Only the status owner can view the viewer list.' });
+  const viewers = await db.query(
+    `SELECT u.id, u.fullname, u.username, u.avatar_url, u.picture, sv.viewed_at
+       FROM status_views sv JOIN users u ON u.id = sv.viewer_id
+      WHERE sv.status_id = ? ORDER BY sv.viewed_at DESC`, [statusId],
+  );
+  res.json({ viewers });
+}));
+
+router.get('/statuses/:statusId/likes', asyncRoute(async (req, res) => {
+  const statusId = Number(req.params.statusId);
+  const status = await db.getOne('SELECT id, user_id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
+  if (!status) return notFound(res, 'This status is no longer available.');
+  if (Number(status.user_id) !== Number(req.user.id)) return res.status(403).json({ message: 'Only the status owner can view the like list.' });
+  const likes = await db.query(
+    `SELECT u.id, u.fullname, u.username, u.avatar_url, u.picture, sl.created_at
+       FROM status_likes sl JOIN users u ON u.id = sl.user_id
+      WHERE sl.status_id = ? ORDER BY sl.created_at DESC`, [statusId],
+  );
+  res.json({ likes });
 }));
 
 router.delete('/statuses/:statusId', asyncRoute(async (req, res) => {
