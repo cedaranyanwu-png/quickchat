@@ -106,6 +106,20 @@ async function cashBalance(userId) {
   return Number(wallet?.balance_kobo || 0);
 }
 
+
+async function recordRewardCommission(sourceType, sourceReference, grossPoints, commissionPoints, recipientPoints) {
+  try {
+    await db.insert(
+      'INSERT INTO reward_platform_commissions (source_type, source_reference, gross_points, commission_points, recipient_points) VALUES (?, ?, ?, ?, ?)',
+      [sourceType, String(sourceReference).slice(0, 160), grossPoints, commissionPoints, recipientPoints],
+    );
+    return true;
+  } catch (error) {
+    if (uniqueError(error)) return false;
+    throw error;
+  }
+}
+
 async function awardReferral(referrerId, referredUserId) {
   if (!referrerId || !referredUserId || Number(referrerId) === Number(referredUserId)) return false;
   const referral = await db.getOne('SELECT id FROM users WHERE id = ?', [referrerId]);
@@ -184,7 +198,7 @@ async function initializeRewardTables() {
       kind VARCHAR(40) NOT NULL, reference VARCHAR(160) NOT NULL UNIQUE,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
-    `CREATE TABLE IF NOT EXISTS user_referrals (
+    `CREATE TABLE IF NOT EXISTS reward_platform_commissions (\n      id ${idColumn}, source_type VARCHAR(40) NOT NULL, source_reference VARCHAR(160) NOT NULL UNIQUE,\n      gross_points INTEGER NOT NULL, commission_points INTEGER NOT NULL, recipient_points INTEGER NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP\n    )`,\n    `CREATE TABLE IF NOT EXISTS user_referrals (
       id ${idColumn}, referrer_id INTEGER NOT NULL, referred_user_id INTEGER NOT NULL UNIQUE,
       reward_points INTEGER NOT NULL DEFAULT 10, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -205,5 +219,5 @@ module.exports = {
   POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS, DEFAULT_VERIFICATION_REWARD_POINTS,
   PLATFORM_COMMISSION_PERCENT, awardReferral, awardVerification, cashBalance,
   convertRewardPoints, creditCash, creditRewardPoints, ensureRewardWallet,
-  rewardBalance,
+  rewardBalance, recordRewardCommission,
 };
