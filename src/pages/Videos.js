@@ -253,6 +253,17 @@ export default function Videos({ openVideo }) {
           <span className="videos-reel-views"><i className="fa-solid fa-eye" /> {video.views} views</span>
         </div>
         <div className="videos-reel-actions">
+          <button type="button" aria-label={soundEnabled ? 'Mute video' : 'Enable video sound'} title={soundEnabled ? 'Mute video' : 'Enable sound'} onClick={(event) => {
+            event.stopPropagation();
+            const player = event.currentTarget.closest('.videos-reel')?.querySelector('video');
+            if (!player) return;
+            const nextEnabled = !soundEnabled;
+            setSoundEnabled(nextEnabled);
+            player.muted = !nextEnabled;
+            if (nextEnabled && player.paused) player.play().then(() => setAutoplayBlockedId(null)).catch(() => setAutoplayBlockedId(String(video.id)));
+          }}>
+            <i className={soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark'} /><span>{soundEnabled ? 'Sound on' : 'Sound off'}</span>
+          </button>
           {!video.isFeedFallback && <>
             <button type="button" aria-label={video.liked ? 'Unlike video' : 'Like video'} onClick={(event) => { event.stopPropagation(); toggleLike(video.id); }}>
               <i className={`fa-heart ${video.liked ? 'fa-solid text-red-400' : 'fa-regular'}`} /><span>{video.likes || 0}</span>
