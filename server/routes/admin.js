@@ -560,7 +560,7 @@ router.post('/reports', asyncRoute(async (req, res) => {
   const entityId = String(req.body?.entityId || '').trim().slice(0, 100);
   const category = String(req.body?.category || '').trim().slice(0, 60);
   const description = String(req.body?.description || '').trim().slice(0, 3000);
-  if (!['user', 'post', 'comment', 'community', 'message'].includes(entityType) || !entityId || !category) {
+  if (!['user', 'post', 'comment', 'community', 'message', 'bug', 'issue'].includes(entityType) || !entityId || !category) {
     return res.status(400).json({ message: 'Choose a valid item to report and a report category.' });
   }
   const recentDateExpression = db.type === 'sqlite' ? 'datetime(created_at) >= datetime(?)' : 'created_at >= ?';

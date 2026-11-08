@@ -50,6 +50,7 @@ import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
 import NetworkStatus from './components/NetworkStatus';
+import ReportIssue from './components/ReportIssue';
 
 const SettingsHub = ({ onLogout }) => <>
   <div className="mx-auto max-w-3xl px-4 pt-3">
@@ -194,6 +195,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         {showRightSidebar && <div className="hidden h-screen flex-shrink-0 lg:block"><RightSidebar /></div>}
         <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden"><BottomNav /></div>
         {!isVideosPage && !isMessagesPage && <div className="fixed bottom-20 right-4 z-40 lg:hidden"><FAB onOpenPost={openPostModal} /></div>}
+        <ReportIssue />
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
         {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
