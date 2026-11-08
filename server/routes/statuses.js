@@ -125,7 +125,8 @@ router.post('/statuses/:statusId/likes', asyncRoute(async (req, res) => {
   if (!Number.isSafeInteger(statusId) || statusId < 1) return res.status(400).json({ message: 'Invalid status ID.' });
   const status = await db.getOne('SELECT id, user_id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
   if (!status) return notFound(res, 'This status is no longer available.');
-  await db.insert('INSERT INTO status_likes (status_id, user_id) VALUES (?, ?) ON CONFLICT (status_id, user_id) DO NOTHING', [statusId, req.user.id]);
+  const existing = await db.getOne('SELECT status_id FROM status_likes WHERE status_id = ? AND user_id = ?', [statusId, req.user.id]);
+  if (!existing) await db.insert('INSERT INTO status_likes (status_id, user_id) VALUES (?, ?)', [statusId, req.user.id]);
   const row = await db.getOne('SELECT COUNT(*) AS likes FROM status_likes WHERE status_id = ?', [statusId]);
   res.json({ liked: true, likes: Number(row?.likes || 0) });
 }));
@@ -202,6 +203,8 @@ router.delete('/statuses/:statusId', asyncRoute(async (req, res) => {
   );
   if (!status) return notFound(res, 'Status not found.');
   await db.delete('DELETE FROM status_views WHERE status_id = ?', [statusId]);
+  await db.delete('DELETE FROM status_likes WHERE status_id = ?', [statusId]);
+  await db.delete('DELETE FROM status_comments WHERE status_id = ?', [statusId]);
   await db.delete('DELETE FROM statuses WHERE id = ? AND user_id = ?', [statusId, req.user.id]);
   res.json({ deleted: true });
 }));
