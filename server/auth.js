@@ -142,7 +142,7 @@ router.post('/register', async (req, res) => {
     await createWelcomeNotification(user.id);
     await recordRegistration(req, user.id);
     const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
-    const referrerMatch = referralCode.match(/^QC(\\d{1,12})$/);
+    const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
     if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
     return sendSession(res, user, 201, 'Account created successfully');
   } catch (error) {
@@ -245,7 +245,7 @@ router.post('/google', async (req, res) => {
       await createWelcomeNotification(user.id);
       await recordRegistration(req, user.id);
       const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
-      const referrerMatch = referralCode.match(/^QC(\\d{1,12})$/);
+      const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
       if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
     }
     return sendSession(res, user, 200, 'Google login successful', { picture });
