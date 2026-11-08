@@ -50,12 +50,14 @@ function LiveHub() {
   const [withdrawAmount, setWithdrawAmount] = useState('100');
   const [rewardBusy, setRewardBusy] = useState('');
   const [referralLink, setReferralLink] = useState('');
+  const [withdrawals, setWithdrawals] = useState([]);
 
   const loadWallet = useCallback(async () => {
     try {
       const result = await apiRequest('/live/wallet');
       setWallet(result);
       setReferralLink(result.referralLink || '');
+      apiRequest('/rewards/withdrawals').then((data) => setWithdrawals(data.withdrawals || [])).catch(() => {});
     } catch (walletError) {
       setError(walletError.message);
     }
@@ -245,6 +247,7 @@ function LiveHub() {
           <button type="submit" disabled={Boolean(rewardBusy)} className="rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{rewardBusy === 'withdraw' ? 'Submitting…' : 'Request withdrawal'}</button>
         </form>
         <p className="mt-2 text-[10px] leading-4 text-slate-500">Withdrawals require a verified payout bank account and admin review. Minimum request: ₦100.</p>
+        {withdrawals.length > 0 && <div className="mt-2 space-y-1">{withdrawals.slice(0, 3).map((item) => <div key={item.id} className="flex items-center justify-between text-[10px] text-slate-500"><span>₦{Number(item.amount).toLocaleString('en-NG')} · {new Date(item.created_at).toLocaleDateString()}</span><span className="font-bold capitalize">{item.status}</span></div>)}</div>}
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2">
           <div className="min-w-0">
             <p className="text-[10px] font-bold text-blue-900">Invite friends · Earn 10 reward points each</p>
@@ -253,7 +256,8 @@ function LiveHub() {
           <button type="button" onClick={() => {
             const userId = JSON.parse(localStorage.getItem('user') || '{}').id || '';
             const link = referralLink || (window.location.origin + '/register?ref=QC' + userId);
-            navigator.clipboard?.writeText(link).then(() => setNotice('Referral link copied.')).catch(() => setError('Could not copy the referral link.'));
+            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(link).then(() => setNotice('Referral link copied.')).catch(() => setError('Could not copy the referral link.'));
+            else setError('Copy is not available in this browser.');
           }} className="shrink-0 rounded-lg bg-blue-700 px-3 py-2 text-[10px] font-bold text-white">Copy link</button>
         </div>
       </section>
