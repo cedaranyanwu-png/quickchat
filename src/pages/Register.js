@@ -229,7 +229,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                 onAuthenticated?.();
                 setStep('interests');
               } catch (err) {
-                setError(err.message);
+                setError(normalizeNetworkError(err));
               } finally {
                 setIsLoading(false);
               }
