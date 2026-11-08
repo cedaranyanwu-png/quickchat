@@ -6,6 +6,7 @@ import BackupRecoveryPanel from '../components/admin/BackupRecoveryPanel';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
+  { key: 'traffic', label: 'Traffic & bot security', icon: 'fa-chart-line', permission: 'analytics.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
   { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
   { key: 'moderation', label: 'Post moderation', icon: 'fa-shield-halved', permission: 'posts.view' },
@@ -51,6 +52,7 @@ export default function Admin() {
   const [section, setSection] = useState('overview');
   const [identity, setIdentity] = useState(null);
   const [overview, setOverview] = useState(null);
+  const [traffic, setTraffic] = useState(null);
   const [users, setUsers] = useState([]);
   const [userPagination, setUserPagination] = useState(null);
   const [search, setSearch] = useState('');
@@ -102,6 +104,9 @@ export default function Admin() {
       if (key === 'overview') {
         const data = await adminRequest('/admin/overview');
         setOverview(data);
+      } else if (key === 'traffic') {
+        const data = await adminRequest('/admin/traffic');
+        setTraffic(data);
       } else if (key === 'users') {
         const data = await adminRequest(`/admin/users?page=${page}&limit=25&search=${encodeURIComponent(query)}`);
         setUsers(data.users || []);
@@ -403,6 +408,33 @@ export default function Admin() {
             <button disabled={credentialBusy} className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-extrabold text-white hover:bg-blue-800 disabled:opacity-60">{credentialBusy ? 'Saving…' : 'Save administrator credentials'}</button>
           </form>
         </section>}
+        {section === 'traffic' && <section>
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div><h2 className="text-lg font-black text-slate-900">Traffic &amp; bot security</h2><p className="mt-1 text-sm text-slate-500">Registration traffic, landing-page activity and automated-request detections for the last 30 days.</p></div>
+            <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-[11px] font-bold text-blue-700">30-day window</span>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {[
+              ['registrations','New registrations','fa-user-plus','blue'],
+              ['uniqueRegistrationIps','Unique registration IPs','fa-location-dot','violet'],
+              ['botDetections','Bot detections','fa-robot','amber'],
+              ['blockedBotRequests','Blocked bot requests','fa-ban','rose'],
+            ].map(([key,label,icon,color]) => <div key={key} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{label}</span><span className={`grid h-10 w-10 place-items-center rounded-xl ${metricColors[color]}`}><i className={`fa-solid ${icon}`} /></span></div><div className="mt-4 text-3xl font-black text-slate-900">{Number(traffic?.[key] || 0).toLocaleString()}</div></div>)}
+          </div>
+          <div className="mt-6 grid gap-5 xl:grid-cols-2">
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">Landing pages</h3><p className="mt-1 text-xs text-slate-500">Login and registration page traffic.</p></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Page</th><th className="px-4 py-3">Views</th><th className="px-4 py-3">Unique IPs</th></tr></thead><tbody className="divide-y divide-slate-100">{(traffic?.landingViews || []).map((row) => <tr key={row.page}><td className="px-5 py-3 font-bold text-slate-800">{row.page}</td><td className="px-4 py-3">{Number(row.count).toLocaleString()}</td><td className="px-4 py-3">{Number(row.uniqueIps).toLocaleString()}</td></tr>)}</tbody></table></div>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">Top registration IPs</h3><p className="mt-1 text-xs text-slate-500">IPs associated with successful account creation.</p></div>
+              <div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">IP address</th><th className="px-4 py-3">Registrations</th><th className="px-4 py-3">Last registration</th></tr></thead><tbody className="divide-y divide-slate-100">{(traffic?.topRegistrationIps || []).map((row) => <tr key={row.ip}><td className="px-5 py-3 font-mono text-xs font-bold text-slate-800">{row.ip}</td><td className="px-4 py-3 font-bold">{Number(row.registrations).toLocaleString()}</td><td className="px-4 py-3 text-xs text-slate-500">{formatDate(row.lastRegistration)}</td></tr>)}</tbody></table></div>
+              {!traffic?.topRegistrationIps?.length && <p className="p-8 text-center text-sm text-slate-400">No registrations recorded in this period.</p>}
+            </div>
+          </div>
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-900"><strong>Bot protection:</strong> suspicious automation is flagged across API requests. High-confidence automation is blocked on login and registration, while normal authenticated app traffic is monitored without aggressive browser heuristics.</div>
+        </section>}
+
         {section === 'overview' && <section>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Platform at a glance</h2><p className="mt-1 text-sm text-slate-500">Live totals from the QuickChat database.</p></div><span className="text-xs font-semibold text-slate-400">Updated {new Date().toLocaleTimeString()}</span></div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">{metricCards.map(([key, label, icon, color]) => <div key={key} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_3px_18px_rgba(15,23,42,.035)]"><div className="flex items-center justify-between"><span className="text-xs font-bold text-slate-500">{label}</span><span className={`grid h-10 w-10 place-items-center rounded-xl ${metricColors[color] || "bg-slate-100 text-slate-600"}`}><i className={`fa-solid ${icon}`} /></span></div><div className="mt-4 text-3xl font-black tracking-tight text-slate-900">{Number(overview?.metrics?.[key] || 0).toLocaleString()}</div></div>)}</div>
