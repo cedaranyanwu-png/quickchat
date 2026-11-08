@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiRequest, resolveMediaUrl, uploadMedia } from '../api';
 import Avatar from './Avatar';
+import VerifiedBadge from './VerifiedBadge';
 
 const COLORS = ['#123b8a', '#174ea6', '#0f766e', '#7c3aed', '#be185d'];
 
