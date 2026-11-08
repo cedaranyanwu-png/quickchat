@@ -214,6 +214,10 @@ router.post('/statuses/:statusId/likes', asyncRoute(async (req, res) => {
   if (!Number.isSafeInteger(statusId) || statusId < 1) return res.status(400).json({ message: 'Invalid status ID.' });
   const status = await db.getOne('SELECT id FROM statuses WHERE id = ? AND expires_at > CURRENT_TIMESTAMP', [statusId]);
   if (!status) return notFound(res, 'This status is no longer available.');
+  if (Number(status.user_id) !== Number(req.user.id)) {
+    try { await db.insert('INSERT INTO status_views (status_id, viewer_id) VALUES (?, ?)', [statusId, req.user.id]); }
+    catch (error) { if (!uniqueConstraint(error)) throw error; }
+  }
   try { await db.insert('INSERT INTO status_likes (status_id, user_id) VALUES (?, ?)', [statusId, req.user.id]); }
   catch (error) { if (!uniqueConstraint(error)) throw error; }
   const likes = await db.getOne('SELECT COUNT(*) AS count FROM status_likes WHERE status_id = ?', [statusId]);
