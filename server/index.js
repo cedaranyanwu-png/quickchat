@@ -102,7 +102,7 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
     const result = paid ? 'success' : 'failed';
     // Points buyers return to the live hub, where the wallet balance is shown.
     res.redirect(pointsPurchase
-      ? `${publicAppUrl()}/live?points=${result}`
+      ? `${publicAppUrl()}/settings/wallet?points=${result}`
       : `${publicAppUrl()}/home?payment=${result}`);
   } catch (error) {
     next(error);
