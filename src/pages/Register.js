@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import { API_BASE_URL, apiRequest } from '../api';
+import { API_BASE_URL, apiRequest, normalizeNetworkError } from '../api';
 import { INTEREST_OPTIONS } from '../interest-options';
 
 const Register = ({ googleEnabled, onAuthenticated }) => {
@@ -38,7 +38,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       onAuthenticated?.();
       setStep('interests');
     } catch (err) {
-      setError(err.message);
+      setError(normalizeNetworkError(err));
     } finally {
       setIsLoading(false);
     }
