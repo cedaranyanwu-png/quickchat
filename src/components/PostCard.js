@@ -36,6 +36,10 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
   const [showMenu, setShowMenu] = useState(false);
   const [showBoostModal, setShowBoostModal] = useState(false);
   const [feedbackNotice, setFeedbackNotice] = useState('');
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportCategory, setReportCategory] = useState('other');
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
   const mediaTouchStartRef = useRef(null);
   const { confirmed: adultContentConfirmed } = useAdultContentConsent();
@@ -94,6 +98,33 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
         setTimeout(() => setFeedbackNotice(''), 3000);
       }
     } catch (_err) {}
+  };
+
+  const submitPostReport = async (event) => {
+    event.preventDefault();
+    const description = reportDescription.trim();
+    if (!description || reportBusy) return;
+    setReportBusy(true);
+    setError('');
+    try {
+      await apiRequest('/reports', {
+        method: 'POST',
+        body: {
+          entityType: 'post',
+          entityId: String(item.id),
+          category: reportCategory,
+          description: description + ' [Page: ' + window.location.pathname + ']',
+        },
+      });
+      setShowReportModal(false);
+      setReportDescription('');
+      setFeedbackNotice('Report submitted for moderator review.');
+      window.setTimeout(() => setFeedbackNotice(''), 3500);
+    } catch (requestError) {
+      setError(requestError.message || 'The report could not be submitted.');
+    } finally {
+      setReportBusy(false);
+    }
   };
 
   const toggleLike = async () => {
@@ -324,6 +355,10 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
                     <i className="fa-solid fa-ban text-slate-400" />
                     Hide this post
                   </button>
+                  <button onClick={() => { setShowMenu(false); setShowReportModal(true); }} className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-slate-700 hover:bg-slate-50">
+                    <i className="fa-solid fa-flag text-amber-600" />
+                    Report post / issue
+                  </button>
                   {isAuthor && (
                     <button onClick={() => { setShowMenu(false); setShowBoostModal(true); }} className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2 text-amber-700 font-bold hover:bg-amber-50">
                       <i className="fa-solid fa-rocket" />
@@ -477,6 +512,24 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
         {feedbackNotice && <p className="text-xs text-blue-700 font-semibold mt-2">{feedbackNotice}</p>}
         {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
       </div>
+
+      {showReportModal && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Report post">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div><p className="text-[10px] font-extrabold uppercase tracking-[.18em] text-blue-700">Post report</p><h2 className="mt-1 text-lg font-black text-slate-900">Report a problem</h2><p className="mt-1 text-xs leading-5 text-slate-500">Send this post or a technical issue to authorized QuickChat moderators.</p></div>
+              <button type="button" onClick={() => setShowReportModal(false)} className="grid h-9 w-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100" aria-label="Close report"><i className="fa-solid fa-xmark" /></button>
+            </div>
+            <form onSubmit={submitPostReport} className="mt-4 space-y-3">
+              <select value={reportCategory} onChange={(event) => setReportCategory(event.target.value)} className="w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-blue-500">
+                <option value="spam">Spam or misleading content</option><option value="harassment">Harassment or abuse</option><option value="copyright">Copyright / rights issue</option><option value="bug">Technical bug</option><option value="other">Other</option>
+              </select>
+              <textarea value={reportDescription} onChange={(event) => setReportDescription(event.target.value)} rows={5} maxLength={3000} required placeholder="Describe what is wrong…" className="w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:bg-white" />
+              <div className="flex justify-end gap-2"><button type="button" onClick={() => setShowReportModal(false)} className="rounded-full px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100">Cancel</button><button type="submit" disabled={reportBusy || !reportDescription.trim()} className="rounded-full bg-blue-700 px-5 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{reportBusy ? 'Sending…' : 'Submit report'}</button></div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <BoostModal
         isOpen={showBoostModal}
