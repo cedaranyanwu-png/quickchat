@@ -5,7 +5,7 @@ const { GIFTS, POINT_PACKS, giftFor, welcomePoints } = require('../gifts');
 const { creditPoints, currentBalance, ensureWallet, recentTransactions, spendPoints } = require('../wallet');
 const { createPointsCheckout, topUpAvailable, topUpMissingConfig } = require('../points-purchase');
 const { notifyUser } = require('../notify');
-const { rewardBalance, cashBalance, POINTS_PER_NAIRA } = require('../rewards');
+const { rewardBalance, cashBalance, POINTS_PER_NAIRA, PURCHASED_POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS } = require('../rewards');
 const { creditRewardPoints, recordRewardCommission, PLATFORM_COMMISSION_PERCENT } = require('../rewards');
 
 const router = express.Router();
@@ -253,6 +253,9 @@ router.get('/live/wallet', asyncRoute(async (req, res) => {
     rewardPoints: earnedRewardPoints,
     cashBalance: (withdrawableKobo / 100).toFixed(2),
     conversionRate: { points: POINTS_PER_NAIRA, naira: 1 },
+    referralCode: `QC${req.user.id}`,
+    referralLink: `${String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\\/$/, '')}/register?ref=QC${req.user.id}`,
+    referralRewardPoints: REFERRAL_REWARD_POINTS,
     currency: 'NGN',
     welcomePoints: welcomePoints(),
     gifts: GIFTS,
@@ -552,14 +555,15 @@ router.post('/live/sessions/:sessionId/gifts', asyncRoute(async (req, res) => {
     throw error;
   }
 
-  const commissionPoints = Math.floor(gift.points * PLATFORM_COMMISSION_PERCENT / 100);
-  const hostRewardPoints = gift.points - commissionPoints;
+  const grossRewardPoints = gift.points * PURCHASED_POINTS_PER_NAIRA;
+  const commissionPoints = Math.floor(grossRewardPoints * PLATFORM_COMMISSION_PERCENT / 100);
+  const hostRewardPoints = grossRewardPoints - commissionPoints;
   if (hostRewardPoints > 0) {
     await creditRewardPoints(session.host_id, hostRewardPoints, {
       kind: 'live_gift_earning', reference: `${reference}_reward`,
     }).catch((error) => console.warn('[Live] Could not credit the host reward wallet:', error.message));
   }
-  await recordRewardCommission('live_gift', `${reference}_commission`, gift.points, commissionPoints, hostRewardPoints);
+  await recordRewardCommission('live_gift', `${reference}_commission`, grossRewardPoints, commissionPoints, hostRewardPoints);
 
   const row = await db.getOne(
     `SELECT g.id, g.gift_key, g.points, g.created_at, g.sender_id,
@@ -586,7 +590,7 @@ router.post('/live/sessions/:sessionId/end', asyncRoute(async (req, res) => {
   }
   const ended = await endSession(session, 'host');
   const counts = await summaryCounts(sessionId);
-  const hostWallet = await ensureWallet(session.host_id);
+  const hostRewardBalance = await rewardBalance(session.host_id);
   const earned = await db.getOne(
     `SELECT COALESCE(SUM(points), 0) AS total FROM live_gifts WHERE session_id = ? AND recipient_id = ?`,
     [sessionId, session.host_id],
@@ -599,7 +603,7 @@ router.post('/live/sessions/:sessionId/end', asyncRoute(async (req, res) => {
       likes: counts.likes,
       comments: counts.comments,
       giftPoints: Number(earned?.total || 0),
-      walletBalance: Number(hostWallet.balance || 0),
+      rewardWalletBalance: hostRewardBalance,
     },
   });
 }));
