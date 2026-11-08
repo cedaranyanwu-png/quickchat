@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
+const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -32,6 +33,7 @@ const DEFAULT_ROLES = [
 ];
 
 async function initializeAdminTables() {
+  await initializePlatformSettings();
   if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
   const statements = [
     `CREATE TABLE IF NOT EXISTS admin_roles (
@@ -639,6 +641,66 @@ router.post('/admin/users/:id/deletion-request', requirePermission('users.delete
 }));
 
 
+
+router.get('/admin/moderation/posts', requirePermission('posts.view'), asyncRoute(async (req, res) => {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(50, Math.max(5, Number.parseInt(req.query.limit, 10) || 20));
+  const search = String(req.query.search || '').trim().slice(0, 100);
+  const offset = (page - 1) * limit;
+  const where = search ? "WHERE LOWER(COALESCE(p.body,'')) LIKE LOWER(?) OR LOWER(COALESCE(u.username,'')) LIKE LOWER(?)" : '';
+  const params = search ? [`%${search}%`, `%${search}%`] : [];
+  const total = await db.getCount(`SELECT COUNT(*) AS count FROM posts p JOIN users u ON u.id = p.author_id ${where}`, params);
+  const posts = await db.query(
+    `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.media, p.visibility, p.created_at,
+            u.username, u.fullname, u.avatar_url,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes,
+            (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS comments,
+            (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS reposts
+       FROM posts p JOIN users u ON u.id = p.author_id ${where}
+      ORDER BY p.created_at DESC, p.id DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset],
+  );
+  res.json({ posts, pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } });
+}));
+
+router.delete('/admin/moderation/posts/:id', requirePermission('posts.remove'), asyncRoute(async (req, res) => {
+  const postId = Number(req.params.id);
+  const reason = String(req.body?.reason || '').trim().slice(0, 2000);
+  if (!Number.isSafeInteger(postId) || postId < 1 || !reason) return res.status(400).json({ message: 'A valid post ID and moderation reason are required.' });
+  const post = await db.getOne('SELECT * FROM posts WHERE id = ?', [postId]);
+  if (!post) return res.status(404).json({ message: 'Post not found.' });
+  await db.delete('DELETE FROM posts WHERE id = ?', [postId]);
+  await db.insert('INSERT INTO moderation_actions (actor_id, target_user_id, entity_type, entity_id, action, reason) VALUES (?, ?, ?, ?, ?, ?)',
+    [req.user.id, post.author_id, 'post', String(postId), 'remove', reason]);
+  await audit(req, 'post.removed', 'post', postId, reason, { author_id: post.author_id, body: String(post.body || '').slice(0, 500) }, { removed: true });
+  res.json({ message: 'Post removed from QuickChat.' });
+}));
+
+router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  const keys = ['verification_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id'];
+  const values = await Promise.all(keys.map((key) => getSetting(key, null)));
+  const settings = Object.fromEntries(keys.map((key, index) => [key, values[index]]));
+  for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token']) {
+    if (settings[key]) settings[key] = '••••••••••••••••';
+  }
+  settings.verification_points = Number(settings.verification_points || 2000);
+  settings.google_drive_enabled = String(settings.google_drive_enabled || 'false').toLowerCase() === 'true';
+  res.json({ settings });
+}));
+
+router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const normal = ['verification_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id'];
+  const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token'];
+  for (const key of normal) {
+    if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
+  }
+  for (const key of secrets) {
+    const value = String(req.body?.[key] || '').trim();
+    if (value && !value.startsWith('••')) await setSetting(key, value, { secret: true, updatedBy: req.user.id });
+  }
+  await audit(req, 'platform.settings_updated', 'settings', null, 'Platform configuration updated', null, { keys: [...normal, ...secrets] });
+  res.json({ message: 'Platform configuration saved.' });
+}));
 router.put('/admin/roles/:id', requirePermission('roles.edit'), asyncRoute(async (req, res) => {
   const roleId = Number(req.params.id);
   const name = String(req.body?.name || '').trim().slice(0, 120);
