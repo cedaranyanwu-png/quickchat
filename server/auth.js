@@ -6,6 +6,7 @@ const db = require('./database');
 const { sendEmail } = require('./email');
 const { createToken } = require('./middleware/authenticate');
 const { recordRegistration } = require('./traffic-security');
+const { awardReferral } = require('./rewards');
 
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -140,6 +141,9 @@ router.post('/register', async (req, res) => {
     if (!user) throw new Error('The account was created but could not be loaded.');
     await createWelcomeNotification(user.id);
     await recordRegistration(req, user.id);
+    const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
+    const referrerMatch = referralCode.match(/^QC(\\d{1,12})$/);
+    if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
     return sendSession(res, user, 201, 'Account created successfully');
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -240,6 +244,9 @@ router.post('/google', async (req, res) => {
     if (createdAccount) {
       await createWelcomeNotification(user.id);
       await recordRegistration(req, user.id);
+      const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
+      const referrerMatch = referralCode.match(/^QC(\\d{1,12})$/);
+      if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
     }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
