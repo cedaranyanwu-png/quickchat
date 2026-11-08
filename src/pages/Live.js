@@ -231,7 +231,7 @@ function LiveHub() {
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">Creator & referral rewards</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">{Number(wallet?.rewardPoints || 0).toLocaleString()} <span className="text-xs font-bold text-slate-400">reward pts</span></p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{Number(wallet?.convertibleRewardPoints || 0).toLocaleString()} <span className="text-xs font-bold text-slate-400">eligible pts</span></p>
             <p className="text-[11px] text-slate-500">Only points earned when another user spends points on your monetized content can be converted. Verification bonuses are for spending, not cash withdrawal.</p>
           </div>
           <div className="text-right">
@@ -240,8 +240,8 @@ function LiveHub() {
           </div>
         </div>
         <form onSubmit={convertRewards} className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-          <input type="number" min="100" step="100" value={convertPoints} onChange={(event) => setConvertPoints(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800" aria-label="Reward points to convert" />
-          <button type="submit" disabled={Boolean(rewardBusy)} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{rewardBusy === 'convert' ? 'Converting…' : 'Convert to ₦'}</button>
+          <input type="number" min="100" max={Number(wallet?.convertibleRewardPoints || 0)} step="100" value={convertPoints} onChange={(event) => setConvertPoints(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800" aria-label="Reward points to convert" />
+          <button type="submit" disabled={Boolean(rewardBusy) || Number(wallet?.convertibleRewardPoints || 0) < 100} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{rewardBusy === 'convert' ? 'Converting…' : 'Convert to ₦'}</button>
         </form>
         <form onSubmit={requestWithdrawal} className="mt-2 grid grid-cols-[1fr_auto] gap-2">
           <input type="number" min="100" step="1" value={withdrawAmount} onChange={(event) => setWithdrawAmount(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800" aria-label="Withdrawal amount in naira" />
