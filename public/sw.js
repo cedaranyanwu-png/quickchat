@@ -2,8 +2,8 @@
  * Private API responses, uploads, and live communication are deliberately
  * excluded from caches. Only the app shell and static same-origin assets persist.
  */
-const SHELL_CACHE = 'quickchat-shell-v2';
-const STATIC_CACHE = 'quickchat-static-v2';
+const SHELL_CACHE = 'quickchat-shell-v3';
+const STATIC_CACHE = 'quickchat-static-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.json', '/offline.html',
   '/favicon/android-chrome-192x192.png', '/favicon/android-chrome-512x512.png'];
 
