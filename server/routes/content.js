@@ -499,16 +499,13 @@ router.post('/posts', asyncRoute(async (req, res) => {
     const communityFilter = communityId
       ? 'AND EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = ? AND cm.user_id = u.id)'
       : '';
-    const params = [req.user.id, postId, `shared a post about ${matchedInterests.join(', ')}`, req.user.id,
-      ...matchedInterests.map((interest) => `%"${interest}"%`)];
-    if (communityId) params.push(communityId);
-    params.push(1000);
+      [req.user.id, ...matchedInterests.map((interest) => `%"${interest}"%`),
     const recipients = await db.query(
       `SELECT u.id FROM users u
         WHERE u.id <> ? AND (${interestFilters}) ${communityFilter}
         ORDER BY u.id
         LIMIT ?`,
-      [req.user.id, ...matchedInterests.map((interest) => `%\"${interest}\"%`),
+      [req.user.id, ...matchedInterests.map((interest) => `%"${interest}"%`),
         ...(communityId ? [communityId] : []), 1000],
     );
     await notifyMany({
