@@ -4,6 +4,8 @@ const fsp = require('fs/promises');
 const path = require('path');
 const zlib = require('zlib');
 const { db } = require('./routes/utils');
+const { getSetting } = require('./platform-settings');
+const { OAuth2Client } = require('google-auth-library');
 
 const backupDirectory = path.resolve(__dirname, process.env.BACKUP_DIRECTORY || '../private-backups');
 const mediaDirectory = path.join(__dirname, 'uploads');
@@ -199,4 +201,121 @@ function getBackupPath(filename) {
   return path.join(backupDirectory, filename);
 }
 
-module.exports = { createBackup, listBackups, getBackupPath, cleanupExpiredBackups, backupDirectory, isRunning: () => running };
+
+function parseZip(buffer) {
+  const entries = new Map(); let offset = 0;
+  while (offset + 30 <= buffer.length) {
+    const signature = buffer.readUInt32LE(offset);
+    if (signature === 0x04034b50) {
+      const flags = buffer.readUInt16LE(offset + 6), method = buffer.readUInt16LE(offset + 8);
+      const compressedSize = buffer.readUInt32LE(offset + 18), nameLength = buffer.readUInt16LE(offset + 26), extraLength = buffer.readUInt16LE(offset + 28);
+      if (flags & 0x08) throw new Error('Unsupported ZIP data descriptor.');
+      const name = buffer.subarray(offset + 30, offset + 30 + nameLength).toString('utf8');
+      const dataStart = offset + 30 + nameLength + extraLength;
+      const compressed = buffer.subarray(dataStart, dataStart + compressedSize);
+      const data = method === 0 ? compressed : method === 8 ? zlib.inflateRawSync(compressed) : null;
+      if (!data) throw new Error(`Unsupported ZIP compression method for ${name}.`);
+      entries.set(name, data); offset = dataStart + compressedSize; continue;
+    }
+    if (signature === 0x02014b50 || signature === 0x06054b50) break;
+    offset += 1;
+  }
+  return entries;
+}
+
+async function restoreBackup(archivePath, { reason = 'Administrator restore', restoredBy = null } = {}) {
+  if (running) { const error = new Error('A backup operation is already running.'); error.status = 409; throw error; }
+  running = true;
+  try {
+    const archive = await fsp.readFile(archivePath);
+    const checksum = crypto.createHash('sha256').update(archive).digest('hex');
+    const entries = parseZip(archive);
+    const manifest = JSON.parse(String(entries.get('manifest.json') || '{}'));
+    if (manifest.format !== 'quickchat-admin-backup' || !Array.isArray(manifest.tables)) throw new Error('Invalid QuickChat backup archive.');
+    const tableNames = manifest.tables.map((t) => t.name).filter((name) => /^[a-zA-Z0-9_]+$/.test(name));
+    const existing = new Set((await tableDefinitions()).map((t) => t.name));
+    const restoreTables = tableNames.filter((name) => existing.has(name));
+    const skippedTables = tableNames.filter((name) => !existing.has(name));
+    if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = OFF');
+    if (db.type === 'mysql') await db.query('SET FOREIGN_KEY_CHECKS = 0');
+    if (db.type === 'postgres') await db.query('SET session_replication_role = replica');
+    try {
+      for (const tableName of restoreTables.slice().reverse()) await db.query('DELETE FROM ' + quoteIdentifier(tableName));
+      let restoredRows = 0;
+      for (const tableName of restoreTables) {
+        const raw = entries.get(`database/tables/${tableName}.json`); if (!raw) continue;
+        const rows = JSON.parse(raw.toString('utf8')); if (!Array.isArray(rows)) continue;
+        const columns = new Set((await columnsFor({ name: tableName })).map((c) => String(c.name).toLowerCase()));
+        for (const row of rows) {
+          const keys = Object.keys(row).filter((key) => columns.has(String(key).toLowerCase())); if (!keys.length) continue;
+          await db.query(`INSERT INTO ${quoteIdentifier(tableName)} (${keys.map(quoteIdentifier).join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`, keys.map((key) => row[key]));
+          restoredRows += 1;
+        }
+      }
+      await restoreMedia(entries);
+      return { checksum, restoredRows, restoredTables: restoreTables.length, skippedTables, mediaFiles: manifest.mediaFiles || 0, reason, restoredBy };
+    } finally {
+      if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
+      if (db.type === 'mysql') await db.query('SET FOREIGN_KEY_CHECKS = 1');
+      if (db.type === 'postgres') await db.query('SET session_replication_role = DEFAULT');
+    }
+  } finally { running = false; }
+}
+
+async function restoreMedia(entries) {
+  await fsp.mkdir(mediaDirectory, { recursive: true });
+  for (const [name, data] of entries) {
+    const base = path.basename(name);
+    if (name.startsWith('media/') && /^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(base)) await fsp.writeFile(path.join(mediaDirectory, base), data, { flag: 'w', mode: 0o600 });
+  }
+}
+
+async function googleDriveConfig() {
+  return {
+    clientId: await getSetting('google_drive_client_id', ''),
+    clientSecret: await getSetting('google_drive_client_secret', ''),
+    refreshToken: await getSetting('google_drive_refresh_token', ''),
+    folderId: await getSetting('google_drive_folder_id', ''),
+    enabled: String(await getSetting('google_drive_enabled', 'false')).toLowerCase() === 'true',
+  };
+}
+
+async function googleDriveAccessToken(config) {
+  if (!config.clientId || !config.clientSecret || !config.refreshToken) throw new Error('Google Drive OAuth credentials are not configured.');
+  const client = new OAuth2Client(config.clientId, config.clientSecret);
+  client.setCredentials({ refresh_token: config.refreshToken });
+  const token = await client.getAccessToken(); if (!token?.token) throw new Error('Google Drive OAuth token could not be refreshed.');
+  return token.token;
+}
+
+async function uploadToGoogleDrive(backupPath, filename) {
+  const config = await googleDriveConfig(); if (!config.enabled) return null;
+  const token = await googleDriveAccessToken(config), data = await fsp.readFile(backupPath);
+  const metadata = { name: filename, mimeType: 'application/zip', ...(config.folderId ? { parents: [config.folderId] } : {}) };
+  const boundary = `quickchat_${crypto.randomBytes(12).toString('hex')}`;
+  const head = Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/zip\r\n\r\n`);
+  const body = Buffer.concat([head, data, Buffer.from(`\r\n--${boundary}--`)]); 
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': String(body.length) }, body });
+  const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || `Google Drive upload failed with HTTP ${response.status}.`);
+  return payload;
+}
+
+async function listGoogleDriveBackups() {
+  const config = await googleDriveConfig(); if (!config.enabled) return [];
+  const token = await googleDriveAccessToken(config), folder = config.folderId.replace(/'/g, "\\'");
+  const q = `name contains '.zip' and trashed = false${config.folderId ? ` and '${folder}' in parents` : ''}`;
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,size,createdTime,webViewLink)&orderBy=createdTime desc&pageSize=100`, { headers: { Authorization: `Bearer ${token}` } });
+  const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || `Google Drive listing failed with HTTP ${response.status}.`);
+  return payload.files || [];
+}
+
+async function downloadFromGoogleDrive(fileId) {
+  const config = await googleDriveConfig(); if (!config.enabled) throw new Error('Google Drive backup storage is disabled.');
+  const token = await googleDriveAccessToken(config);
+  const response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) { const payload = await response.json().catch(() => ({})); throw new Error(payload?.error?.message || `Google Drive download failed with HTTP ${response.status}.`); }
+  return Buffer.from(await response.arrayBuffer());
+}
+
+module.exports = { createBackup, listBackups, getBackupPath, cleanupExpiredBackups, backupDirectory, isRunning: () => running, restoreBackup, uploadToGoogleDrive, listGoogleDriveBackups, downloadFromGoogleDrive };
+
