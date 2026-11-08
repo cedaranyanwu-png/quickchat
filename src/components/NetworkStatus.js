@@ -11,6 +11,21 @@ export default function NetworkStatus() {
       setShowRestored(false);
       setOnline(false);
     };
+    const handleNetworkError = () => {
+      window.clearTimeout(restoredTimer);
+      setShowRestored(false);
+      setOnline(false);
+    };
+    const handleNetworkRestored = () => {
+      setOnline((wasOnline) => {
+        if (!wasOnline) {
+          setShowRestored(true);
+          window.clearTimeout(restoredTimer);
+          restoredTimer = window.setTimeout(() => setShowRestored(false), 2800);
+        }
+        return true;
+      });
+    };
     const handleOnline = () => {
       setOnline(true);
       setShowRestored(true);
@@ -19,10 +34,14 @@ export default function NetworkStatus() {
     };
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
+    window.addEventListener('quickchat:network-error', handleNetworkError);
+    window.addEventListener('quickchat:network-restored', handleNetworkRestored);
     return () => {
       window.clearTimeout(restoredTimer);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
+      window.removeEventListener('quickchat:network-error', handleNetworkError);
+      window.removeEventListener('quickchat:network-restored', handleNetworkRestored);
     };
   }, []);
 
