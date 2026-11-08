@@ -657,6 +657,7 @@ export default function Messages() {
                       {message.text && <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>}
                       <div className="mt-1 flex items-center justify-end gap-2">
                         <small className="opacity-70">{message.time}</small>
+                        {isMine && <span className="inline-flex items-center" title={message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'} aria-label={message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}><i className={`fa-solid ${message.readAt ? 'fa-check-double text-sky-200' : message.deliveredAt ? 'fa-check-double opacity-70' : 'fa-check opacity-70'} text-[10px]`} /></span>}
                         <button
                           type="button"
                           onClick={() => setReplyMenuId((current) => current === message.id ? null : message.id)}
