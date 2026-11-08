@@ -50,6 +50,7 @@ export async function apiRequest(path, options = {}) {
     });
   } catch (networkError) {
     if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-error'));
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
     }
@@ -86,6 +87,7 @@ export async function adminRequest(path, options = {}) {
     });
   } catch (networkError) {
     if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-error'));
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
     }
