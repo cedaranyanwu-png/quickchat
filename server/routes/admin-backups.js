@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
+const os = require('os');
 const { asyncRoute } = require('./utils');
 const { requirePermission, audit } = require('./admin');
 const engine = require('../backup-engine');
@@ -19,12 +20,14 @@ router.post('/admin/backups', requirePermission('backups.create'), asyncRoute(as
   await audit(req, 'backup.created', 'backup', result.id, 'Administrator created a full platform backup', null, {
     sizeBytes: result.sizeBytes, checksum: result.checksum, tableCount: result.tableCount, totalRows: result.totalRows, mediaFiles: result.mediaFiles,
   });
+  let drive = null;
+  try { drive = await engine.uploadToGoogleDrive(result.path, result.filename); } catch (error) { console.error('[Backup] Google Drive upload failed:', error.message); }
   res.status(201).json({
     message: 'Backup created and checksum verified.',
     backup: {
       id: result.id, filename: result.filename, sizeBytes: result.sizeBytes,
       checksum: result.checksum, totalRows: result.totalRows, tableCount: result.tableCount,
-      mediaFiles: result.mediaFiles, mediaBytes: result.mediaBytes, createdAt: result.createdAt,
+      mediaFiles: result.mediaFiles, mediaBytes: result.mediaBytes, createdAt: result.createdAt, googleDrive: drive,
     },
   });
 }));
@@ -39,6 +42,38 @@ router.get('/admin/backups/:filename/download', requirePermission('backups.downl
   res.setHeader('Content-Length', stat.size);
   res.setHeader('Content-Disposition', 'attachment; filename="' + path.basename(fullPath) + '"');
   fs.createReadStream(fullPath).pipe(res);
+}));
+
+
+router.get('/admin/backups/google-drive', requirePermission('backups.view'), asyncRoute(async (_req, res) => {
+  const files = await engine.listGoogleDriveBackups();
+  res.json({ files });
+}));
+
+router.post('/admin/backups/:filename/restore', requirePermission('backups.create'), asyncRoute(async (req, res) => {
+  const filename = String(req.params.filename || '');
+  const fullPath = engine.getBackupPath(filename);
+  if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
+  const stat = await fsp.stat(fullPath).catch(() => null);
+  if (!stat?.isFile()) return res.status(404).json({ message: 'Backup not found.' });
+  if (!req.body?.confirm) return res.status(400).json({ message: 'Restore confirmation is required.' });
+  const result = await engine.restoreBackup(fullPath, { restoredBy: req.user.id, reason: String(req.body?.reason || 'Administrator restore').slice(0, 300) });
+  await audit(req, 'backup.restored', 'backup', filename, result.reason, null, { checksum: result.checksum, restoredRows: result.restoredRows, restoredTables: result.restoredTables });
+  res.json({ message: 'Backup restored successfully.', result });
+}));
+
+router.post('/admin/backups/google-drive/:fileId/restore', requirePermission('backups.create'), asyncRoute(async (req, res) => {
+  if (!req.body?.confirm) return res.status(400).json({ message: 'Restore confirmation is required.' });
+  const data = await engine.downloadFromGoogleDrive(String(req.params.fileId || ''));
+  const tempPath = path.join(os.tmpdir(), `quickchat-drive-restore-${Date.now()}-${Math.random().toString(16).slice(2)}.zip`);
+  await fsp.writeFile(tempPath, data, { mode: 0o600 });
+  try {
+    const result = await engine.restoreBackup(tempPath, { restoredBy: req.user.id, reason: String(req.body?.reason || 'Google Drive administrator restore').slice(0, 300) });
+    await audit(req, 'backup.google_drive_restored', 'backup', req.params.fileId, result.reason, null, { checksum: result.checksum, restoredRows: result.restoredRows, restoredTables: result.restoredTables });
+    res.json({ message: 'Google Drive backup restored successfully.', result });
+  } finally {
+    await fsp.unlink(tempPath).catch(() => {});
+  }
 }));
 
 router.delete('/admin/backups/:filename', requirePermission('backups.delete'), asyncRoute(async (req, res) => {
