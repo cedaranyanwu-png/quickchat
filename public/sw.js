@@ -85,9 +85,12 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/static/') || url.pathname.startsWith('/favicon/') ||
       url.pathname === '/manifest.json' || url.pathname === '/logo192.png' ||
       url.pathname === '/logo512.png') {
-    event.respondWith(cacheStaticAsset(request).catch(async () => (
-      await caches.match(request) || new Response('', { status: 504 })
-    )));
+    event.respondWith(
+      cacheStaticAsset(request).catch(async () => {
+        const cached = await caches.match(request);
+        return cached || new Response('', { status: 504 });
+      })
+    );
   }
 });
 
