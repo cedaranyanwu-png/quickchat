@@ -5,6 +5,7 @@ const { GIFTS, POINT_PACKS, giftFor, welcomePoints } = require('../gifts');
 const { creditPoints, currentBalance, ensureWallet, recentTransactions, spendPoints } = require('../wallet');
 const { createPointsCheckout, topUpAvailable, topUpMissingConfig } = require('../points-purchase');
 const { notifyUser } = require('../notify');
+const { creditRewardPoints, recordRewardCommission, PLATFORM_COMMISSION_PERCENT } = require('../rewards');
 
 const router = express.Router();
 
@@ -544,11 +545,14 @@ router.post('/live/sessions/:sessionId/gifts', asyncRoute(async (req, res) => {
     throw error;
   }
 
-  await creditPoints(session.host_id, gift.points, {
-    kind: 'gift_received',
-    reference: `${reference}_in`,
-    sessionId,
-  }).catch((error) => console.warn('[Live] Could not credit the host wallet:', error.message));
+  const commissionPoints = Math.floor(gift.points * PLATFORM_COMMISSION_PERCENT / 100);
+  const hostRewardPoints = gift.points - commissionPoints;
+  if (hostRewardPoints > 0) {
+    await creditRewardPoints(session.host_id, hostRewardPoints, {
+      kind: 'live_gift_earning', reference: `${reference}_reward`,
+    }).catch((error) => console.warn('[Live] Could not credit the host reward wallet:', error.message));
+  }
+  await recordRewardCommission('live_gift', `${reference}_commission`, gift.points, commissionPoints, hostRewardPoints);
 
   const row = await db.getOne(
     `SELECT g.id, g.gift_key, g.points, g.created_at, g.sender_id,
