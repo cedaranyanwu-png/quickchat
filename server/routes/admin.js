@@ -20,7 +20,7 @@ const PERMISSIONS = [
   'reports.view', 'reports.assign', 'reports.resolve', 'badges.assign', 'badges.revoke',
   'roles.view', 'roles.create', 'roles.edit', 'roles.delete', 'permissions.assign',
   'audit_logs.view', 'rss.manage', 'ads.manage', 'analytics.view', 'settings.manage',
-  'verification.review', 'moderation.manage', 'admins.manage',
+  'verification.review', 'moderation.manage', 'admins.manage', 'rewards.manage',
   'backups.view', 'backups.create', 'backups.download', 'backups.delete', 'notifications.send',
 ];
 
@@ -453,6 +453,7 @@ router.post('/admin/users/:id/verify', requirePermission('users.verify'), asyncR
   if (!target) return res.status(404).json({ message: 'User not found.' });
   if (Number(target.verified)) return res.status(409).json({ message: 'This account is already verified.' });
   await db.update("UPDATE users SET verified = 1, verified_at = CURRENT_TIMESTAMP, verification_method = 'admin_review' WHERE id = ?", [userId]);
+  await require('../rewards').awardVerification(userId, 'admin_review');
   const badge = await db.getOne("SELECT id FROM verification_badges WHERE badge_key = 'verified_individual' AND is_active = 1");
   if (badge) {
     const existing = await db.getOne('SELECT id FROM user_badges WHERE user_id = ? AND badge_id = ? AND revoked_at IS NULL', [userId, badge.id]);
