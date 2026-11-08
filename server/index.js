@@ -10,6 +10,8 @@ const authRoutes = require('./auth');
 const { authenticate } = require('./middleware/authenticate');
 const adminAuth = require('./admin-auth');
 const { initializePageTables } = require('./schema');
+const rewardService = require('./rewards');
+const rewardRoutes = require('./routes/rewards');
 const { initializeSecurityTables, botDetector, trafficRouter } = require('./traffic-security');
 const contentRoutes = require('./routes/content');
 const statusRoutes = require('./routes/statuses');
@@ -247,6 +249,7 @@ app.use('/api', recommendationRoutes);
 app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
 app.use('/api', adminBackupRoutes);
+app.use('/api', rewardRoutes);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -313,6 +316,7 @@ async function initializeDB() {
   await migrateLegacyUsers();
   await ensureUniqueIndexes();
   await initializePageTables();
+  await rewardService.initializeRewardTables();
   await initializeSecurityTables();
   await adminRoutes.initializeAdminTables();
   await adminAuth.initializeAdminAuth();
