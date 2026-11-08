@@ -499,7 +499,6 @@ router.post('/posts', asyncRoute(async (req, res) => {
     const communityFilter = communityId
       ? 'AND EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = ? AND cm.user_id = u.id)'
       : '';
-      [req.user.id, ...matchedInterests.map((interest) => `%"${interest}"%`),
     const recipients = await db.query(
       `SELECT u.id FROM users u
         WHERE u.id <> ? AND (${interestFilters}) ${communityFilter}
