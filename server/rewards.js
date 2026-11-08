@@ -142,14 +142,28 @@ async function awardReferral(referrerId, referredUserId) {
 }
 
 async function awardVerification(userId, method) {
-  // Verification bonuses are spendable platform points, not creator earnings.
-  // A unique transaction reference makes this safe for both new and existing verified users.
-  const { creditPoints } = require('./wallet');
-  const result = await creditPoints(userId, DEFAULT_VERIFICATION_REWARD_POINTS, {
-    kind: 'verification_bonus',
-    reference: `verification_bonus_${userId}`,
-  });
-  return { ...result, points: result.ok ? DEFAULT_VERIFICATION_REWARD_POINTS : 0, method };
+  // Insert the unique ledger row before crediting the spendable wallet. This avoids
+  // duplicate startup backfills increasing a balance more than once.
+  const { ensureWallet, currentBalance } = require('./wallet');
+  await ensureWallet(userId);
+  try {
+    await db.insert(
+      'INSERT INTO point_transactions (user_id, amount, kind, reference) VALUES (?, ?, ?, ?)',
+      [userId, DEFAULT_VERIFICATION_REWARD_POINTS, 'verification_bonus', `verification_bonus_${userId}`],
+    );
+  } catch (error) {
+    if (uniqueError(error)) return { ok: false, reason: 'duplicate', points: 0, method };
+    throw error;
+  }
+  const updated = await db.update(
+    'UPDATE point_wallets SET balance = balance + ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?',
+    [DEFAULT_VERIFICATION_REWARD_POINTS, userId],
+  );
+  if (!updated) {
+    await db.delete('DELETE FROM point_transactions WHERE reference = ?', [`verification_bonus_${userId}`]);
+    return { ok: false, reason: 'missing-wallet', points: 0, method };
+  }
+  return { ok: true, balance: await currentBalance(userId), points: DEFAULT_VERIFICATION_REWARD_POINTS, method };
 }
 
 async function convertibleRewardBalance(userId) {
