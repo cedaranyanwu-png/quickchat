@@ -5,9 +5,11 @@ const {
 const { normalizeSelectedInterests } = require('../algorithm');
 const { notifyUser } = require('../notify');
 const { creditPoints, currentBalance, spendPoints } = require('../wallet');
+const { getSetting } = require('../platform-settings');
 
 // One-time price of the verified badge, paid from the user's points wallet.
-const VERIFICATION_POINTS = 5000;
+const DEFAULT_VERIFICATION_POINTS = 2000;
+async function verificationPoints() { return Math.max(1, Number.parseInt(await getSetting('verification_points', DEFAULT_VERIFICATION_POINTS), 10) || DEFAULT_VERIFICATION_POINTS); }
 
 const router = express.Router();
 
@@ -113,8 +115,8 @@ router.get('/verification/status', asyncRoute(async (req, res) => {
     verified: Boolean(Number(row.verified || 0)),
     verifiedAt: row.verified_at || null,
     verificationMethod: row.verification_method || null,
-    planPrice: String(VERIFICATION_POINTS),
-    planPoints: VERIFICATION_POINTS,
+    planPrice: String(await verificationPoints()),
+    planPoints: await verificationPoints(),
     currency: 'NGN',
     pointsBalance: await currentBalance(req.user.id),
   });
@@ -136,9 +138,9 @@ router.post('/verification/upgrade', asyncRoute(async (req, res) => {
   });
   if (!spent.ok) {
     return res.status(402).json({
-      message: `Verification costs ${VERIFICATION_POINTS.toLocaleString()} points. Your wallet has ${Number(spent.balance || 0).toLocaleString()} — top up your wallet to continue.`,
+      message: `Verification costs ${requiredPoints.toLocaleString()} points. Your wallet has ${Number(spent.balance || 0).toLocaleString()} — top up your wallet to continue.`,
       balance: spent.balance || 0,
-      required: VERIFICATION_POINTS,
+      required: requiredPoints,
     });
   }
 
@@ -151,7 +153,7 @@ router.post('/verification/upgrade', asyncRoute(async (req, res) => {
   );
   if (!changed) {
     // Someone else verified the account mid-flight: refund this purchase.
-    await creditPoints(req.user.id, VERIFICATION_POINTS, {
+    await creditPoints(req.user.id, requiredPoints, {
       kind: 'verification_refund',
       reference: `${reference}_refund`,
     }).catch(() => {});
