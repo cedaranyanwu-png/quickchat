@@ -184,6 +184,8 @@ router.get('/messages/unread-count', asyncRoute(async (req, res) => {
 }));
 
 router.get('/messages/conversations', asyncRoute(async (req, res) => {
+  // A message is delivered once the recipient's active QuickChat client syncs it.
+  await db.update('UPDATE messages SET delivered_at = CURRENT_TIMESTAMP WHERE sender_id <> ? AND delivered_at IS NULL AND conversation_id IN (SELECT conversation_id FROM conversation_members WHERE user_id = ?)', [req.user.id, req.user.id]);
   const conversations = await db.query(
     `SELECT c.id, u.id AS user_id, u.fullname, u.username, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             u.automation_status, u.typing_until, u.typing_conversation_id,
@@ -256,7 +258,7 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
 
   const messages = await db.query(
     `SELECT m.id, m.conversation_id, m.sender_id, m.text, m.is_read, m.created_at,
-            m.reply_to_message_id, m.media_type, m.media_url,
+            m.reply_to_message_id, m.media_type, m.media_url, m.delivered_at, m.read_at,
             replied.id AS replied_id, replied.sender_id AS replied_sender_id, replied.text AS replied_text
        FROM messages m
        LEFT JOIN messages replied ON replied.id = m.reply_to_message_id
@@ -264,7 +266,7 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
     [conversationId, clampLimit(req.query.limit, 100, 200)],
   );
   await db.update(
-    'UPDATE messages SET is_read = 1 WHERE conversation_id = ? AND sender_id <> ?',
+    'UPDATE messages SET is_read = 1, delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP), read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE conversation_id = ? AND sender_id <> ?',
     [conversationId, req.user.id],
   );
   res.json({
@@ -275,6 +277,8 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
       text: message.text,
       mediaType: message.media_type || null,
       mediaUrl: message.media_url || null,
+      deliveredAt: message.delivered_at || null,
+      readAt: message.read_at || null,
       time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: message.created_at,
       replyTo: message.replied_id ? {
