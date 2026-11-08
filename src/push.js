@@ -22,7 +22,7 @@ function toUint8Array(base64String) {
 let registrationPromise = null;
 
 export function registerServiceWorker() {
-  if (!pushSupported()) return Promise.resolve(null);
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return Promise.resolve(null);
   if (!registrationPromise) {
     registrationPromise = navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
