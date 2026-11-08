@@ -1,14 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export default function NetworkStatus() {
   const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const [showRestored, setShowRestored] = useState(false);
+  const offlineRef = useRef(typeof navigator !== 'undefined' && !navigator.onLine);
 
   useEffect(() => {
     let restoredTimer;
     const handleOffline = () => {
       window.clearTimeout(restoredTimer);
       setShowRestored(false);
+      offlineRef.current = true;
       setOnline(false);
     };
     const handleNetworkError = () => {
@@ -17,16 +19,15 @@ export default function NetworkStatus() {
       setOnline(false);
     };
     const handleNetworkRestored = () => {
-      setOnline((wasOnline) => {
-        if (!wasOnline) {
-          setShowRestored(true);
-          window.clearTimeout(restoredTimer);
-          restoredTimer = window.setTimeout(() => setShowRestored(false), 2800);
-        }
-        return true;
-      });
+      if (!offlineRef.current) return;
+      offlineRef.current = false;
+      setOnline(true);
+      setShowRestored(true);
+      window.clearTimeout(restoredTimer);
+      restoredTimer = window.setTimeout(() => setShowRestored(false), 2800);
     };
     const handleOnline = () => {
+      offlineRef.current = false;
       setOnline(true);
       setShowRestored(true);
       window.dispatchEvent(new Event('quickchat:online'));
