@@ -41,11 +41,22 @@ export async function apiRequest(path, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
-    ...requestOptions,
-    headers,
-    ...(body === undefined ? {} : { body: isRawBody || isFormBody ? body : JSON.stringify(body) }),
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+      ...requestOptions,
+      headers,
+      ...(body === undefined ? {} : { body: isRawBody || isFormBody ? body : JSON.stringify(body) }),
+    });
+  } catch (networkError) {
+    if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-error'));
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
+    }
+    throw new Error('QuickChat could not reach the server. Check your connection and try again.');
+  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-restored'));
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && token) {
@@ -67,11 +78,22 @@ export async function adminRequest(path, options = {}) {
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
 
-  const response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
-    ...requestOptions,
-    headers,
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`, {
+      ...requestOptions,
+      headers,
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+  } catch (networkError) {
+    if (networkError?.name === 'AbortError') throw networkError;
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-error'));
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('You are offline. Check your internet connection and QuickChat will reconnect automatically.');
+    }
+    throw new Error('QuickChat could not reach the server. Check your connection and try again.');
+  }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-restored'));
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) localStorage.removeItem('adminToken');
@@ -102,4 +124,17 @@ export function resolveMediaUrl(value) {
   const apiOrigin = API_BASE_URL.startsWith('http') ? API_BASE_URL.replace(/\/api\/?$/, '') : '';
   if (url.startsWith('/')) return apiOrigin ? `${apiOrigin}${url}` : url;
   return apiOrigin ? `${apiOrigin}/${url}` : `/${url}`;
+}
+
+// Convert browser-specific fetch failures into concise, app-native messages.
+export function normalizeNetworkError(error) {
+  if (error?.name === 'AbortError') return error.message || 'Request cancelled.';
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'You are offline. Check your internet connection and QuickChat will reconnect automatically.';
+  }
+  if (error instanceof TypeError || /failed to fetch|networkerror|load failed|connection/i.test(error?.message || '')) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-error'));
+    return 'QuickChat could not reach the server. Check your connection and try again.';
+  }
+  return error?.message || 'QuickChat could not complete that request. Try again.';
 }
