@@ -174,7 +174,7 @@ function StatusAvatar({ group, onClick }) {
   const ringStyle = useMemo(() => ({ background: `conic-gradient(${stops})`, boxShadow: group.statuses.some((status) => !status.viewed) ? '0 0 0 2px rgba(18,59,138,.08), 0 0 13px rgba(18,59,138,.24)' : 'none' }), [stops, group.statuses]);
   return <button type="button" onClick={onClick} className="flex w-[66px] flex-shrink-0 flex-col items-center gap-1.5 border-0 bg-transparent p-0">
     <span className="qc-status-ring grid h-[62px] w-[62px] place-items-center rounded-full p-[3px]" style={ringStyle}><span className="grid h-full w-full place-items-center rounded-full bg-white p-[2px]"><Avatar name={group.name} picture={group.picture} size={48} /></span></span>
-    <span className="max-w-full truncate text-[10px] font-semibold text-slate-600">{group.name || group.username}</span>
+    <span className="max-w-full truncate text-[10px] font-semibold text-slate-600">{group.name || group.username} <VerifiedBadge verified={group.verified} /></span>
   </button>;
 }
 
