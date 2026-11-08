@@ -46,14 +46,36 @@ async function notifyUser({
 // Used when many recipients get the same notification and a push per row would
 // be noisy (for example a post matched a thousand interest feeds).
 async function notifyMany({ userIds, actorId, type, postId, text }) {
-  const unique = [...new Set(userIds.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const unique = [...new Set((userIds || []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))]
+    .filter((userId) => Number(userId) !== Number(actorId));
+  if (!unique.length) return 0;
+
+  const actor = actorId
+    ? await db.getOne('SELECT fullname, username FROM users WHERE id = ?', [actorId])
+    : null;
+  const actorName = actor?.fullname || 'QuickChat';
+  const actorHandle = actor?.username ? String(actor.username).replace(/^@/, '') : '';
+  const message = String(text || '').slice(0, 255);
+  const url = type === 'follow' && actorHandle
+    ? `/profile/${encodeURIComponent(actorHandle)}`
+    : postId ? '/home' : '/notifications';
+
+  // Keep the in-app record as the source of truth, and trigger the same
+  // browser-push path used by single-recipient notifications.
   for (const userId of unique) {
-    if (Number(userId) === Number(actorId)) continue;
-    await db.query(
+    await db.insert(
       'INSERT INTO notifications (user_id, actor_id, type, post_id, text) VALUES (?, ?, ?, ?, ?)',
-      [userId, actorId, type, postId ?? null, String(text).slice(0, 255)],
+      [userId, actorId ?? null, type || 'system', postId ?? null, message],
     );
+    pushQuietly(userId, {
+      title: type === 'message' ? `New message from ${actorName}` : `QuickChat · ${actorName}`,
+      body: `${actorName} ${message}`,
+      url,
+      tag: `${type || 'activity'}-${postId || Date.now()}-${userId}`,
+      type: type || 'activity',
+    });
   }
+  return unique.length;
 }
 
 module.exports = { notifyMany, notifyUser };
