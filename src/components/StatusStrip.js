@@ -179,9 +179,54 @@ function StatusAvatar({ group, onClick }) {
 
 function StatusViewer({ viewer, onClose, onMove, onDelete }) {
   const status = viewer.group.statuses[viewer.index];
+  const [liked, setLiked] = useState(Boolean(status?.liked));
+  const [likes, setLikes] = useState([]);
+  const [viewers, setViewers] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [detailsError, setDetailsError] = useState('');
+  const mediaUrl = resolveMediaUrl(status?.mediaUrl);
+
+  useEffect(() => {
+    if (!status?.id) return;
+    let active = true;
+    setLiked(Boolean(status.liked));
+    setComments([]);
+    setCommentDraft('');
+    setDetailsError('');
+    apiRequest(`/statuses/${status.id}/comments`)
+      .then((result) => { if (active) setComments(result.comments || []); })
+      .catch((error) => { if (active) setDetailsError(error.message); });
+    if (viewer.group.isOwn) {
+      Promise.all([
+        apiRequest(`/statuses/${status.id}/viewers`),
+        apiRequest(`/statuses/${status.id}/likes`),
+      ]).then(([viewResult, likeResult]) => {
+        if (active) { setViewers(viewResult.viewers || []); setLikes(likeResult.likes || []); }
+      }).catch((error) => { if (active) setDetailsError(error.message); });
+    }
+    return () => { active = false; };
+  }, [status?.id, viewer.group.isOwn]);
+
   if (!status) return null;
-  const mediaUrl = resolveMediaUrl(status.mediaUrl);
   const elapsed = status.createdAt ? new Date(status.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const toggleStatusLike = async () => {
+    try {
+      const result = await apiRequest(`/statuses/${status.id}/likes`, { method: liked ? 'DELETE' : 'POST' });
+      setLiked(result.liked);
+      status.liked = result.liked;
+      status.likes = result.likes;
+    } catch (error) { setDetailsError(error.message); }
+  };
+  const submitStatusComment = async (event) => {
+    event.preventDefault();
+    if (!commentDraft.trim()) return;
+    try {
+      const result = await apiRequest(`/statuses/${status.id}/comments`, { method: 'POST', body: { text: commentDraft.trim() } });
+      setComments((current) => [...current, result.comment]);
+      setCommentDraft('');
+    } catch (error) { setDetailsError(error.message); }
+  };
   return <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black p-0 sm:p-4" role="dialog" aria-modal="true" aria-label="Status viewer">
     <div className="relative flex h-full w-full max-w-md flex-col overflow-hidden bg-slate-950 sm:h-[min(90dvh,760px)] sm:rounded-2xl">
       <div className="absolute left-3 right-3 top-3 z-20 flex gap-1">
@@ -201,7 +246,19 @@ function StatusViewer({ viewer, onClose, onMove, onDelete }) {
         <button type="button" onClick={() => onMove(-1)} disabled={viewer.index === 0} className="absolute bottom-0 left-0 top-0 w-1/3" aria-label="Previous status" />
         <button type="button" onClick={() => onMove(1)} className="absolute bottom-0 right-0 top-0 w-2/3" aria-label="Next status" />
       </div>
-      <div className="px-4 py-3 text-center text-[11px] text-white/55">Status disappears after 24 hours</div>
+      <div className="max-h-[34%] overflow-y-auto bg-slate-950 px-4 py-3 text-white">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          {!viewer.group.isOwn ? <button type="button" onClick={toggleStatusLike} className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold"><i className={liked ? 'fa-solid fa-heart text-rose-400' : 'fa-regular fa-heart'} /> {status.likes || 0} {liked ? 'Liked' : 'Like'}</button> : <span className="text-xs text-white/60">Status insights</span>}
+          <span className="text-[11px] text-white/55">Expires in 24 hours</span>
+        </div>
+        {viewer.group.isOwn && <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
+          <details className="rounded-lg bg-white/10 p-2"><summary className="cursor-pointer font-bold">Views ({viewers.length})</summary><div className="mt-2 space-y-2">{viewers.map((user) => <p key={user.id}>{user.fullname || user.username}</p>)}{!viewers.length && <p className="text-white/60">No views yet.</p>}</div></details>
+          <details className="rounded-lg bg-white/10 p-2"><summary className="cursor-pointer font-bold">Likes ({likes.length})</summary><div className="mt-2 space-y-2">{likes.map((user) => <p key={user.id}>{user.fullname || user.username}</p>)}{!likes.length && <p className="text-white/60">No likes yet.</p>}</div></details>
+        </div>}
+        <div className="mb-2 max-h-24 space-y-2 overflow-y-auto text-xs">{comments.map((item) => <p key={item.id}><strong>{item.fullname || item.username || 'User'}:</strong> {item.body}</p>)}{!comments.length && <p className="text-white/55">No comments yet.</p>}</div>
+        {detailsError && <p className="mb-2 text-xs text-rose-300">{detailsError}</p>}
+        <form onSubmit={submitStatusComment} className="flex gap-2"><input value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={2000} placeholder="Write a comment…" className="min-w-0 flex-1 rounded-full border border-white/20 bg-white/10 px-3 py-2 text-sm text-white outline-none placeholder:text-white/50" /><button type="submit" disabled={!commentDraft.trim()} className="rounded-full bg-blue-600 px-4 py-2 text-xs font-bold disabled:opacity-50">Send</button></form>
+      </div>
     </div>
   </div>;
 }
