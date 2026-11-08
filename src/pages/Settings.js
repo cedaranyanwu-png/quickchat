@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import { disablePush, enablePush, getPushStatus, pushSupported, sendTestPush } from '../push';
+import PWAInstallCard from '../components/PWAInstallCard';
 
 const BUSINESS_CATEGORIES = [
   'Bakery & Food Production',
@@ -327,6 +328,7 @@ export default function Settings({ onLogout }) {
           { id: 'business', label: 'Business Profile', icon: 'fa-solid fa-briefcase' },
           { id: 'recommendations', label: 'Recommendation Bot', icon: 'fa-solid fa-wand-magic-sparkles' },
           { id: 'notifications', label: 'Notifications', icon: 'fa-solid fa-bell' },
+          { id: 'app', label: 'QuickChat App', icon: 'fa-solid fa-mobile-screen-button' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -816,6 +818,8 @@ export default function Settings({ onLogout }) {
           )}
         </section>
       )}
+
+      {activeTab === 'app' && <PWAInstallCard />}
 
       <section className="mx-4 mb-6 mt-4 rounded-2xl border border-red-200 bg-red-50 p-4 sm:p-5">
         <div className="flex items-start gap-3">
