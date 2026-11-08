@@ -164,7 +164,13 @@ async function convertRewardPoints(userId, points) {
   const debited = await debitRewardPoints(userId, amount, { kind: 'conversion', reference: `${reference}_points` });
   if (!debited.ok) return debited;
   const naira = amount / POINTS_PER_NAIRA;
-  const credited = await creditCash(userId, naira * 100, { reference: `${reference}_cash` });
+  let credited;
+  try {
+    credited = await creditCash(userId, naira * 100, { reference: `${reference}_cash` });
+  } catch (error) {
+    await creditRewardPoints(userId, amount, { kind: 'conversion_rollback', reference: `${reference}_rollback` });
+    throw error;
+  }
   if (!credited.ok) {
     await creditRewardPoints(userId, amount, { kind: 'conversion_rollback', reference: `${reference}_rollback` });
     return credited;
