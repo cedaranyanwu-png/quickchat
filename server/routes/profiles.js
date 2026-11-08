@@ -45,6 +45,8 @@ const POST_SELECT = `
     FROM posts p JOIN users u ON u.id = p.author_id LEFT JOIN communities c ON c.id = p.community_id LEFT JOIN rss_articles ra ON ra.id = p.rss_article_id`;
 
 router.get('/profile/me', asyncRoute(async (req, res) => {
+  await require('../rewards').awardVerification(req.user.id, 'self_service_points');
+
   const row = await db.getOne(`${PROFILE_SELECT} WHERE u.id = ?`, [req.user.id, req.user.id]);
   if (!row) return notFound(res, 'Your account was not found.');
   res.json({ profile: toProfile(row) });
@@ -129,10 +131,11 @@ router.post('/verification/upgrade', asyncRoute(async (req, res) => {
     return res.status(409).json({ message: 'Your account is already verified.', alreadyVerified: true });
   }
 
-  // Charge the badge from the points wallet. The balance guard lives in the UPDATE,
+  // Charge the badge from the purchased-points wallet. The balance guard lives in the UPDATE,
   // so two concurrent requests cannot both buy the badge.
+  const requiredPoints = await verificationPoints();
   const reference = `verification_${req.user.id}_${Date.now()}`;
-  const spent = await spendPoints(req.user.id, VERIFICATION_POINTS, {
+  const spent = await spendPoints(req.user.id, requiredPoints, {
     kind: 'verification_purchase',
     reference,
   });
