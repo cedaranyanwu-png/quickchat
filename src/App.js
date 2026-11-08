@@ -50,6 +50,7 @@ import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
 import NetworkStatus from './components/NetworkStatus';
+import ReportIssue from './components/ReportIssue';
 
 const SettingsHub = ({ onLogout }) => <>
   <div className="mx-auto max-w-3xl px-4 pt-3">
