@@ -16,6 +16,7 @@ export default function Videos({ openVideo }) {
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
   const [autoplayBlockedId, setAutoplayBlockedId] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [commentsVideoId, setCommentsVideoId] = useState(null);
   const [comments, setComments] = useState([]);
   const [commentDraft, setCommentDraft] = useState('');
@@ -120,7 +121,7 @@ export default function Videos({ openVideo }) {
         if (entry.isIntersecting && entry.intersectionRatio >= 0.65) {
           recordView(id);
           // Muted inline playback is permitted by mobile browsers during automatic scrolling.
-          player.muted = true;
+          player.muted = !soundEnabled;
           player.play()
             .then(() => setAutoplayBlockedId(null))
             .catch(() => setAutoplayBlockedId(id));
@@ -132,7 +133,7 @@ export default function Videos({ openVideo }) {
 
     feed.querySelectorAll('[data-video-id]').forEach((player) => observer.observe(player));
     return () => observer.disconnect();
-  }, [videos, recordView]);
+  }, [videos, recordView, soundEnabled]);
 
   const publishVideo = async (event) => {
     event.preventDefault();
@@ -208,7 +209,9 @@ export default function Videos({ openVideo }) {
   const togglePlayback = (event, videoId) => {
     const player = event.currentTarget.querySelector('video');
     if (!player) return;
-    player.muted = true;
+    // A direct user gesture is allowed to enable audio on mobile browsers.
+    setSoundEnabled(true);
+    player.muted = false;
     if (player.paused) {
       player.play()
         .then(() => setAutoplayBlockedId(null))
@@ -235,7 +238,8 @@ export default function Videos({ openVideo }) {
           data-video-id={String(video.id)}
           src={video.videoUrl}
           poster={video.thumbnail || undefined}
-          muted
+          muted={!soundEnabled}
+          controls
           playsInline
           loop
           preload="metadata"
@@ -260,7 +264,7 @@ export default function Videos({ openVideo }) {
           <ShareMenu path={video.isFeedFallback ? `/share/post/${video.postId}` : `/share/video/${video.id}`} title={video.title} text={video.description || video.title} downloads={[{ url: video.videoUrl, type: 'video', label: 'Download video' }]} downloadTextLabel="Download video details" buttonClassName="text-white hover:bg-white/10 hover:text-white" />
           <span><i className="fa-solid fa-eye" /><small>{video.views}</small></span>
         </div>
-        {autoplayBlockedId === String(video.id) && <button type="button" className="videos-reel-play" aria-label="Play video" onClick={(event) => { event.stopPropagation(); const player = event.currentTarget.parentElement.querySelector('video'); player.muted = true; player.play().then(() => setAutoplayBlockedId(null)).catch(() => {}); }}><i className="fa-solid fa-play" /></button>}
+        {autoplayBlockedId === String(video.id) && <button type="button" className="videos-reel-play" aria-label="Play video" onClick={(event) => { event.stopPropagation(); const player = event.currentTarget.parentElement.querySelector('video'); setSoundEnabled(true); player.muted = false; player.play().then(() => setAutoplayBlockedId(null)).catch(() => {}); }}><i className="fa-solid fa-play" /></button>}
       </article>)}
       {!videos.length && <div className="videos-reel-empty">{loading ? 'Loading videos…' : error || 'No videos yet. Upload the first one.'}</div>}
     </section>
