@@ -81,6 +81,7 @@ router.post('/rewards/withdrawals', asyncRoute(async (req, res) => {
     );
     return res.status(201).json({ message: 'Withdrawal request submitted for admin review.', withdrawal: row });
   } catch (error) {
+    await db.delete('DELETE FROM reward_withdrawals WHERE reference = ?', [reference]);
     await db.update('UPDATE reward_cash_wallets SET balance_kobo = balance_kobo + ? WHERE user_id = ?', [amount, req.user.id]);
     throw error;
   }
