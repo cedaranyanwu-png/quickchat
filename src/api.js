@@ -121,3 +121,15 @@ export function resolveMediaUrl(value) {
   if (url.startsWith('/')) return apiOrigin ? `${apiOrigin}${url}` : url;
   return apiOrigin ? `${apiOrigin}/${url}` : `/${url}`;
 }
+
+// Convert browser-specific fetch failures into concise, app-native messages.
+export function normalizeNetworkError(error) {
+  if (error?.name === 'AbortError') return error.message || 'Request cancelled.';
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return 'You are offline. Check your internet connection and QuickChat will reconnect automatically.';
+  }
+  if (error instanceof TypeError || /failed to fetch|networkerror|load failed|connection/i.test(error?.message || '')) {
+    return 'QuickChat could not reach the server. Check your connection and try again.';
+  }
+  return error?.message || 'QuickChat could not complete that request. Try again.';
+}
