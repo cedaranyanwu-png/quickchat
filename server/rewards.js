@@ -3,7 +3,7 @@ const db = require('./database');
 const POINTS_PER_NAIRA = 100;
 const PURCHASED_POINTS_PER_NAIRA = 10;
 const REFERRAL_REWARD_POINTS = 10;
-const DEFAULT_VERIFICATION_REWARD_POINTS = 2000;
+const DEFAULT_VERIFICATION_REWARD_POINTS = 1000;
 const PLATFORM_COMMISSION_PERCENT = 10;
 
 function uniqueError(error) {
@@ -142,17 +142,25 @@ async function awardReferral(referrerId, referredUserId) {
 }
 
 async function awardVerification(userId, method) {
-  const setting = await db.getOne("SELECT setting_value FROM platform_settings WHERE setting_key = 'verification_reward_points'");
-  const configured = Number.parseInt(setting?.setting_value || '', 10);
-  const points = Number.isInteger(configured) && configured >= 0
-    ? Math.min(configured, 1000000)
-    : DEFAULT_VERIFICATION_REWARD_POINTS;
-  if (!points) return { ok: true, balance: await rewardBalance(userId), points: 0 };
-  const result = await creditRewardPoints(userId, points, {
-    kind: 'verification',
-    reference: `verification_reward_${userId}`,
+  // Verification bonuses are spendable platform points, not creator earnings.
+  // A unique transaction reference makes this safe for both new and existing verified users.
+  const { creditPoints } = require('./wallet');
+  const result = await creditPoints(userId, DEFAULT_VERIFICATION_REWARD_POINTS, {
+    kind: 'verification_bonus',
+    reference: `verification_bonus_${userId}`,
   });
-  return { ...result, points, method };
+  return { ...result, points: result.ok ? DEFAULT_VERIFICATION_REWARD_POINTS : 0, method };
+}
+
+async function convertibleRewardBalance(userId) {
+  const row = await db.getOne(
+    `SELECT COALESCE(SUM(amount), 0) AS balance
+       FROM reward_point_transactions
+      WHERE user_id = ?
+        AND kind IN ('paid_chat_earning', 'paid_post_earning', 'paid_group_earning', 'paid_community_earning', 'conversion', 'conversion_rollback')`,
+    [userId],
+  );
+  return Math.max(0, Number(row?.balance || 0));
 }
 
 async function convertRewardPoints(userId, points) {
@@ -160,6 +168,8 @@ async function convertRewardPoints(userId, points) {
   if (!Number.isSafeInteger(amount) || amount < POINTS_PER_NAIRA || amount % POINTS_PER_NAIRA !== 0) {
     return { ok: false, reason: 'minimum', required: POINTS_PER_NAIRA };
   }
+  const eligibleBalance = await convertibleRewardBalance(userId);
+  if (eligibleBalance < amount) return { ok: false, reason: 'insufficient', balance: eligibleBalance, eligibleBalance };
   const reference = `reward_conversion_${userId}_${Date.now()}_${require('node:crypto').randomUUID()}`;
   const debited = await debitRewardPoints(userId, amount, { kind: 'conversion', reference: `${reference}_points` });
   if (!debited.ok) return debited;
@@ -227,5 +237,5 @@ module.exports = {
   POINTS_PER_NAIRA, PURCHASED_POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS, DEFAULT_VERIFICATION_REWARD_POINTS,
   PLATFORM_COMMISSION_PERCENT, awardReferral, awardVerification, cashBalance,
   convertRewardPoints, creditCash, creditRewardPoints, ensureRewardWallet,
-  rewardBalance, recordRewardCommission,
+  rewardBalance, convertibleRewardBalance, recordRewardCommission,
 };
