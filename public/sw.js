@@ -19,6 +19,25 @@ self.addEventListener('install', (event) => {
         if (response.ok) await cache.put(url, response);
       } catch (_error) { /* install can still complete if a nonessential icon is absent */ }
     }));
+
+    // Pre-cache the hashed CRA JavaScript and CSS bundles during installation.
+    // Without this step, the first offline launch could load index.html but
+    // fail before React starts because the bundle had not yet been requested
+    // under service-worker control.
+    const indexResponse = await cache.match('/index.html');
+    if (indexResponse) {
+      const html = await indexResponse.clone().text();
+      const assetPaths = Array.from(html.matchAll(/(?:src|href)=["']([^"']+)["']/g))
+        .map((match) => match[1])
+        .filter((path) => path.startsWith('/static/'));
+      const staticCache = await caches.open(STATIC_CACHE);
+      await Promise.all(assetPaths.map(async (path) => {
+        try {
+          const response = await fetch(path, { cache: 'reload' });
+          if (response.ok && response.type === 'basic') await staticCache.put(path, response);
+        } catch (_error) { /* a missing optional asset must not block worker install */ }
+      }));
+    }
     await self.skipWaiting();
   })());
 });
