@@ -16,6 +16,7 @@ export default function NetworkStatus() {
     const handleNetworkError = () => {
       window.clearTimeout(restoredTimer);
       setShowRestored(false);
+      offlineRef.current = true;
       setOnline(false);
     };
     const handleNetworkRestored = () => {
