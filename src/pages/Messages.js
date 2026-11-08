@@ -33,6 +33,7 @@ export default function Messages() {
   const [unlockingChat, setUnlockingChat] = useState(false);
   const [dayPassOffer, setDayPassOffer] = useState(false);
   const [dayPassBusy, setDayPassBusy] = useState(false);
+  const messageRequestRef = useRef(0);
   const touchStartRef = useRef(null);
   const endOfMessagesRef = useRef(null);
   const openedUserRef = useRef('');
@@ -64,9 +65,12 @@ export default function Messages() {
 
   const loadMessages = useCallback(async (conversationId) => {
     if (!conversationId) return;
-    const result = await apiRequest(`/messages/conversations/${conversationId}/messages`);
-    setPaidChatAccess(result.locked ? { requiresUnlock: true, unlocked: false, pricePoints: Number(result.pricePoints || 100) } : { requiresUnlock: false, unlocked: true });
-    setMessages(result.messages || []);
+    const requestId = ++messageRequestRef.current;
+    const result = await apiRequest(`/messages/conversations/${encodeURIComponent(conversationId)}/messages`);
+    if (requestId !== messageRequestRef.current) return;
+    const nextMessages = Array.isArray(result?.messages) ? result.messages : [];
+    setPaidChatAccess(result?.locked ? { requiresUnlock: true, unlocked: false, pricePoints: Number(result.pricePoints || 100) } : { requiresUnlock: false, unlocked: true });
+    setMessages(nextMessages);
   }, []);
 
   useEffect(() => {
@@ -114,8 +118,12 @@ export default function Messages() {
     let active = true;
     const refresh = async () => {
       try {
-        const result = await apiRequest(`/messages/conversations/${activeId}/messages`);
-        if (active) { setMessages(result.messages || []); setError(''); }
+        const result = await apiRequest(`/messages/conversations/${encodeURIComponent(activeId)}/messages`);
+        if (active) {
+          setMessages(Array.isArray(result?.messages) ? result.messages : []);
+          setPaidChatAccess(result?.locked ? { requiresUnlock: true, unlocked: false, pricePoints: Number(result.pricePoints || 100) } : { requiresUnlock: false, unlocked: true });
+          setError('');
+        }
       } catch (requestError) { if (active) setError(requestError.message); }
     };
     refresh();
@@ -583,7 +591,8 @@ export default function Messages() {
               </div>
             )}
             {paidChatAccess?.requiresUnlock && !paidChatAccess.unlocked ? null : messages.map((message) => {
-              const isMine = message.sender === 'me';
+              const currentUser = (() => { try { return JSON.parse(localStorage.getItem('user') || '{}'); } catch { return {}; } })();
+              const isMine = message.sender === 'me' || Number(message.senderId) === Number(currentUser.id);
               const isSwiped = swipedMessageId === message.id;
               const isMenuOpen = replyMenuId === message.id;
               const dragStyle = isSwiped ? { transform: 'translateX(52px)' } : undefined;
