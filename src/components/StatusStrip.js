@@ -235,7 +235,7 @@ function StatusViewer({ viewer, onClose, onMove, onDelete }) {
       </div>
       <header className="relative z-20 mt-5 flex items-center gap-2 px-4 py-3 text-white">
         <Avatar name={viewer.group.name} picture={viewer.group.picture} size={34} />
-        <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{viewer.group.name || viewer.group.username}</p><p className="text-[10px] text-white/65">{elapsed}</p></div>
+        <div className="min-w-0 flex-1"><p className="truncate text-sm font-bold">{viewer.group.name || viewer.group.username} <VerifiedBadge verified={viewer.group.verified} className="text-white" /></p><p className="text-[10px] text-white/65">{elapsed}</p></div>
         {viewer.group.isOwn && <button type="button" onClick={onDelete} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="Delete status"><i className="fa-solid fa-trash" /></button>}
         <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full hover:bg-white/10" aria-label="Close status"><i className="fa-solid fa-xmark text-lg" /></button>
       </header>
