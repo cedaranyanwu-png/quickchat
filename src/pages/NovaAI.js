@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE_URL, apiRequest } from '../api';
+import { API_BASE_URL, apiRequest, normalizeNetworkError } from '../api';
 import Avatar from '../components/Avatar';
 import NovaIcon from '../components/NovaIcon';
 
