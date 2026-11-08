@@ -215,7 +215,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const path = window.location.pathname.replace(/\\/$/, '') || '/';
+    const path = window.location.pathname.replace(/\/$/, '') || '/';
     if (!['/', '/login', '/register'].includes(path)) return undefined;
     const controller = new AbortController();
     fetch(`${API_BASE_URL}/traffic/landing`, {
