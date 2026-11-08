@@ -10,6 +10,7 @@ export default function VideoModal({ videoId, onClose }) {
   const [comment, setComment] = useState('');
   const [error, setError] = useState('');
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [showMobileComments, setShowMobileComments] = useState(false);
   const [showLikeBurst, setShowLikeBurst] = useState(false);
   const lastTapRef = useRef(0);
@@ -83,7 +84,7 @@ export default function VideoModal({ videoId, onClose }) {
         if (entry.isIntersecting && entry.intersectionRatio >= 0.65) {
           setSelectedId(id);
           recordView(id);
-          player.muted = true;
+          player.muted = !soundEnabled;
           const playAttempt = player.play();
           if (playAttempt?.then) {
             playAttempt.then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
@@ -96,7 +97,7 @@ export default function VideoModal({ videoId, onClose }) {
 
     feed.querySelectorAll('[data-reel-id]').forEach((element) => observer.observe(element));
     return () => observer.disconnect();
-  }, [videoId, videos.length, recordView]);
+  }, [videoId, videos.length, recordView, soundEnabled]);
 
   useEffect(() => {
     if (!activeVideoId) return undefined;
@@ -111,7 +112,7 @@ export default function VideoModal({ videoId, onClose }) {
   useEffect(() => {
     if (!activeVideoId || !desktopVideoRef.current) return;
     const player = desktopVideoRef.current;
-    player.muted = true;
+    player.muted = false;
     recordView(activeVideoId);
     player.play().catch(() => setAutoplayBlocked(true));
   }, [activeVideoId, recordView]);
@@ -156,7 +157,8 @@ export default function VideoModal({ videoId, onClose }) {
   const toggleReelPlayback = (event) => {
     const player = event.currentTarget.querySelector('video');
     if (!player) return;
-    player.muted = true;
+    setSoundEnabled(true);
+    player.muted = false;
     if (player.paused) player.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
     else player.pause();
   };
@@ -170,7 +172,7 @@ export default function VideoModal({ videoId, onClose }) {
     {/* Mobile uses a native full-height snap scroller; only the visible reel plays. */}
     <div ref={reelFeedRef} className="lg:hidden absolute inset-0 h-[100dvh] overflow-y-auto snap-y snap-mandatory overscroll-y-contain bg-black" style={{ scrollbarWidth: 'none' }}>
       {videos.map((video) => <section key={video.id} data-reel-id={video.id} className="relative h-[100dvh] min-h-[100svh] w-full snap-start snap-always overflow-hidden bg-black" onClick={toggleReelPlayback} onDoubleClick={(event) => handleVideoDoubleTap(video, event)}>
-        <video src={video.videoUrl} poster={video.thumbnail || undefined} muted playsInline loop preload="metadata" className="absolute inset-0 w-full h-full object-cover" aria-label={video.title}/>
+        <video src={video.videoUrl} poster={video.thumbnail || undefined} muted={!soundEnabled} controls playsInline loop preload="metadata" className="absolute inset-0 w-full h-full object-cover" aria-label={video.title}/>
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[42%] bg-gradient-to-t from-black/90 via-black/35 to-transparent"/>
         <div className="absolute left-4 right-16 bottom-8 text-white pointer-events-none">
           <div className="flex items-center gap-2 mb-3"><Avatar name={video.creator} picture={video.picture} size={38}/><span className="font-bold text-sm">{video.creator}</span><span className="text-xs text-white/75">{video.handle}</span></div>
@@ -188,14 +190,14 @@ export default function VideoModal({ videoId, onClose }) {
           <span className="flex flex-col items-center gap-1 text-xs"><i className="fa-solid fa-eye text-xl"/>{video.views}</span>
         </div>
         {showLikeBurst && String(selectedId) === String(video.id) && <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center"><i className="fa-solid fa-heart text-7xl text-white drop-shadow-[0_4px_18px_rgba(0,0,0,.55)] animate-ping" /></div>}
-        {autoplayBlocked && String(selectedId) === String(video.id) && <button onClick={(event) => { event.stopPropagation(); const player = event.currentTarget.parentElement.querySelector('video'); player.muted = true; player.play().then(() => setAutoplayBlocked(false)).catch(() => {}); }} className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/60 text-white"><i className="fa-solid fa-play text-xl"/></button>}
+        {autoplayBlocked && String(selectedId) === String(video.id) && <button onClick={(event) => { event.stopPropagation(); const player = event.currentTarget.parentElement.querySelector('video'); setSoundEnabled(true); player.muted = false; player.play().then(() => setAutoplayBlocked(false)).catch(() => {}); }} className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/60 text-white"><i className="fa-solid fa-play text-xl"/></button>}
       </section>)}
       {videos.length === 0 && <div className="h-full grid place-items-center text-white p-6 text-center">{error || (loading ? 'Loading videos…' : 'No videos are available yet.')}</div>}
     </div>
 
     {/* Desktop keeps the focused player and its details beside it. */}
     <div className="hidden lg:flex absolute inset-0 p-6 items-stretch justify-center">
-      {activeVideo ? <div className="w-full max-w-6xl bg-white rounded-2xl overflow-hidden flex"><div className="flex-1 bg-black flex items-center justify-center"><video ref={desktopVideoRef} key={activeVideo.id} src={activeVideo.videoUrl} poster={activeVideo.thumbnail || undefined} controls autoPlay muted playsInline loop className="max-h-full max-w-full"/></div><aside className="w-[360px] overflow-y-auto p-5"><div className="flex items-center gap-3"><Avatar name={activeVideo.creator} picture={activeVideo.picture} size={40}/><div><strong className="block text-sm">{activeVideo.creator}</strong><span className="text-xs text-slate-500">{activeVideo.handle}</span></div></div><h2 className="font-extrabold text-lg mt-4">{activeVideo.title}</h2><p className="text-xs text-slate-500 mt-1">{activeVideo.views} views</p><p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap">{activeVideo.description}</p>{commentsPanel}</aside></div> : <p className="text-white self-center">{error || (loading ? 'Loading video…' : 'No videos are available yet.')}</p>}
+      {activeVideo ? <div className="w-full max-w-6xl bg-white rounded-2xl overflow-hidden flex"><div className="flex-1 bg-black flex items-center justify-center"><video ref={desktopVideoRef} key={activeVideo.id} src={activeVideo.videoUrl} poster={activeVideo.thumbnail || undefined} controls autoPlay playsInline loop className="max-h-full max-w-full"/></div><aside className="w-[360px] overflow-y-auto p-5"><div className="flex items-center gap-3"><Avatar name={activeVideo.creator} picture={activeVideo.picture} size={40}/><div><strong className="block text-sm">{activeVideo.creator}</strong><span className="text-xs text-slate-500">{activeVideo.handle}</span></div></div><h2 className="font-extrabold text-lg mt-4">{activeVideo.title}</h2><p className="text-xs text-slate-500 mt-1">{activeVideo.views} views</p><p className="text-sm text-slate-700 mt-3 whitespace-pre-wrap">{activeVideo.description}</p>{commentsPanel}</aside></div> : <p className="text-white self-center">{error || (loading ? 'Loading video…' : 'No videos are available yet.')}</p>}
     </div>
 
     {showMobileComments && <div className="lg:hidden absolute inset-x-0 bottom-0 z-[65] max-h-[70dvh] overflow-y-auto rounded-t-2xl bg-white p-4" onClick={(event) => event.stopPropagation()}><div className="flex justify-between items-center mb-3"><strong>Comments</strong><button onClick={() => setShowMobileComments(false)} aria-label="Close comments"><i className="fa-solid fa-xmark"/></button></div>{commentsPanel}</div>}
