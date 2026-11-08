@@ -8,7 +8,7 @@ const {
 const { classifyAdultSource } = require('../adult-content');
 const { legacyEngagementFor } = require('../engagement');
 const { getAccountForUser, isFlutterwavePaymentsConfigured } = require('../flutterwave');
-const { notifyUser } = require('../notify');
+const { notifyMany, notifyUser } = require('../notify');
 const { getRecommendedFeed } = require('../services/recommendation-engine');
 const { analyzeContent } = require('../services/content-classifier');
 
@@ -503,13 +503,21 @@ router.post('/posts', asyncRoute(async (req, res) => {
       ...matchedInterests.map((interest) => `%"${interest}"%`)];
     if (communityId) params.push(communityId);
     params.push(1000);
-    await db.query(
-      `INSERT INTO notifications (user_id, actor_id, type, post_id, text)
-       SELECT u.id, ?, 'interest_post', ?, ? FROM users u
+    const recipients = await db.query(
+      `SELECT u.id FROM users u
         WHERE u.id <> ? AND (${interestFilters}) ${communityFilter}
+        ORDER BY u.id
         LIMIT ?`,
-      params,
+      [req.user.id, ...matchedInterests.map((interest) => `%\"${interest}\"%`),
+        ...(communityId ? [communityId] : []), 1000],
     );
+    await notifyMany({
+      userIds: recipients.map((recipient) => recipient.id),
+      actorId: req.user.id,
+      type: 'interest_post',
+      postId,
+      text: `shared a post about ${matchedInterests.join(', ')}`,
+    });
   }
   const post = await db.getOne(`${POST_SELECT} WHERE p.id = ?`, [req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, req.user.id, postId]);
   res.status(201).json({ post: toPost(post) });
