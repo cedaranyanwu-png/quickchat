@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import { API_BASE_URL } from '../api';
+import { API_BASE_URL, normalizeNetworkError } from '../api';
 
 const Login = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
@@ -34,7 +34,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       onAuthenticated?.();
       navigate('/home');
     } catch (err) {
-      setError(err.message);
+      setError(normalizeNetworkError(err));
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +118,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
                 onAuthenticated?.();
                 navigate('/home');
               } catch (err) {
-                setError(err.message);
+                setError(normalizeNetworkError(err));
               } finally {
                 setIsLoading(false);
               }
