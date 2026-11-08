@@ -10,6 +10,7 @@ const authRoutes = require('./auth');
 const { authenticate } = require('./middleware/authenticate');
 const adminAuth = require('./admin-auth');
 const { initializePageTables } = require('./schema');
+const { initializeSecurityTables, botDetector, trafficRouter } = require('./traffic-security');
 const contentRoutes = require('./routes/content');
 const statusRoutes = require('./routes/statuses');
 const profileRoutes = require('./routes/profiles');
@@ -57,6 +58,9 @@ app.post('/api/webhooks/flutterwave', express.json({ limit: '1mb' }), async (req
   }
 });
 app.use(express.json({ limit: '1mb' }));
+// Security telemetry runs before authentication so public registration/login traffic is covered too.
+app.use('/api', botDetector());
+app.use('/api', trafficRouter());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', immutable: true }));
 // Serve status/post media from persistent object storage, with legacy local-file fallback.
 app.get('/uploads/:filename', mediaRoutes.servePublicMedia);
@@ -309,6 +313,7 @@ async function initializeDB() {
   await migrateLegacyUsers();
   await ensureUniqueIndexes();
   await initializePageTables();
+  await initializeSecurityTables();
   await adminRoutes.initializeAdminTables();
   await adminAuth.initializeAdminAuth();
   console.log('[Database] Users and independent administration tables are ready.');
