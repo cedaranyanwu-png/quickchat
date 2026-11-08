@@ -317,6 +317,11 @@ async function initializeDB() {
   await ensureUniqueIndexes();
   await initializePageTables();
   await rewardService.initializeRewardTables();
+  // Backfill the one-time 1,000-point bonus for every previously verified human account.
+  const previouslyVerified = await db.query('SELECT id FROM users WHERE verified = 1 AND COALESCE(is_synthetic, 0) = 0 ORDER BY id');
+  for (const account of previouslyVerified) {
+    await rewardService.awardVerification(account.id, 'existing_verified_account');
+  }
   await initializeSecurityTables();
   await adminRoutes.initializeAdminTables();
   await adminAuth.initializeAdminAuth();
