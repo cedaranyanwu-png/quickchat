@@ -38,8 +38,6 @@ export default function ReportIssue({ isMessagesPage = false }) {
       <button type="button" onClick={() => { setOpen(true); setNotice(''); }} className={`fixed right-4 z-40 grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-md transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 lg:bottom-6 lg:right-6 ${isMessagesPage ? 'top-24 bottom-auto' : 'bottom-36 lg:bottom-6'}`} aria-label="Report a bug or issue" title="Report a bug or issue">
         <i className="fa-solid fa-bug text-xs" />
       </button>
-        <i className="fa-solid fa-bug text-xs" />
-      </button>
       {open && (
         <div className="fixed inset-0 z-[120] grid place-items-center bg-slate-950/60 p-4" role="dialog" aria-modal="true" aria-label="Report a bug or issue">
           <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl">
