@@ -3,7 +3,7 @@ const express = require('express');
 const { db, asyncRoute, clampLimit, notFound, uniqueConstraint } = require('./utils');
 const { notifyUser } = require('../notify');
 const { currentBalance, spendPoints, creditPoints } = require('../wallet');
-const { creditRewardPoints, recordRewardCommission, PLATFORM_COMMISSION_PERCENT } = require('../rewards');
+const { creditRewardPoints, recordRewardCommission, PLATFORM_COMMISSION_PERCENT, PURCHASED_POINTS_PER_NAIRA } = require('../rewards');
 
 const router = express.Router();
 
@@ -88,8 +88,9 @@ router.post('/messages/conversations/:conversationId/unlock', asyncRoute(async (
   const reference = `paid_chat_${conversationId}_${req.user.id}_${creator.id}`;
   const spent = await spendPoints(req.user.id, points, { kind: 'paid_chat_unlock', reference });
   if (!spent.ok) return res.status(402).json({ message: `You need ${points.toLocaleString('en-NG')} points to unlock this chat.`, pricePoints: points, balance: spent.balance });
-  const commissionPoints = Math.floor(points * PLATFORM_COMMISSION_PERCENT / 100);
-  const creatorRewardPoints = points - commissionPoints;
+  const grossRewardPoints = points * PURCHASED_POINTS_PER_NAIRA;
+  const commissionPoints = Math.floor(grossRewardPoints * PLATFORM_COMMISSION_PERCENT / 100);
+  const creatorRewardPoints = grossRewardPoints - commissionPoints;
   try {
     await db.insert('INSERT INTO paid_chat_unlocks (conversation_id, buyer_id, creator_id, points) VALUES (?, ?, ?, ?)', [conversationId, req.user.id, creator.id, points]);
     if (creatorRewardPoints > 0) {
@@ -98,7 +99,7 @@ router.post('/messages/conversations/:conversationId/unlock', asyncRoute(async (
       });
       if (!credited.ok && credited.reason !== 'duplicate') throw new Error('Could not credit creator reward points.');
     }
-    await recordRewardCommission('paid_chat', `${reference}_commission`, points, commissionPoints, creatorRewardPoints);
+    await recordRewardCommission('paid_chat', `${reference}_commission`, grossRewardPoints, commissionPoints, creatorRewardPoints);
   } catch (error) {
     await db.delete('DELETE FROM paid_chat_unlocks WHERE conversation_id = ? AND buyer_id = ? AND creator_id = ?', [conversationId, req.user.id, creator.id]);
     await creditPoints(req.user.id, points, { kind: 'paid_chat_refund', reference: `${reference}_refund` });
