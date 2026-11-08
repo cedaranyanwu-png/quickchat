@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { apiRequest } from '../api';
 
-export default function ReportIssue() {
+export default function ReportIssue({ isMessagesPage = false }) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState('bug');
   const [description, setDescription] = useState('');
@@ -35,7 +35,9 @@ export default function ReportIssue() {
 
   return (
     <>
-      <button type="button" onClick={() => { setOpen(true); setNotice(''); }} className="fixed bottom-36 right-4 z-40 grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-md transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 lg:bottom-6 lg:right-6" aria-label="Report a bug or issue" title="Report a bug or issue">
+      <button type="button" onClick={() => { setOpen(true); setNotice(''); }} className={`fixed right-4 z-40 grid h-9 w-9 place-items-center rounded-full border border-slate-200 bg-white/95 text-slate-500 shadow-md transition hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-700 lg:bottom-6 lg:right-6 ${isMessagesPage ? 'top-24 bottom-auto' : 'bottom-36 lg:bottom-6'}`} aria-label="Report a bug or issue" title="Report a bug or issue">
+        <i className="fa-solid fa-bug text-xs" />
+      </button>
         <i className="fa-solid fa-bug text-xs" />
       </button>
       {open && (
