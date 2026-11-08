@@ -91,6 +91,7 @@ export async function adminRequest(path, options = {}) {
     }
     throw new Error('QuickChat could not reach the server. Check your connection and try again.');
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-restored'));
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401) localStorage.removeItem('adminToken');
