@@ -2,6 +2,12 @@ const crypto = require('crypto');
 const { db } = require('./database');
 
 let initialized = false;
+const ENV_MAP = {
+  flw_secret_key: 'FLW_SECRET_KEY',
+  flw_secret_hash: 'FLW_SECRET_HASH',
+  flw_webhook_url: 'FLW_WEBHOOK_URL',
+  public_app_url: 'PUBLIC_APP_URL',
+};
 
 function encryptionKey() {
   return crypto.createHash('sha256')
@@ -21,7 +27,7 @@ function decrypt(value) {
   try {
     const [iv, tag, encrypted] = String(value || '').split('.');
     if (!iv || !tag || !encrypted) return '';
-    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64url'));
+    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey(), iv ? Buffer.from(iv, 'base64url') : iv);
     decipher.setAuthTag(Buffer.from(tag, 'base64url'));
     return Buffer.concat([decipher.update(Buffer.from(encrypted, 'base64url')), decipher.final()]).toString('utf8');
   } catch (_error) {
@@ -45,8 +51,10 @@ async function initializePlatformSettings() {
     updated_by INTEGER,
     updated_at ${dateType} DEFAULT CURRENT_TIMESTAMP
   )`);
-  const envMap = { flw_secret_key: 'FLW_SECRET_KEY', flw_secret_hash: 'FLW_SECRET_HASH', flw_webhook_url: 'FLW_WEBHOOK_URL', public_app_url: 'PUBLIC_APP_URL' };
-  for (const [settingKey, envKey] of Object.entries(envMap)) { const saved = await db.getOne('SELECT setting_value, is_secret FROM platform_settings WHERE setting_key = ?', [settingKey]); if (saved) process.env[envKey] = Number(saved.is_secret) ? decrypt(saved.setting_value) : saved.setting_value; }
+  for (const [settingKey, envKey] of Object.entries(ENV_MAP)) {
+    const saved = await db.getOne('SELECT setting_value, is_secret FROM platform_settings WHERE setting_key = ?', [settingKey]);
+    if (saved) process.env[envKey] = Number(saved.is_secret) ? decrypt(saved.setting_value) : saved.setting_value;
+  }
   const verificationPoints = await db.getOne('SELECT setting_value FROM platform_settings WHERE setting_key = ?', ['verification_points']);
   if (verificationPoints?.setting_value) process.env.QUICKCHAT_VERIFICATION_POINTS = verificationPoints.setting_value;
   initialized = true;
@@ -64,14 +72,19 @@ async function setSetting(key, value, { secret = false, updatedBy = null } = {})
   await initializePlatformSettings();
   const stored = secret ? encrypt(value) : String(value ?? '');
   const existing = await db.getOne('SELECT id FROM platform_settings WHERE setting_key = ?', [key]);
-  const envMap = { flw_secret_key: 'FLW_SECRET_KEY', flw_secret_hash: 'FLW_SECRET_HASH', flw_webhook_url: 'FLW_WEBHOOK_URL', public_app_url: 'PUBLIC_APP_URL' };
-  const envMap = { flw_secret_key: 'FLW_SECRET_KEY', flw_secret_hash: 'FLW_SECRET_HASH', flw_webhook_url: 'FLW_WEBHOOK_URL', public_app_url: 'PUBLIC_APP_URL' };\n  if (existing) {
-    await db.update('UPDATE platform_settings SET setting_value = ?, is_secret = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?',
-      [stored, secret ? 1 : 0, updatedBy, key]);
+  if (existing) {
+    await db.update(
+      'UPDATE platform_settings SET setting_value = ?, is_secret = ?, updated_by = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?',
+      [stored, secret ? 1 : 0, updatedBy, key],
+    );
   } else {
-    await db.insert('INSERT INTO platform_settings (setting_key, setting_value, is_secret, updated_by) VALUES (?, ?, ?, ?)',
-      [key, stored, secret ? 1 : 0, updatedBy]);
+    await db.insert(
+      'INSERT INTO platform_settings (setting_key, setting_value, is_secret, updated_by) VALUES (?, ?, ?, ?)',
+      [key, stored, secret ? 1 : 0, updatedBy],
+    );
   }
+  if (ENV_MAP[key]) process.env[ENV_MAP[key]] = String(value ?? '');
+  if (key === 'verification_points') process.env.QUICKCHAT_VERIFICATION_POINTS = String(value ?? '');
 }
 
 async function getSettings(keys) {
