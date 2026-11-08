@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { db } = require('./database');
+const db = require('./database');
 
 let initialized = false;
 const ENV_MAP = {
