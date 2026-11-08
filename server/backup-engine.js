@@ -289,17 +289,36 @@ async function googleDriveAccessToken(config) {
 }
 
 async function uploadToGoogleDrive(backupPath, filename) {
-  const config = await googleDriveConfig(); if (!config.enabled) return null;
-  const token = await googleDriveAccessToken(config), data = await fsp.readFile(backupPath);
+  const config = await googleDriveConfig();
+  if (!config.enabled) return null;
+  const token = await googleDriveAccessToken(config);
+  const data = await fsp.readFile(backupPath);
   const metadata = { name: filename, mimeType: 'application/zip', ...(config.folderId ? { parents: [config.folderId] } : {}) };
-  const boundary = `quickchat_${crypto.randomBytes(12).toString('hex')}`;
-  const head = Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: application/zip\r\n\r\n`);
-  const body = Buffer.concat([head, data, Buffer.from(`\r\n--${boundary}--`)]); 
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,size,webViewLink', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': `multipart/related; boundary=${boundary}`, 'Content-Length': String(body.length) }, body });
-  const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.error?.message || `Google Drive upload failed with HTTP ${response.status}.`);
+  const init = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,size,webViewLink', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json; charset=UTF-8',
+      'X-Upload-Content-Type': 'application/zip',
+      'X-Upload-Content-Length': String(data.length),
+    },
+    body: JSON.stringify(metadata),
+  });
+  if (!init.ok) {
+    const payload = await init.json().catch(() => ({}));
+    throw new Error(payload?.error?.message || `Google Drive upload initialization failed with HTTP ${init.status}.`);
+  }
+  const location = init.headers.get('location');
+  if (!location) throw new Error('Google Drive did not return an upload session URL.');
+  const upload = await fetch(location, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/zip', 'Content-Length': String(data.length) },
+    body: data,
+  });
+  const payload = await upload.json().catch(() => ({}));
+  if (!upload.ok) throw new Error(payload?.error?.message || `Google Drive upload failed with HTTP ${upload.status}.`);
   return payload;
 }
-
 async function listGoogleDriveBackups() {
   const config = await googleDriveConfig(); if (!config.enabled) return [];
   const token = await googleDriveAccessToken(config), folder = config.folderId.replace(/'/g, "\\'");
