@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import Avatar from '../components/Avatar';
 import VerifiedBadge from '../components/VerifiedBadge';
@@ -35,9 +35,7 @@ export default function Live() {
 
 function LiveHub() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState([]);
-  const [wallet, setWallet] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -45,24 +43,7 @@ function LiveHub() {
   const [studioOpen, setStudioOpen] = useState(false);
   const [studioTitle, setStudioTitle] = useState('');
   const [askTitle, setAskTitle] = useState(false);
-  const [topUpBusy, setTopUpBusy] = useState('');
-  const [showPacks, setShowPacks] = useState(false);
-  const [convertPoints, setConvertPoints] = useState('100');
-  const [withdrawAmount, setWithdrawAmount] = useState('100');
-  const [rewardBusy, setRewardBusy] = useState('');
-  const [referralLink, setReferralLink] = useState('');
-  const [withdrawals, setWithdrawals] = useState([]);
 
-  const loadWallet = useCallback(async () => {
-    try {
-      const result = await apiRequest('/live/wallet');
-      setWallet(result);
-      setReferralLink(result.referralLink || '');
-      apiRequest('/rewards/withdrawals').then((data) => setWithdrawals(data.withdrawals || [])).catch(() => {});
-    } catch (walletError) {
-      setError(walletError.message);
-    }
-  }, []);
 
   const loadSessions = useCallback(async (initial = false) => {
     try {
@@ -78,64 +59,11 @@ function LiveHub() {
 
   useEffect(() => {
     apiRequest('/profile/me').then((result) => setProfile(result.profile)).catch(() => {});
-    loadWallet();
     loadSessions(true);
     const timer = setInterval(() => loadSessions(false), 10_000);
     return () => clearInterval(timer);
-  }, [loadSessions, loadWallet]);
+  }, [loadSessions]);
 
-  // Flutterwave returns here after a points purchase.
-  useEffect(() => {
-    const result = searchParams.get('points');
-    if (!result) return;
-    if (result === 'success') {
-      setNotice('Your points top-up was successful.');
-      loadWallet();
-    } else if (result === 'failed') {
-      setError('That points payment did not complete. No points were added.');
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete('points');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams, loadWallet]);
-
-  const startTopUp = async (pack) => {
-    setTopUpBusy(pack.key);
-    setError('');
-    try {
-      const result = await apiRequest('/live/wallet/topup', {
-        method: 'POST',
-        body: { packKey: pack.key },
-      });
-      window.location.assign(result.checkoutUrl);
-    } catch (requestError) {
-      setError(requestError.message);
-      setTopUpBusy('');
-    }
-  };
-
-
-  const convertRewards = async (event) => {
-    event.preventDefault();
-    setRewardBusy('convert'); setError(''); setNotice('');
-    try {
-      const result = await apiRequest('/rewards/convert', { method: 'POST', body: { points: Number(convertPoints) } });
-      setNotice(result.message || 'Reward points converted.');
-      await loadWallet();
-    } catch (requestError) { setError(requestError.message); }
-    finally { setRewardBusy(''); }
-  };
-
-  const requestWithdrawal = async (event) => {
-    event.preventDefault();
-    setRewardBusy('withdraw'); setError(''); setNotice('');
-    try {
-      const result = await apiRequest('/rewards/withdrawals', { method: 'POST', body: { amount: Number(withdrawAmount) } });
-      setNotice(result.message || 'Withdrawal request submitted.');
-      await loadWallet();
-    } catch (requestError) { setError(requestError.message); }
-    finally { setRewardBusy(''); }
-  };
 
   const openStudio = () => {
     setStudioTitle('');
@@ -150,10 +78,7 @@ function LiveHub() {
   const finishStudio = () => {
     setStudioOpen(false);
     loadSessions(true);
-    loadWallet();
   };
-
-  const transactions = wallet?.transactions || [];
 
   return (
     <div className="mx-auto max-w-4xl pb-24 lg:pb-8">
@@ -170,98 +95,6 @@ function LiveHub() {
       {notice && <p className="mx-4 mt-4 rounded-xl bg-emerald-50 px-3 py-2 text-xs text-emerald-800" role="status">{notice}</p>}
       {error && <p className="mx-4 mt-4 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">{error}</p>}
 
-      <section className="m-4 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-blue-950 p-4 text-white shadow-lg">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-white/50">Gift wallet</p>
-            <p className="mt-1 text-2xl font-extrabold">
-              <i className="fa-solid fa-coins mr-2 text-amber-300" />
-              {Number(wallet?.balance || 0).toLocaleString()}
-              <span className="ml-1 text-sm font-bold text-white/50">pts</span>
-            </p>
-            <p className="mt-1 text-[11px] text-white/50">Gifts you receive from viewers are added here.</p>
-          </div>
-          <button type="button" onClick={() => setShowPacks((value) => !value)} className="rounded-full bg-white/10 px-3 py-2 text-[11px] font-bold text-white hover:bg-white/20">
-            <i className="fa-solid fa-plus mr-1" />Buy points
-          </button>
-        </div>
-
-        {showPacks && (
-          <div className="mt-3 border-t border-white/10 pt-3">
-            {wallet?.topUpAvailable ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(wallet.pointPacks || []).map((pack) => (
-                  <button
-                    key={pack.key}
-                    type="button"
-                    onClick={() => startTopUp(pack)}
-                    disabled={Boolean(topUpBusy)}
-                    className="rounded-xl border border-amber-300/30 bg-amber-400/10 p-2.5 text-left transition hover:bg-amber-400/20 disabled:opacity-60"
-                  >
-                    <span className="block text-sm font-extrabold text-amber-200">{pack.points.toLocaleString()} pts</span>
-                    <span className="block text-[10px] text-white/60">{topUpBusy === pack.key ? 'Opening…' : `₦${Number(pack.amount).toLocaleString('en-NG')}`}</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[11px] leading-4 text-amber-200">
-                To sell points, add the Flutterwave keys
-                {wallet?.missingConfig?.length ? ` (${wallet.missingConfig.join(', ')})` : ''} to <code>server/.env</code> and restart the API.
-                {wallet?.welcomePoints > 0 ? ` New wallets start with ${wallet.welcomePoints} welcome points.` : ''}
-              </p>
-            )}
-            {transactions.length > 0 && (
-              <div className="mt-3 space-y-1">
-                {transactions.slice(0, 5).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between text-[11px] text-white/60">
-                    <span>{LABELS[entry.kind] || entry.kind}</span>
-                    <span className={entry.amount > 0 ? 'font-bold text-emerald-300' : 'font-bold text-white/70'}>
-                      {entry.amount > 0 ? '+' : ''}{Number(entry.amount).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-
-      <section className="mx-4 mb-4 rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-700">Creator & referral rewards</p>
-            <p className="mt-1 text-2xl font-extrabold text-slate-900">{Number(wallet?.convertibleRewardPoints || 0).toLocaleString()} <span className="text-xs font-bold text-slate-400">eligible pts</span></p>
-            <p className="text-[11px] text-slate-500">Only points earned when another user spends points on your monetized content can be converted. Verification bonuses are for spending, not cash withdrawal.</p>
-          </div>
-          <div className="text-right">
-            <p className="text-[10px] font-bold uppercase text-slate-400">Withdrawable</p>
-            <p className="text-lg font-extrabold text-emerald-700">₦{Number(wallet?.cashBalance || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
-          </div>
-        </div>
-        <form onSubmit={convertRewards} className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-          <input type="number" min="100" max={Number(wallet?.convertibleRewardPoints || 0)} step="100" value={convertPoints} onChange={(event) => setConvertPoints(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800" aria-label="Reward points to convert" />
-          <button type="submit" disabled={Boolean(rewardBusy) || Number(wallet?.convertibleRewardPoints || 0) < 100} className="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{rewardBusy === 'convert' ? 'Converting…' : 'Convert to ₦'}</button>
-        </form>
-        <form onSubmit={requestWithdrawal} className="mt-2 grid grid-cols-[1fr_auto] gap-2">
-          <input type="number" min="100" step="1" value={withdrawAmount} onChange={(event) => setWithdrawAmount(event.target.value)} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-800" aria-label="Withdrawal amount in naira" />
-          <button type="submit" disabled={Boolean(rewardBusy)} className="rounded-xl border border-slate-200 bg-slate-900 px-4 py-2 text-xs font-bold text-white disabled:opacity-60">{rewardBusy === 'withdraw' ? 'Submitting…' : 'Request withdrawal'}</button>
-        </form>
-        <p className="mt-2 text-[10px] leading-4 text-slate-500">Withdrawals require a verified payout bank account and admin review. Minimum request: ₦100.</p>
-        {withdrawals.length > 0 && <div className="mt-2 space-y-1">{withdrawals.slice(0, 3).map((item) => <div key={item.id} className="flex items-center justify-between text-[10px] text-slate-500"><span>₦{Number(item.amount).toLocaleString('en-NG')} · {new Date(item.created_at).toLocaleDateString()}</span><span className="font-bold capitalize">{item.status}</span></div>)}</div>}
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-blue-50 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold text-blue-900">Invite friends · Earn 10 reward points each</p>
-            <p className="truncate text-[10px] text-blue-700">{referralLink || 'Your referral link loads with your wallet.'}</p>
-          </div>
-          <button type="button" onClick={() => {
-            const userId = JSON.parse(localStorage.getItem('user') || '{}').id || '';
-            const link = referralLink || (window.location.origin + '/register?ref=QC' + userId);
-            if (navigator.clipboard?.writeText) navigator.clipboard.writeText(link).then(() => setNotice('Referral link copied.')).catch(() => setError('Could not copy the referral link.'));
-            else setError('Copy is not available in this browser.');
-          }} className="shrink-0 rounded-lg bg-blue-700 px-3 py-2 text-[10px] font-bold text-white">Copy link</button>
-        </div>
-      </section>
       <section className="m-4">
         <div className="mb-3 flex items-center gap-2">
           <span className="relative flex h-2.5 w-2.5">
