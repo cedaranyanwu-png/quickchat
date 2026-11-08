@@ -468,7 +468,35 @@ export default function Admin() {
 
         {section === 'settings' && <AdminSettingsPanel />}
 
-        {section === 'audit' && <section><div className="mb-5"><h2 className="text-lg font-black text-slate-900">Administrative audit trail</h2><p className="mt-1 text-sm text-slate-500">Append-only record of sensitive administrative operations.</p></div><div className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-4">Action</th><th className="px-4 py-4">Administrator</th><th className="px-4 py-4">Target</th><th className="px-4 py-4">Reason</th><th className="px-4 py-4">Timestamp</th></tr></thead><tbody className="divide-y divide-slate-100">{auditLogs.map((log) => <tr key={log.id}><td className="px-5 py-4 font-bold text-slate-800">{log.action}</td><td className="px-4 py-4 text-xs">{log.administrator || log.admin_user_id}</td><td className="px-4 py-4 text-xs text-slate-500">{log.target_type || '—'} {log.target_id || ''}</td><td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{log.reason || '—'}</td><td className="px-4 py-4 text-xs text-slate-500">{formatDate(log.created_at)}</td></tr>)}</tbody></table></div>{!auditLogs.length && <p className="p-8 text-center text-sm text-slate-400">No audit entries recorded.</p>}</div></section>}
+        {section === 'audit' && (
+          <section>
+            <div className="mb-5">
+              <h2 className="text-lg font-black text-slate-900">Administrative audit trail</h2>
+              <p className="mt-1 text-sm text-slate-500">Append-only record of sensitive administrative operations.</p>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                    <tr><th className="px-5 py-4">Action</th><th className="px-4 py-4">Administrator</th><th className="px-4 py-4">Target</th><th className="px-4 py-4">Reason</th><th className="px-4 py-4">Timestamp</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {auditLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td className="px-5 py-4 font-bold text-slate-800">{log.action}</td>
+                        <td className="px-4 py-4 text-xs">{log.administrator || log.admin_user_id}</td>
+                        <td className="px-4 py-4 text-xs text-slate-500">{log.target_type || '—'} {log.target_id || ''}</td>
+                        <td className="max-w-[220px] truncate px-4 py-4 text-xs text-slate-500">{log.reason || '—'}</td>
+                        <td className="px-4 py-4 text-xs text-slate-500">{formatDate(log.created_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!auditLogs.length && <p className="p-8 text-center text-sm text-slate-400">No audit entries recorded.</p>}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   </div>;
