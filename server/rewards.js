@@ -1,6 +1,7 @@
 const db = require('./database');
 
 const POINTS_PER_NAIRA = 100;
+const PURCHASED_POINTS_PER_NAIRA = 10;
 const REFERRAL_REWARD_POINTS = 10;
 const DEFAULT_VERIFICATION_REWARD_POINTS = 2000;
 const PLATFORM_COMMISSION_PERCENT = 10;
@@ -216,7 +217,7 @@ async function initializeRewardTables() {
 
 module.exports = {
   initializeRewardTables,
-  POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS, DEFAULT_VERIFICATION_REWARD_POINTS,
+  POINTS_PER_NAIRA, PURCHASED_POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS, DEFAULT_VERIFICATION_REWARD_POINTS,
   PLATFORM_COMMISSION_PERCENT, awardReferral, awardVerification, cashBalance,
   convertRewardPoints, creditCash, creditRewardPoints, ensureRewardWallet,
   rewardBalance, recordRewardCommission,
