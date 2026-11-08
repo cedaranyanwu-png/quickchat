@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../api';
 import Avatar from './Avatar';
+import VerifiedBadge from './VerifiedBadge';
 
 // A slim "who is live" rail on Home. It only appears when somebody is live so
 // the feed stays calm when nobody is streaming.
@@ -47,7 +48,7 @@ export default function LiveNowStrip() {
               </span>
               <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-red-600 px-1.5 py-[1px] text-[8px] font-extrabold text-white">LIVE</span>
             </span>
-            <span className="mt-1 w-full truncate text-[10px] font-bold text-slate-700">{session.host?.name}</span>
+            <span className="mt-1 w-full truncate text-[10px] font-bold text-slate-700">{session.host?.name} <VerifiedBadge verified={session.host?.verified} /></span>
             <span className="text-[9px] text-slate-400">{session.viewers} watching</span>
           </button>
         ))}
