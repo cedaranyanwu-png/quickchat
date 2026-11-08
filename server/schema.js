@@ -105,7 +105,7 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS messages (
       id ${idColumn}, conversation_id INTEGER NOT NULL, sender_id INTEGER NOT NULL, text TEXT NOT NULL,
-      reply_to_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, media_upload_id INTEGER,
+      reply_to_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, delivered_at ${dateType}, read_at ${dateType}, media_upload_id INTEGER,
       media_type VARCHAR(20), media_url TEXT, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
     `CREATE TABLE IF NOT EXISTS message_calls (
@@ -372,7 +372,7 @@ async function addMissingMessageColumns() {
       ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
       : await db.query('SHOW COLUMNS FROM messages').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
 
-  const additions = { reply_to_message_id: 'INTEGER', media_upload_id: 'INTEGER', media_type: 'VARCHAR(20)', media_url: 'TEXT' };
+  const additions = { reply_to_message_id: 'INTEGER', delivered_at: db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP', read_at: db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP', media_upload_id: 'INTEGER', media_type: 'VARCHAR(20)', media_url: 'TEXT' };
   for (const [column, type] of Object.entries(additions)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE messages ADD COLUMN ${column} ${type}`);
   }
