@@ -22,6 +22,14 @@ async function initializePageTables() {
       status_id INTEGER NOT NULL, viewer_id INTEGER NOT NULL, viewed_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (status_id, viewer_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS status_likes (
+      status_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (status_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS status_comments (
+      id ${idColumn}, status_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+      body VARCHAR(2000) NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+    )`,
     `CREATE TABLE IF NOT EXISTS posts (
       id ${idColumn}, author_id INTEGER NOT NULL, body TEXT NOT NULL,
       kind VARCHAR(20) NOT NULL DEFAULT 'text', category VARCHAR(80), media TEXT, video_id INTEGER,
