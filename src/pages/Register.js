@@ -23,7 +23,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, referralCode: new URLSearchParams(window.location.search).get('ref') || '' }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -217,7 +217,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                 const response = await fetch(`${API_BASE_URL}/auth/google`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token: credentialResponse.credential }),
+                  body: JSON.stringify({ token: credentialResponse.credential, referralCode: new URLSearchParams(window.location.search).get('ref') || '' }),
                 });
                 const data = await response.json();
                 if (!response.ok) {
