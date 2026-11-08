@@ -5,6 +5,7 @@ const { GIFTS, POINT_PACKS, giftFor, welcomePoints } = require('../gifts');
 const { creditPoints, currentBalance, ensureWallet, recentTransactions, spendPoints } = require('../wallet');
 const { createPointsCheckout, topUpAvailable, topUpMissingConfig } = require('../points-purchase');
 const { notifyUser } = require('../notify');
+const { rewardBalance, cashBalance, POINTS_PER_NAIRA } = require('../rewards');
 const { creditRewardPoints, recordRewardCommission, PLATFORM_COMMISSION_PERCENT } = require('../rewards');
 
 const router = express.Router();
@@ -244,8 +245,14 @@ router.get('/live/catalog', asyncRoute(async (req, res) => {
 router.get('/live/wallet', asyncRoute(async (req, res) => {
   const wallet = await ensureWallet(req.user.id);
   const transactions = await recentTransactions(req.user.id);
+  const [earnedRewardPoints, withdrawableKobo] = await Promise.all([
+    rewardBalance(req.user.id), cashBalance(req.user.id),
+  ]);
   res.json({
     balance: Number(wallet.balance || 0),
+    rewardPoints: earnedRewardPoints,
+    cashBalance: (withdrawableKobo / 100).toFixed(2),
+    conversionRate: { points: POINTS_PER_NAIRA, naira: 1 },
     currency: 'NGN',
     welcomePoints: welcomePoints(),
     gifts: GIFTS,
