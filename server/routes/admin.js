@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
+const { getTrafficOverview } = require('../traffic-security');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -334,6 +335,11 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
     [req.user.id],
   );
   res.json({ userId: req.user.id, roles, permissions, admin: { id: req.adminAccount.id, username: req.adminAccount.username, mustChangePassword: Boolean(Number(req.adminAccount.must_change_password)) } });
+}));
+
+router.get('/admin/traffic', requirePermission('analytics.view'), asyncRoute(async (_req, res) => {
+  const traffic = await getTrafficOverview();
+  res.json(traffic);
 }));
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {

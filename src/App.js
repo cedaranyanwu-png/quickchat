@@ -215,6 +215,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const path = window.location.pathname.replace(/\\/$/, '') || '/';
+    if (!['/', '/login', '/register'].includes(path)) return undefined;
+    const controller = new AbortController();
+    fetch(`${API_BASE_URL}/traffic/landing`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page: path }),
+      signal: controller.signal,
+      keepalive: true,
+    }).catch(() => {});
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     const captureInstallPrompt = (event) => {
       event.preventDefault();
       window.__quickchatDeferredInstallPrompt = event;

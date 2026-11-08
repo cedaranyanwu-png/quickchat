@@ -5,6 +5,7 @@ const { OAuth2Client } = require('google-auth-library');
 const db = require('./database');
 const { sendEmail } = require('./email');
 const { createToken } = require('./middleware/authenticate');
+const { recordRegistration } = require('./traffic-security');
 
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -138,6 +139,7 @@ router.post('/register', async (req, res) => {
 
     if (!user) throw new Error('The account was created but could not be loaded.');
     await createWelcomeNotification(user.id);
+    await recordRegistration(req, user.id);
     return sendSession(res, user, 201, 'Account created successfully');
   } catch (error) {
     if (isUniqueConstraintError(error)) {
@@ -235,7 +237,10 @@ router.post('/google', async (req, res) => {
       );
       user.email_verified = 1;
     }
-    if (createdAccount) await createWelcomeNotification(user.id);
+    if (createdAccount) {
+      await createWelcomeNotification(user.id);
+      await recordRegistration(req, user.id);
+    }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
