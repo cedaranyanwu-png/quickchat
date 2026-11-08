@@ -82,7 +82,7 @@ export default function NovaAI() {
         setMessages(result.messages || []);
         setConversationId(result.conversationId || null);
       })
-      .catch((requestError) => { if (active) setError(requestError.message); });
+      .catch((requestError) => { if (active) setError(normalizeNetworkError(requestError)); });
     apiRequest('/nova/status').then((result) => { if (active) setStatus(result); }).catch(() => {
       if (active) setStatus({ available: false, provider: 'ollama', model: '', message: 'Could not reach the NovaAI status check.' });
     });
