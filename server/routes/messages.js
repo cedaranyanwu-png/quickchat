@@ -165,6 +165,7 @@ router.get('/messages/contacts', asyncRoute(async (req, res) => {
     username: user.username || '',
     handle: user.username?.startsWith('@') ? user.username : `@${user.username || ''}`,
     picture: user.avatar_url || user.picture || null,
+    verified: Boolean(Number(user.verified || 0)),
     isAutomated: Boolean(Number(user.is_synthetic || 0)),
     online: isAccountOnline(user),
     following: Boolean(user.following),
