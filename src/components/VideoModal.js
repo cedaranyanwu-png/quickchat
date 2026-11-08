@@ -181,6 +181,18 @@ export default function VideoModal({ videoId, onClose }) {
           <p className="mt-2 text-xs text-white/75">{video.views} views</p>
         </div>
         <div className="absolute right-3 bottom-10 flex flex-col gap-5 items-center text-white">
+          <button type="button" aria-label={soundEnabled ? 'Mute video' : 'Enable video sound'} onClick={(event) => {
+            event.stopPropagation();
+            const player = event.currentTarget.closest('[data-reel-id]')?.querySelector('video');
+            if (!player) return;
+            const nextEnabled = !soundEnabled;
+            setSoundEnabled(nextEnabled);
+            player.muted = !nextEnabled;
+            if (nextEnabled && player.paused) player.play().then(() => setAutoplayBlocked(false)).catch(() => setAutoplayBlocked(true));
+          }} className="flex flex-col items-center gap-1">
+            <i className={soundEnabled ? 'fa-solid fa-volume-high text-xl' : 'fa-solid fa-volume-xmark text-xl'} />
+            <span className="text-[10px]">{soundEnabled ? 'Sound on' : 'Sound off'}</span>
+          </button>
           <button onClick={(event) => { event.stopPropagation(); toggleVideoLike(video); }} className="flex flex-col items-center gap-1">
             <i className={`${video.liked ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart text-2xl`} />
             <span className="text-[10px]">{video.likes || 0}</span>
