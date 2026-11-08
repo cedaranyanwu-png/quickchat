@@ -95,6 +95,16 @@ router.get('/rewards/withdrawals', asyncRoute(async (req, res) => {
   res.json({ withdrawals: rows.map((row) => ({ ...row, amount: (Number(row.amount_kobo) / 100).toFixed(2) })) });
 }));
 
+router.get('/admin/rewards/commissions', requirePermission('rewards.manage'), asyncRoute(async (_req, res) => {
+  const totals = await db.getOne(
+    'SELECT COALESCE(SUM(gross_points), 0) AS gross_points, COALESCE(SUM(commission_points), 0) AS commission_points, COALESCE(SUM(recipient_points), 0) AS recipient_points FROM reward_platform_commissions',
+  );
+  const recent = await db.query(
+    'SELECT id, source_type, source_reference, gross_points, commission_points, recipient_points, created_at FROM reward_platform_commissions ORDER BY id DESC LIMIT 100',
+  );
+  res.json({ totals, commissions: recent });
+}));
+
 router.get('/admin/rewards/withdrawals', requirePermission('rewards.manage'), asyncRoute(async (req, res) => {
   const status = ['pending', 'approved', 'paid', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
   const rows = await db.query(
