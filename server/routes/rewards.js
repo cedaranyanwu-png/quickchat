@@ -3,7 +3,7 @@ const crypto = require('node:crypto');
 const { db, asyncRoute, notFound } = require('./utils');
 const {
   POINTS_PER_NAIRA, REFERRAL_REWARD_POINTS, awardVerification, cashBalance,
-  convertRewardPoints, rewardBalance,
+  convertRewardPoints, rewardBalance, convertibleRewardBalance,
 } = require('../rewards');
 const { requirePermission, audit } = require('./admin');
 
@@ -20,6 +20,7 @@ router.get('/rewards/me', asyncRoute(async (req, res) => {
   ]);
   res.json({
     rewardPoints: points,
+    convertibleRewardPoints: await convertibleRewardBalance(req.user.id),
     cashBalance: (cashKobo / 100).toFixed(2),
     currency: 'NGN',
     conversionRate: { points: POINTS_PER_NAIRA, naira: 1 },
