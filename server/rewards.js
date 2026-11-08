@@ -175,7 +175,7 @@ async function convertRewardPoints(userId, points) {
     await creditRewardPoints(userId, amount, { kind: 'conversion_rollback', reference: `${reference}_rollback` });
     return credited;
   }
-  return { ok: true, points: amount, naira, rewardBalance: debited.balance - amount, cashBalanceKobo: await cashBalance(userId) };
+  return { ok: true, points: amount, naira, rewardBalance: debited.balance, cashBalanceKobo: await cashBalance(userId) };
 }
 
 
@@ -205,7 +205,8 @@ async function initializeRewardTables() {
       kind VARCHAR(40) NOT NULL, reference VARCHAR(160) NOT NULL UNIQUE,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
-    `CREATE TABLE IF NOT EXISTS reward_platform_commissions (\n      id ${idColumn}, source_type VARCHAR(40) NOT NULL, source_reference VARCHAR(160) NOT NULL UNIQUE,\n      gross_points INTEGER NOT NULL, commission_points INTEGER NOT NULL, recipient_points INTEGER NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP\n    )`,\n    `CREATE TABLE IF NOT EXISTS user_referrals (
+    `CREATE TABLE IF NOT EXISTS reward_platform_commissions (\n      id ${idColumn}, source_type VARCHAR(40) NOT NULL, source_reference VARCHAR(160) NOT NULL UNIQUE,\n      gross_points INTEGER NOT NULL, commission_points INTEGER NOT NULL, recipient_points INTEGER NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP\n    )`,
+    `CREATE TABLE IF NOT EXISTS user_referrals (
       id ${idColumn}, referrer_id INTEGER NOT NULL, referred_user_id INTEGER NOT NULL UNIQUE,
       reward_points INTEGER NOT NULL DEFAULT 10, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
