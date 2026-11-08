@@ -49,6 +49,7 @@ import PushNotificationPrompt from './components/PushNotificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
+import NetworkStatus from './components/NetworkStatus';
 
 const SettingsHub = ({ onLogout }) => <>
   <div className="mx-auto max-w-3xl px-4 pt-3">
@@ -208,6 +209,21 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 };
 
 export default function App() {
+  useEffect(() => {
+    // Register the app shell worker for every visitor, including signed-out users.
+    registerServiceWorker().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const captureInstallPrompt = (event) => {
+      event.preventDefault();
+      window.__quickchatDeferredInstallPrompt = event;
+      window.dispatchEvent(new Event('quickchat:pwa-install-available'));
+    };
+    window.addEventListener('beforeinstallprompt', captureInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', captureInstallPrompt);
+  }, []);
+
   const [googleClientId, setGoogleClientId] = useState(process.env.REACT_APP_GOOGLE_CLIENT_ID || '');
   const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem('token')));
 
@@ -229,8 +245,8 @@ export default function App() {
 
   const handleAuthenticated = (authenticated = true) => setIsAuthenticated(authenticated);
   const ageConsentIdentity = getAgeConsentIdentity();
-  const app = <BrowserRouter><AdultContentProvider key={ageConsentIdentity} identity={ageConsentIdentity}>
+  const app = <><NetworkStatus /><BrowserRouter><AdultContentProvider key={ageConsentIdentity} identity={ageConsentIdentity}>
     <Layout googleEnabled={Boolean(googleClientId)} onAuthenticated={handleAuthenticated} isAuthenticated={isAuthenticated} />
-  </AdultContentProvider></BrowserRouter>;
+  </AdultContentProvider></BrowserRouter></>;
   return googleClientId ? <GoogleOAuthProvider clientId={googleClientId}>{app}</GoogleOAuthProvider> : app;
 }
