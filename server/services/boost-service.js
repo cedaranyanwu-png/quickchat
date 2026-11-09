@@ -132,6 +132,7 @@ async function getEligibleBoostedProfiles({ userInterests = [], currentUserId, l
         AND bp.status = 'active'
         AND bp.expires_at > ?
         AND bp.promoted_profile_id <> ?
+        AND COALESCE(u.is_synthetic, 0) = 0
         AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY bp.created_at DESC LIMIT 20`,
     [now, currentUserId, currentUserId]
