@@ -133,7 +133,8 @@ export default function AdminAdsPanel() {
             <input type="url" value={form.imageUrl} onChange={(e) => update('imageUrl', e.target.value)} placeholder="https://cdn.example.com/ad-image.jpg" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-blue-500" />
           </label>
           </>}
-          {form.type === 'script' && <label className="mt-3 block text-xs font-bold text-slate-700">Native Banner / Advertising JavaScript snippet
+          {form.type === 'script' && <>
+          <label className="mt-3 block text-xs font-bold text-slate-700">Native Banner / Advertising JavaScript snippet
             <textarea value={form.scriptCode} onChange={(e) => update('scriptCode', e.target.value)} maxLength={50000} rows={10} spellCheck={false} autoComplete="off" placeholder={'Paste the complete Native Banner snippet, including its &lt;script&gt; and container &lt;div&gt;...'} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 px-3 py-3 font-mono text-xs leading-5 text-emerald-300 outline-none focus:border-blue-500" />
             <span className="mt-1 block text-[11px] font-normal leading-5 text-slate-500">Up to 50,000 characters. The snippet runs inside an isolated responsive ad frame and keeps its original script/container pairing.</span>
           </label>
@@ -143,6 +144,8 @@ export default function AdminAdsPanel() {
             <button type="button" onClick={reset} className="rounded-xl border border-slate-200 px-5 py-3 text-xs font-bold text-slate-600">Clear form</button>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">Native Banner snippets run inside an isolated responsive iframe so the third-party script can initialize while remaining separated from the main QuickChat page. Link and native ads continue to accept HTTP(S) destinations.</p>
+          </>
+          }
         </form>
 
         <div className="space-y-3">
