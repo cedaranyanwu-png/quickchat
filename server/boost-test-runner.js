@@ -113,34 +113,42 @@ async function runSyntheticBoostTestPass() {
         if (eventType === 'follow') {
           if (targetId === botUserId) continue;
           const existing = await db.getOne(
-            'SELECT follower_id FROM follows WHERE follower_id = ? AND followed_id = ?',
+            'SELECT follower_id, COALESCE(is_synthetic, 0) AS is_synthetic FROM follows WHERE follower_id = ? AND followed_id = ?',
             [botUserId, targetId],
           );
-          if (existing) {
+          if (existing && Number(existing.is_synthetic) !== 1) {
             skippedExisting += 1;
             usedUsers.add(botUserId);
             continue;
           }
 
-          await db.query(
-            'INSERT INTO follows (follower_id, followed_id, is_synthetic) VALUES (?, ?, 1)',
-            [botUserId, targetId],
-          );
+          // Recover a synthetic relationship created by an earlier interrupted
+          // pass instead of leaving its campaign counter permanently at zero.
+          if (!existing) {
+            await db.query(
+              'INSERT INTO follows (follower_id, followed_id, is_synthetic) VALUES (?, ?, 1)',
+              [botUserId, targetId],
+            );
+          }
         } else {
           const existing = await db.getOne(
-            'SELECT user_id FROM post_likes WHERE post_id = ? AND user_id = ?',
+            'SELECT user_id, COALESCE(is_synthetic, 0) AS is_synthetic FROM post_likes WHERE post_id = ? AND user_id = ?',
             [postId, botUserId],
           );
-          if (existing) {
+          if (existing && Number(existing.is_synthetic) !== 1) {
             skippedExisting += 1;
             usedUsers.add(botUserId);
             continue;
           }
 
-          await db.query(
-            'INSERT INTO post_likes (post_id, user_id, is_synthetic) VALUES (?, ?, 1)',
-            [postId, botUserId],
-          );
+          // Recover a synthetic like left behind if a previous pass stopped
+          // before its audit event and delivery counter were written.
+          if (!existing) {
+            await db.query(
+              'INSERT INTO post_likes (post_id, user_id, is_synthetic) VALUES (?, ?, 1)',
+              [postId, botUserId],
+            );
+          }
         }
 
         await db.query(
