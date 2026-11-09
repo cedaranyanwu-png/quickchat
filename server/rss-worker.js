@@ -18,11 +18,11 @@ async function activateExistingSourcesOnce() {
   );
   if (completed) return;
 
-  const disabled = await db.getOne('SELECT COUNT(*) AS total FROM rss_sources WHERE enabled = 0');
+  const disabled = await db.getOne('SELECT COUNT(*) AS total FROM rss_sources WHERE enabled = 0 OR auto_sync = 0');
   const activatedCount = Number(disabled && disabled.total || 0);
   if (activatedCount > 0) {
     await db.update(
-      'UPDATE rss_sources SET enabled = 1, auto_sync = 1, updated_at = CURRENT_TIMESTAMP WHERE enabled = 0',
+      'UPDATE rss_sources SET enabled = 1, auto_sync = 1, updated_at = CURRENT_TIMESTAMP WHERE enabled = 0 OR auto_sync = 0',
     );
   }
   await db.insert(
