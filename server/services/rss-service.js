@@ -265,9 +265,10 @@ async function syncSource(sourceId, { force = false } = {}) {
   try {
     const result = await fetchFeedWithRetry(source.feed_url, { etag: source.etag, lastModified: source.last_modified });
     if (result.notModified) {
+      const feedPostsPublished = await publishExistingArticles(sourceId);
       await db.update('UPDATE rss_sources SET last_sync_at = CURRENT_TIMESTAMP, last_success_at = CURRENT_TIMESTAMP, last_error = NULL WHERE id = ?', [sourceId]);
       await logSync(sourceId, 'unchanged', counts, null, startedAt);
-      return { sourceId, ...counts, unchanged: true };
+      return { sourceId, ...counts, feedPostsPublished, unchanged: true };
     }
     const publisher = String(result.parsed.title || source.name || 'Publisher').trim().slice(0, 150);
     counts.fetched = result.items.length;
