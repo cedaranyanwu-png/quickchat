@@ -28,6 +28,9 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
   const navigate = useNavigate();
   const [item, setItem] = useState(post);
   const [showReplies, setShowReplies] = useState(false);
+  const [reactionMenuOpen, setReactionMenuOpen] = useState(false);
+  const [postReaction, setPostReaction] = useState(null);
+  const [postReactionCount, setPostReactionCount] = useState(0);
   const [replies, setReplies] = useState([]);
   const [replyText, setReplyText] = useState('');
   const [error, setError] = useState('');
@@ -125,6 +128,35 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
     } finally {
       setReportBusy(false);
     }
+  };
+
+  useEffect(() => {
+    if (!item.id || readOnly || item.itemType === 'ad' || item.isSponsored) return undefined;
+    let active = true;
+    apiRequest(`/posts/${item.id}/reactions`)
+      .then((result) => {
+        if (!active) return;
+        setPostReaction(result.myReaction || null);
+        setPostReactionCount(Number(result.total || 0));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [item.id, readOnly, item.itemType, item.isSponsored]);
+
+  const reactToPost = async (reaction) => {
+    try {
+      setError('');
+      if (postReaction === reaction) {
+        const result = await apiRequest(`/posts/${item.id}/reactions`, { method: 'DELETE' });
+        setPostReaction(null);
+        setPostReactionCount(Number(result.total || 0));
+      } else {
+        const result = await apiRequest(`/posts/${item.id}/reactions`, { method: 'POST', body: { reaction } });
+        setPostReaction(result.reaction);
+        setPostReactionCount(Number(result.total || 0));
+      }
+      setReactionMenuOpen(false);
+    } catch (requestError) { setError(requestError.message); }
   };
 
   const toggleLike = async () => {
@@ -492,6 +524,24 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
           <div className="flex items-center justify-between max-w-lg mt-3 text-slate-500 text-xs">
             {!readOnly && <button onClick={toggleReplies} disabled={item.isAdult && !adultContentConfirmed} className="hover:text-blue-700 flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-50" aria-label="View replies"><i className="fa-regular fa-comment"></i>{item.replies || 0}</button>}
             {!readOnly && <button onClick={toggleRepost} className={`flex items-center gap-1 ${item.reposted ? 'text-emerald-700' : 'hover:text-emerald-600'}`} aria-label={item.reposted ? 'Undo repost' : 'Repost'}><i className="fa-solid fa-retweet"></i>{item.shares || 0}</button>}
+            {!readOnly && (
+              <div className="relative flex items-center gap-1">
+                <button type="button" onClick={() => setReactionMenuOpen((value) => !value)}
+                  className={`flex items-center gap-1 ${postReaction ? 'text-blue-700' : 'hover:text-blue-700'}`} aria-label="React to post">
+                  <span className="text-sm">{postReaction || '😊'}</span>{postReactionCount || ''}
+                </button>
+                {reactionMenuOpen && (
+                  <div className="absolute bottom-full left-0 z-30 mb-2 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-lg">
+                    {['❤️', '😂', '😍', '👍', '🔥', '😢', '😡'].map((reaction) => (
+                      <button key={reaction} type="button" onClick={() => reactToPost(reaction)}
+                        className={`grid h-8 w-8 place-items-center rounded-full text-sm hover:bg-slate-100 ${postReaction === reaction ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`}>
+                        {reaction}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {!readOnly && <button onClick={toggleLike} className={`flex items-center gap-1 ${item.liked ? 'text-red-600' : 'hover:text-red-600'}`} aria-label={item.liked ? 'Unlike post' : 'Like post'}><i className={`${item.liked ? 'fa-solid' : 'fa-regular'} fa-heart`}></i>{item.likes || 0}</button>}
             {!readOnly && <button onClick={toggleBookmark} className={item.bookmarked ? 'text-blue-700' : 'hover:text-blue-700'} aria-label={item.bookmarked ? 'Remove bookmark' : 'Bookmark post'}><i className={`${item.bookmarked ? 'fa-solid' : 'fa-regular'} fa-bookmark`}></i></button>}
             {showShare && (!item.isAdult || adultContentConfirmed) && <ShareMenu path={`/share/post/${item.id}`} title={`Post by ${item.name || 'QuickChat user'}`} text={item.text || 'See this post on QuickChat'} downloads={downloads} />}
