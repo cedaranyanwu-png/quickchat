@@ -41,7 +41,7 @@ export default function AdminAdsPanel() {
     if (form.type === 'native' && !form.description.trim()) return setError('Native ads need a description.');
     const entry = {
       ...form,
-      id: editingId || (globalThis.crypto?.randomUUID?.() || `ad-${Date.now()}`),
+      id: editingId || (`ad-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`),
       title: form.title.trim(),
       description: form.description.trim(),
       imageUrl: form.imageUrl.trim(),
