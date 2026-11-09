@@ -47,8 +47,9 @@ const COMMUNITY_ACCESS = `(p.community_id IS NULL OR c.monthly_price IS NULL OR 
                 AND cs.current_period_end > CURRENT_TIMESTAMP))`;
 
 async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface = 'find_friends') {
+  const visibilityKey = surface === 'home' ? 'bots_show_home' : surface === 'explore' ? 'bots_show_explore' : 'bots_show_find_friends';
   const visible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
-    && String(await getSetting(surface === 'home' ? 'bots_show_home' : 'bots_show_find_friends', 'false')).toLowerCase() === 'true';
+    && String(await getSetting(visibilityKey, 'false')).toLowerCase() === 'true';
   const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
     && String(await getSetting('bots_show_explore', 'false')).toLowerCase() === 'true';
   const people = await db.query(
