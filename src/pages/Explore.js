@@ -277,7 +277,7 @@ export default function Explore({ openModal, openVideo }) {
 
       {/* Main Tab Content */}
       <div className="px-4 pt-2">
-        {activeTab === 'sponsored' && <AdFeedSlot className="mb-3 rounded-xl border border-slate-200" />}
+        {activeTab === 'sponsored' && <AdFeedSlot placement="explore" slotIndex={0} className="mb-3 rounded-xl border border-slate-200" />}
         {error && <p className="p-4 text-sm text-red-600 bg-red-50 rounded-xl mb-3">{error}</p>}
         {loading && (
           <div className="py-12 text-center text-slate-400">
