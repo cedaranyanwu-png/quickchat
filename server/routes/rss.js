@@ -232,7 +232,7 @@ router.post('/rss/admin/sources', asyncRoute(async (req, res) => {
     'INSERT INTO rss_sources (name, feed_url, publisher_name, publisher_url, region, categories, enabled, auto_sync, sync_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [name, feedUrl, String(test.parsed.title || name).slice(0, 150), String(req.body && req.body.publisherUrl || '').slice(0, 512) || null,
       String(req.body && req.body.region || '').slice(0, 40) || null, JSON.stringify(categories), enabled,
-      req.body && req.body.autoSync === false ? 0 : 1, Math.max(10, Math.min(60, Number(req.body && req.body.syncIntervalMinutes) || 15))],
+      0, Math.max(10, Math.min(60, Number(req.body && req.body.syncIntervalMinutes) || 15))],
   );
   res.status(201).json({ source: row, test: { itemCount: test.items.length, publisher: test.parsed.title || name } });
 }));
@@ -253,7 +253,7 @@ router.patch('/rss/admin/sources/:sourceId', asyncRoute(async (req, res) => {
   }
   const categories = req.body && Array.isArray(req.body.categories) ? req.body.categories : parseArray(source.categories);
   const enabled = req.body && req.body.enabled !== undefined ? (req.body.enabled ? 1 : 0) : Number(source.enabled);
-  const autoSync = req.body && req.body.autoSync !== undefined ? (req.body.autoSync ? 1 : 0) : Number(source.auto_sync);
+  const autoSync = 0;
   await db.update(
     'UPDATE rss_sources SET name = ?, feed_url = ?, publisher_name = ?, categories = ?, enabled = ?, auto_sync = ?, sync_interval_minutes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
     [name, feedUrl, publisher, JSON.stringify(categories), enabled, autoSync,
