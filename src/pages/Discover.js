@@ -73,17 +73,26 @@ export default function Discover({ openModal, openVideo, embedded = false }) {
     try {
       const params = new URLSearchParams({ limit: '12', page: String(nextPage) });
       if (categoryValue(category)) params.set('category', categoryValue(category));
-      const [articleResult, discoverResult] = await Promise.all([
+
+      // RSS articles are the primary Explore feed. Community recommendations are
+      // supplemental and must never prevent publisher articles from rendering.
+      const [articleResult, discoverResult] = await Promise.allSettled([
         apiRequest('/rss/articles?' + params.toString()),
         apiRequest('/discover'),
       ]);
-      setArticles((current) => append ? [...current, ...(articleResult.articles || [])] : (articleResult.articles || []));
-      setHasMore(Boolean(articleResult.hasMore));
+
+      if (articleResult.status === 'rejected') throw articleResult.reason;
+      const articleData = articleResult.value || {};
+      setArticles((current) => append ? [...current, ...(articleData.articles || [])] : (articleData.articles || []));
+      setHasMore(Boolean(articleData.hasMore));
       setPage(nextPage);
-      setTrendingPosts((discoverResult.trendingPosts || []).map(normalizeDiscoverPost));
-      setPeople(discoverResult.people || []);
+
+      if (discoverResult.status === 'fulfilled' && discoverResult.value) {
+        setTrendingPosts((discoverResult.value.trendingPosts || []).map(normalizeDiscoverPost));
+        setPeople(discoverResult.value.people || []);
+      }
     } catch (requestError) {
-      setError(requestError.message || 'Discover could not load right now.');
+      setError(requestError.message || 'RSS articles could not load right now.');
       if (!append) setArticles([]);
     } finally {
       setLoading(false);
