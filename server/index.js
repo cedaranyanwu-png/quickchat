@@ -36,6 +36,7 @@ const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
 const { publicAppUrl } = require('./flutterwave');
 const { emailProvider } = require('./email');
+const { getSetting } = require('./platform-settings');
 const { initializePush, getPublicKey, isPushReady } = require('./push');
 
 const app = express();
@@ -77,16 +78,19 @@ app.use((req, res, next) => {
 // Public runtime configuration. Everything here is safe to expose to browsers;
 // secrets stay in server/.env. The live/local switch and domain come from env,
 // so the same build can run against localhost or the live domain.
-app.get('/api/config', (_req, res) => {
-  const appUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
-  res.json({
-    googleClientId: process.env.GOOGLE_CLIENT_ID || process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
-    environment: appEnvironment,
-    appUrl,
-    apiOrigin: String(process.env.PUBLIC_API_ORIGIN || '').trim().replace(/\/$/, ''),
-    push: { available: isPushReady(), publicKey: getPublicKey() },
-    features: { live: true, liveGifts: true, push: true, nova: true },
-  });
+app.get('/api/config', async (_req, res, next) => {
+  try {
+    const appUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\/$/, '');
+    const rssPublisher = String(await getSetting('rss_publisher_enabled', 'false')).toLowerCase() === 'true';
+    res.json({
+      googleClientId: process.env.GOOGLE_CLIENT_ID || process.env.REACT_APP_GOOGLE_CLIENT_ID || '',
+      environment: appEnvironment,
+      appUrl,
+      apiOrigin: String(process.env.PUBLIC_API_ORIGIN || '').trim().replace(/\/$/, ''),
+      push: { available: isPushReady(), publicKey: getPublicKey() },
+      features: { live: true, liveGifts: true, push: true, nova: true, rssPublisher },
+    });
+  } catch (error) { next(error); }
 });
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', environment: appEnvironment, database: db.type, email: emailProvider(), push: isPushReady() }));
 app.use('/api/auth', authRoutes);
