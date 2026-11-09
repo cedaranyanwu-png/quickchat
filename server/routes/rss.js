@@ -1,6 +1,7 @@
 const express = require('express');
 const { db, asyncRoute, clampLimit, notFound, uniqueConstraint } = require('./utils');
 const { fetchFeed, validateFeedUrl, syncSource } = require('../services/rss-service');
+const { getSetting } = require('../platform-settings');
 
 const router = express.Router();
 const allowedActions = new Set(['view', 'click', 'share']);
@@ -83,6 +84,8 @@ function diversifyArticles(rows, maxPerPublisher = 3) {
 }
 
 router.get('/rss/articles', asyncRoute(async (req, res) => {
+  const publisherEnabled = String(await getSetting('rss_publisher_enabled', 'false')).toLowerCase() === 'true';
+  if (!publisherEnabled) return res.json({ articles: [], page: 1, limit: clampLimit(req.query.limit, 20, 50), total: 0, hasMore: false, enabled: false });
   const limit = clampLimit(req.query.limit, 20, 50);
   const page = Math.max(1, Math.min(10000, Number.parseInt(req.query.page, 10) || 1));
   const offset = (page - 1) * limit;
