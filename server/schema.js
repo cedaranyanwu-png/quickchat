@@ -206,7 +206,14 @@ async function initializePageTables() {
       PRIMARY KEY (session_id, user_id)
     )`,
     // WebRTC offers, answers, and ICE candidates are relayed through this table.
-    `CREATE TABLE IF NOT EXISTS message_reactions (\n      message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (message_id, user_id)\n    )`,\n    `CREATE TABLE IF NOT EXISTS post_reactions (\n      post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (post_id, user_id)\n    )`,\n    `CREATE TABLE IF NOT EXISTS live_signals (
+    `CREATE TABLE IF NOT EXISTS message_reactions (
+      message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (message_id, user_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS post_reactions (
+      post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (post_id, user_id)
+    )`,
       id ${idColumn}, session_id INTEGER NOT NULL, from_user_id INTEGER NOT NULL,
       to_user_id INTEGER NOT NULL, kind VARCHAR(20) NOT NULL, payload TEXT,
       created_at_ms ${epochType} NOT NULL DEFAULT 0
