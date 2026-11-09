@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { apiRequest } from '../api';
 
+function ScriptAdFrame({ ad }) {
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;width:100%;min-height:100%;overflow-x:hidden;background:transparent}body{display:flex;justify-content:center;align-items:flex-start}#ad-root{width:100%;max-width:100%;overflow:hidden}img,iframe,video,ins,div{max-width:100%}</style></head><body><div id="ad-root">${ad.scriptCode || ''}</div></body></html>`;
+  return <section className="w-full overflow-hidden border-b border-slate-200 bg-white px-2 py-3" aria-label="Sponsored advertisement">
+    <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">Sponsored</div>
+    <iframe title={`Advertisement: ${ad.title || 'Sponsored content'}`} srcDoc={srcDoc} sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" referrerPolicy="strict-origin-when-cross-origin" loading="lazy" style={{ display: 'block', width: '100%', minHeight: 120, height: 320, border: 0, background: 'transparent' }} />
+  </section>;
+}
+
 function AdCard({ ad }) {
   if (!ad) return null;
   return (
@@ -36,5 +44,6 @@ export default function AdFeedSlot({ className = '', placement = 'home', slotInd
   }, [placement, slotIndex]);
 
   if (!ad) return null;
+  if (ad.type === 'script' && ad.scriptCode) return <div className={className}><ScriptAdFrame ad={ad} /></div>;
   return <section aria-label="Sponsored content" className={className}><AdCard ad={ad} /></section>;
 }
