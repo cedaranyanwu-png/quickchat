@@ -50,8 +50,6 @@ async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface
   const visibilityKey = surface === 'home' ? 'bots_show_home' : surface === 'explore' ? 'bots_show_explore' : 'bots_show_find_friends';
   const visible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
     && String(await getSetting(visibilityKey, 'false')).toLowerCase() === 'true';
-  const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
-    && String(await getSetting('bots_show_find_friends', 'false')).toLowerCase() === 'true';
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
@@ -277,6 +275,8 @@ router.get('/discover', asyncRoute(async (req, res) => {
       ORDER BY engagement_score DESC, p.created_at DESC, p.id DESC LIMIT 5`,
     [req.user.id, req.user.id, req.user.id],
   );
+  const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
+    && String(await getSetting('bots_show_find_friends', 'false')).toLowerCase() === 'true';
   const mediaRows = await db.query(
     `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname
        FROM posts p JOIN users u ON u.id = p.author_id
