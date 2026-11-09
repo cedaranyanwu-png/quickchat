@@ -89,7 +89,6 @@ async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface
     bio: person.bio || '',
     picture: person.avatar_url || person.picture || null,
     verified: Boolean(Number(person.verified || 0)),
-    isAutomated: Boolean(Number(person.is_synthetic || 0)),
     followers: Number(person.follower_count || 0),
   }));
 }
