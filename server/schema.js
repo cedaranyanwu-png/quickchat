@@ -347,11 +347,22 @@ async function initializePageTables() {
   for (const statement of statements) await db.query(statement);
   await addMissingPostColumns();
   await addMissingBoostColumns();
+  await addMissingBotTestColumns();
   await addMissingPaymentColumns();
   await addMissingNotificationColumns();
   await addMissingMessageColumns();
   await addMissingCommunityColumns();
   await ensureIndexes();
+}
+
+
+async function addMissingBotTestColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(boost_test_events)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', ['boost_test_events']).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM boost_test_events').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+  if (!columns.has('bot_id')) await db.query('ALTER TABLE boost_test_events ADD COLUMN bot_id INTEGER');
 }
 
 async function addMissingCommunityColumns() {
