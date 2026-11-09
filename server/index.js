@@ -227,6 +227,13 @@ function escapeHtml(value) {
 
 // Page APIs require the bearer token returned by the login and registration routes.
 app.use('/api', (req, res, next) => {
+  // Managed feed placements and their isolated renderer are public read-only
+  // endpoints. They must be reachable by guests so sponsored content can load.
+  if (req.method === 'GET' && (
+    req.path === '/ads/placements' ||
+    /^\/ads\/render\/[^/]+$/.test(req.path)
+  )) return next();
+
   // The admin console has its own token namespace and never consumes the user token.
   if (req.path === '/admin/auth/login') return next();
   if (req.path.startsWith('/admin/')) return adminAuth.authenticateAdmin(req, res, next);
