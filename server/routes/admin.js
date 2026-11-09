@@ -40,23 +40,6 @@ async function initializeAdminTables() {
   await initializePlatformSettings();
   if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
   const statements = [
-    `CREATE TABLE IF NOT EXISTS bots (
-      id ${idColumn}, user_id INTEGER NOT NULL UNIQUE, bot_key VARCHAR(100) NOT NULL UNIQUE,
-      display_name VARCHAR(160) NOT NULL, username VARCHAR(80) NOT NULL,
-      status VARCHAR(20) NOT NULL DEFAULT 'active', created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS bot_follow_events (
-      id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, target_user_id INTEGER NOT NULL,
-      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, target_user_id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS bot_reach_events (
-      id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, post_id INTEGER,
-      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, post_id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS bot_post_like_events (
-      id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, post_id INTEGER NOT NULL,
-      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, post_id)
-    )`,
     `CREATE TABLE IF NOT EXISTS admin_roles (
       id ${idColumn}, role_key VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(120) NOT NULL,
       description TEXT, is_system INTEGER NOT NULL DEFAULT 0, is_active INTEGER NOT NULL DEFAULT 1,
@@ -447,8 +430,8 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
             CASE WHEN EXISTS (SELECT 1 FROM account_bans b WHERE b.user_id = u.id AND b.revoked_at IS NULL) THEN 'banned'
                  WHEN EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP'}) THEN 'suspended'
                  ELSE 'active' END AS account_status,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
-            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS followers,
+            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS following,
             (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS posts
        FROM users u ${filter} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?`,
     [...params, limit, (page - 1) * limit],
@@ -717,7 +700,7 @@ router.get('/admin/moderation/posts', requirePermission('posts.view'), asyncRout
   const posts = await db.query(
     `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.media, p.visibility, p.created_at,
             u.username, u.fullname, u.avatar_url,
-            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS likes,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS comments,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS reposts
        FROM posts p JOIN users u ON u.id = p.author_id ${where}
@@ -751,8 +734,8 @@ router.get('/admin/bots', requirePermission('settings.manage'), asyncRoute(async
                 FROM bots b JOIN users u ON u.id = b.user_id
                ORDER BY b.id DESC LIMIT ? OFFSET ?`, [limit, offset]),
     db.getCount('SELECT COUNT(*) AS count FROM bots'),
-    db.getCount('SELECT COUNT(*) AS count FROM bot_follow_events'),
-    db.getCount('SELECT COUNT(*) AS count FROM bot_post_like_events'),
+    db.getCount("SELECT COUNT(*) AS count FROM boost_test_events WHERE event_type = 'follow' AND bot_id IS NOT NULL"),
+    db.getCount("SELECT COUNT(*) AS count FROM boost_test_events WHERE event_type = 'like' AND bot_id IS NOT NULL"),
   ]);
   res.json({ bots, total, page, pages: Math.max(1, Math.ceil(total / limit)), activity: { follows, likes } });
 }));
@@ -817,7 +800,6 @@ router.patch('/admin/bots/:id', requirePermission('settings.manage'), asyncRoute
   const bot = await db.getOne('SELECT id, user_id FROM bots WHERE id = ?', [id]);
   if (!bot) return res.status(404).json({ message: 'Bot account not found.' });
   await db.query('UPDATE bots SET status = ? WHERE id = ?', [status, id]);
-  await db.query('UPDATE users SET automation_status = ? WHERE id = ?', [status, bot.user_id]);
   await audit(req, 'bot.status_changed', 'bot', id, `Bot status changed to ${status}`);
   res.json({ message: `Bot account ${status}.` });
 }));
