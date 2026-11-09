@@ -16,6 +16,9 @@ const {
 } = require('./ai-poster-characters');
 
 const isProduction = process.env.NODE_ENV === 'production';
+// Production RSS publishing is handled by rss-worker.js under @quickchat-rss.
+// Keep the character runtime away from RSS imports and staged RSS posts.
+const rssPublishingDisabled = String(process.env.AI_POSTER_DISABLE_RSS_PUBLISHING || (isProduction ? 'true' : 'false')).toLowerCase() === 'true';
 const modelUrl = process.env.AI_POSTER_MODEL_URL || 'http://localhost:11434/api/chat';
 const model = process.env.AI_POSTER_MODEL || 'llama3.2';
 const feedTimeoutMs = positiveInteger(process.env.AI_POSTER_FEED_TIMEOUT_MS, 30000);
@@ -840,13 +843,17 @@ async function runOnce() {
   if (runInProgress || shuttingDown) return;
   runInProgress = true;
   try {
-    if (!stageDatabase) {
-      stageDatabase = createStageDatabase();
-      await initializeStageDatabase(stageDatabase);
-    }
     const database = await getApplicationDatabase();
-    const feeds = configuredFeeds();
-    await publishStagedPosts(stageDatabase, database, feeds);
+    const feeds = rssPublishingDisabled ? [] : configuredFeeds();
+    if (!rssPublishingDisabled) {
+      if (!stageDatabase) {
+        stageDatabase = createStageDatabase();
+        await initializeStageDatabase(stageDatabase);
+      }
+      await publishStagedPosts(stageDatabase, database, feeds);
+    } else {
+      log('RSS polling and staged RSS publishing are disabled; the dedicated RSS worker owns feed publishing.');
+    }
     if (process.env.AI_POSTER_STAGED_ONLY === '1') {
       log('Staged-story publishing pass complete; feed polling was skipped.');
       return;
@@ -856,6 +863,10 @@ async function runOnce() {
     await engageWithHumanPosts(database);
     await startHumanConversations(database);
     await respondToHumanMessages(database);
+    if (rssPublishingDisabled) {
+      if (!shuttingDown) await engageWithRecentPosts(database);
+      return;
+    }
     if (!feeds.length) {
       log('No valid URLs are configured in AI_POSTER_FEEDS.');
       return;
@@ -1455,8 +1466,9 @@ async function shutdown(signal) {
 }
 
 async function start() {
-  const feeds = configuredFeeds();
-  if (!feeds.length) log('No valid URLs are configured in AI_POSTER_FEEDS.');
+  const feeds = rssPublishingDisabled ? [] : configuredFeeds();
+  if (rssPublishingDisabled) log('RSS publishing disabled; the dedicated RSS worker owns all feed posts.');
+  else if (!feeds.length) log('No valid URLs are configured in AI_POSTER_FEEDS.');
   log(`Starting with ${feeds.length} feed(s), model ${model}, schedule "${scheduleExpression}".`);
   if (process.env.AI_POSTER_RUN_ONCE === '1') {
     await runOnce();
