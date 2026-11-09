@@ -502,6 +502,7 @@ function startServer() {
   return initializeDB()
     .then(() => initializePush())
     .then(() => initializeBackupSchedule())
+    .then(() => { startSyntheticBoostTestRunner(); })
     .then(
       () => new Promise((resolve) => {
         const server = app.listen(port, () => {
@@ -515,6 +516,7 @@ function startServer() {
         const shutdown = () => {
           if (shuttingDown) return;
           shuttingDown = true;
+          stopSyntheticBoostTestRunner();
           server.close(async () => {
             await db.close();
             process.exit(0);
