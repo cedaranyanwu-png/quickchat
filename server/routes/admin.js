@@ -308,27 +308,58 @@ router.put('/admin/ads', requirePermission('ads.manage'), asyncRoute(async (req,
   if (!Array.isArray(req.body?.ads) || req.body.ads.length > 50) {
     return res.status(400).json({ message: 'Provide an array containing no more than 50 advertisements.' });
   }
+
   const ads = [];
   const seen = new Set();
-  for (const raw of req.body.ads) {
-    const id = String(raw?.id || '').trim().slice(0, 80);
-    const type = ['link', 'native', 'script'].includes(raw?.type) ? raw.type : null;
-    const title = String(raw?.title || '').trim().slice(0, 120);
-    const description = String(raw?.description || '').trim().slice(0, 500);
-    const destinationUrl = String(raw?.destinationUrl || '').trim().slice(0, 2048);
-    const imageUrl = String(raw?.imageUrl || '').trim().slice(0, 2048);
-    const scriptCode = String(raw?.scriptCode || '').trim().slice(0, 50000);
-    const placement = ['home', 'explore', 'both'].includes(raw?.placement) ? raw.placement : 'both';
+  for (let index = 0; index < req.body.ads.length; index += 1) {
+    const raw = req.body.ads[index] || {};
+    // Accept older labels saved by previous versions of the ad manager.
+    const rawType = String(raw.type || raw.format || '').trim().toLowerCase();
+    const type = ({
+      link: 'link',
+      native: 'native',
+      script: 'script',
+      javascript: 'script',
+      js: 'script',
+      native_banner: 'script',
+      'native-banner': 'script',
+      banner_script: 'script',
+    })[rawType] || null;
+
+    let id = String(raw.id || '').trim().slice(0, 80);
+    if (!id || seen.has(id)) id = `ad-${crypto.randomUUID()}`;
+    const title = String(raw.title || '').trim().slice(0, 120) || 'Advertisement';
+    const description = String(raw.description || '').trim().slice(0, 500);
+    const destinationUrl = String(raw.destinationUrl || raw.destination_url || '').trim().slice(0, 2048);
+    const imageUrl = String(raw.imageUrl || raw.image_url || '').trim().slice(0, 2048);
+    const rawScript = raw.scriptCode ?? raw.script_code ?? raw.snippet ?? raw.code ?? '';
+    const scriptCode = String(rawScript).trim();
+    const placement = ['home', 'explore', 'both'].includes(raw.placement) ? raw.placement : 'both';
     const isValidUrl = (value) => {
       try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch (_error) { return false; }
     };
-    const validDestination = type === 'script' ? (!destinationUrl || isValidUrl(destinationUrl)) : isValidUrl(destinationUrl);
-    if (!id || seen.has(id) || !type || !title || !validDestination || (imageUrl && !isValidUrl(imageUrl)) || (type === 'native' && !description) || (type === 'script' && !scriptCode)) {
-      return res.status(400).json({ message: 'Each ad needs a unique ID, title, and valid format. Link/native ads need a valid HTTP(S) destination; native ads need a description; script ads need a JavaScript snippet (maximum 50,000 characters).' });
+
+    let reason = '';
+    if (!type) reason = 'choose Link, Native, or Native Banner / JavaScript format';
+    else if (type !== 'script' && !isValidUrl(destinationUrl)) reason = 'enter a valid HTTP(S) destination URL';
+    else if (imageUrl && !isValidUrl(imageUrl)) reason = 'the image URL must use HTTP(S)';
+    else if (type === 'native' && !description) reason = 'add a description for this native ad';
+    else if (type === 'script' && !scriptCode) reason = 'paste the complete JavaScript snippet, including its script and container elements';
+    else if (type === 'script' && scriptCode.length > 50000) reason = 'the JavaScript snippet exceeds the 50,000-character limit';
+
+    if (reason) {
+      return res.status(400).json({ message: `Advertisement ${index + 1}${title ? ` (“${title}”)` : ''}: ${reason}.` });
     }
+
     seen.add(id);
-    ads.push({ id, type, title, description, destinationUrl, imageUrl, scriptCode: type === 'script' ? scriptCode : '', placement, active: raw.active !== false });
+    ads.push({
+      id, type, title, description, destinationUrl, imageUrl,
+      scriptCode: type === 'script' ? scriptCode : '',
+      placement,
+      active: raw.active !== false,
+    });
   }
+
   let previous = [];
   try { previous = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { previous = []; }
   await setSetting('managed_feed_ads', JSON.stringify(ads), { updatedBy: req.user.id });
