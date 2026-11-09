@@ -361,6 +361,11 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
             <button onClick={() => !readOnly && username && navigate(`/profile/${username}`)} className="font-bold text-sm text-slate-900 border-0 bg-transparent p-0 hover:underline">{item.name || 'User'}</button>
             <VerifiedBadge verified={item.verified} className="text-xs" />
             <span className="text-slate-500 text-xs">{item.handle || (username ? `@${username}` : '')} · {item.time}</span>
+            {item.linkedArticle && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-sky-700" title="Published from an RSS feed">
+                <i className="fa-solid fa-rss text-[9px]" /> RSS
+              </span>
+            )}
             {item.isPromoted && (
               <span className="rounded-full bg-amber-100 border border-amber-200 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-amber-800">
                 <i className="fa-solid fa-bolt mr-1 text-amber-600" />
