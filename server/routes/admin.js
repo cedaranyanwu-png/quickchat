@@ -312,20 +312,22 @@ router.put('/admin/ads', requirePermission('ads.manage'), asyncRoute(async (req,
   const seen = new Set();
   for (const raw of req.body.ads) {
     const id = String(raw?.id || '').trim().slice(0, 80);
-    const type = raw?.type === 'link' ? 'link' : raw?.type === 'native' ? 'native' : null;
+    const type = ['link', 'native', 'script'].includes(raw?.type) ? raw.type : null;
     const title = String(raw?.title || '').trim().slice(0, 120);
     const description = String(raw?.description || '').trim().slice(0, 500);
     const destinationUrl = String(raw?.destinationUrl || '').trim().slice(0, 2048);
     const imageUrl = String(raw?.imageUrl || '').trim().slice(0, 2048);
+    const scriptCode = String(raw?.scriptCode || '').trim().slice(0, 50000);
     const placement = ['home', 'explore', 'both'].includes(raw?.placement) ? raw.placement : 'both';
     const isValidUrl = (value) => {
       try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch (_error) { return false; }
     };
-    if (!id || seen.has(id) || !type || !title || !isValidUrl(destinationUrl) || (imageUrl && !isValidUrl(imageUrl)) || (type === 'native' && !description)) {
-      return res.status(400).json({ message: 'Each ad needs a unique ID, valid format, title, valid HTTP(S) destination, and a description for native ads. Image URLs must also use HTTP(S).' });
+    const validDestination = type === 'script' ? (!destinationUrl || isValidUrl(destinationUrl)) : isValidUrl(destinationUrl);
+    if (!id || seen.has(id) || !type || !title || !validDestination || (imageUrl && !isValidUrl(imageUrl)) || (type === 'native' && !description) || (type === 'script' && !scriptCode)) {
+      return res.status(400).json({ message: 'Each ad needs a unique ID, title, and valid format. Link/native ads need a valid HTTP(S) destination; native ads need a description; script ads need a JavaScript snippet (maximum 50,000 characters).' });
     }
     seen.add(id);
-    ads.push({ id, type, title, description, destinationUrl, imageUrl, placement, active: raw.active !== false });
+    ads.push({ id, type, title, description, destinationUrl, imageUrl, scriptCode: type === 'script' ? scriptCode : '', placement, active: raw.active !== false });
   }
   let previous = [];
   try { previous = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { previous = []; }
