@@ -202,6 +202,59 @@ async function logSync(sourceId, status, counts, error, startedAt) {
   );
 }
 
+const RSS_PUBLISHER_EMAIL = 'quickchat-rss@quickchat.app';
+const RSS_PUBLISHER_USERNAME = 'quickchat-rss';
+
+async function ensureRssPublisher() {
+  let publisher = await db.getOne('SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) ORDER BY id ASC LIMIT 1', [RSS_PUBLISHER_USERNAME, RSS_PUBLISHER_EMAIL]);
+  if (publisher) return Number(publisher.id);
+  const created = await db.insert(
+    'INSERT INTO users (fullname, name, username, email, password, bio, verified, is_synthetic) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    ['QuickChat RSS', 'QuickChat RSS', RSS_PUBLISHER_USERNAME, RSS_PUBLISHER_EMAIL, null,
+      'Official RSS publisher for news and updates shared from approved feeds on QuickChat.', 0, 0],
+  );
+  console.log('[RSS] Publisher profile ready: @' + RSS_PUBLISHER_USERNAME + ' (user ' + created.id + ').');
+  return Number(created.id);
+}
+
+async function publishArticleToFeed(article) {
+  if (!article || !article.id || !article.article_url || !article.title) return false;
+  const existing = await db.getOne(
+    'SELECT id FROM posts WHERE rss_article_id = ? OR source_link = ? LIMIT 1',
+    [article.id, article.article_url],
+  );
+  if (existing) return false;
+  const publisherId = await ensureRssPublisher();
+  const body = String(article.excerpt || article.title).trim().slice(0, 5000);
+  await db.insert(
+    'INSERT INTO posts (author_id, body, kind, category, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [publisherId, body || article.title, 'text', article.category || 'News', article.article_url, article.id, 'public'],
+  );
+  return true;
+}
+
+async function publishExistingArticles(sourceId) {
+  const publisherId = await ensureRssPublisher();
+  const rows = await db.query(
+    'SELECT a.id, a.article_url, a.title, a.excerpt, a.category FROM rss_articles a WHERE a.source_id = ? AND a.status = ? AND NOT EXISTS (SELECT 1 FROM posts p WHERE p.rss_article_id = a.id OR p.source_link = a.article_url) ORDER BY COALESCE(a.published_at, a.imported_at) DESC, a.id DESC',
+    [sourceId, 'published'],
+  );
+  let published = 0;
+  for (const article of rows) {
+    const body = String(article.excerpt || article.title).trim().slice(0, 5000);
+    try {
+      await db.insert(
+        'INSERT INTO posts (author_id, body, kind, category, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [publisherId, body || article.title, 'text', article.category || 'News', article.article_url, article.id, 'public'],
+      );
+      published += 1;
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+    }
+  }
+  return published;
+}
+
 async function syncSource(sourceId, { force = false } = {}) {
   const source = await db.getOne('SELECT * FROM rss_sources WHERE id = ?', [sourceId]);
   if (!source) throw new Error('RSS source not found.');
@@ -241,12 +294,13 @@ async function syncSource(sourceId, { force = false } = {}) {
         else throw error;
       }
     }
+    const feedPostsPublished = await publishExistingArticles(sourceId);
     await db.update(
       'UPDATE rss_sources SET publisher_name = ?, etag = ?, last_modified = ?, last_sync_at = CURRENT_TIMESTAMP, last_success_at = CURRENT_TIMESTAMP, last_error = NULL WHERE id = ?',
       [publisher, result.headers.etag || source.etag || null, result.headers['last-modified'] || source.last_modified || null, sourceId],
     );
     await logSync(sourceId, 'success', counts, null, startedAt);
-    return { sourceId, ...counts, unchanged: false };
+    return { sourceId, ...counts, feedPostsPublished, unchanged: false };
   } catch (error) {
     await db.update('UPDATE rss_sources SET last_sync_at = CURRENT_TIMESTAMP, last_error = ? WHERE id = ?', [String(error.message || error).slice(0, 1000), sourceId]);
     await logSync(sourceId, 'failed', counts, error, startedAt);
@@ -270,4 +324,4 @@ async function syncEnabledSources({ force = false } = {}) {
   return results;
 }
 
-module.exports = { fetchFeed, fetchFeedWithRetry, validateFeedUrl, plainExcerpt, syncSource, syncEnabledSources, validExternalUrl };
+module.exports = { fetchFeed, fetchFeedWithRetry, validateFeedUrl, plainExcerpt, syncSource, syncEnabledSources, validExternalUrl, ensureRssPublisher, publishExistingArticles };
