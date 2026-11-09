@@ -11,6 +11,7 @@ const { getAccountForUser, isFlutterwavePaymentsConfigured } = require('../flutt
 const { notifyMany, notifyUser } = require('../notify');
 const { getRecommendedFeed } = require('../services/recommendation-engine');
 const { analyzeContent } = require('../services/content-classifier');
+const { getSetting } = require('../platform-settings');
 
 const router = express.Router();
 let videoLibrarySyncPromise = null;
@@ -26,7 +27,7 @@ const POST_SELECT = `
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
          (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
          (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
-         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS like_count,
          EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
          EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked,
          EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
@@ -45,15 +46,19 @@ const COMMUNITY_ACCESS = `(p.community_id IS NULL OR c.monthly_price IS NULL OR 
                 AND cs.subscriber_id = ? AND cs.status = 'active'
                 AND cs.current_period_end > CURRENT_TIMESTAMP))`;
 
-async function loadPeopleSuggestions(userId, limit = 5, interestProfile) {
+async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface = 'find_friends') {
+  const visibilityKey = surface === 'home' ? 'bots_show_home' : surface === 'explore' ? 'bots_show_explore' : 'bots_show_find_friends';
+  const visible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
+    && String(await getSetting(visibilityKey, 'false')).toLowerCase() === 'true';
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count
        FROM users u
       WHERE u.id <> ?
+        AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
         AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY follower_count DESC, u.id DESC LIMIT ?`,
-    [userId, userId, Math.max(limit * 5, 30)],
+    [userId, String(visible), userId, Math.max(limit * 5, 30)],
   );
   if (!people.length) return [];
   const ids = people.map((person) => person.id);
@@ -84,7 +89,6 @@ async function loadPeopleSuggestions(userId, limit = 5, interestProfile) {
     bio: person.bio || '',
     picture: person.avatar_url || person.picture || null,
     verified: Boolean(Number(person.verified || 0)),
-    isAutomated: Boolean(Number(person.is_synthetic || 0)),
     followers: Number(person.follower_count || 0),
   }));
 }
@@ -127,7 +131,7 @@ router.get('/home', asyncRoute(async (req, res) => {
     };
     if (!live) {
       const [suggestedUsers, suggestedCommunities] = await Promise.all([
-        loadPeopleSuggestions(req.user.id, 4, profile),
+        loadPeopleSuggestions(req.user.id, 4, profile, 'home'),
         loadCommunitySuggestions(req.user.id, 4),
       ]);
       response.suggestedUsers = suggestedUsers;
@@ -165,7 +169,7 @@ router.get('/home', asyncRoute(async (req, res) => {
   const response = { posts: timelinePosts.slice(0, limit), tab };
   if (!live) {
     const [suggestedUsers, suggestedCommunities] = await Promise.all([
-      loadPeopleSuggestions(req.user.id, 4, profile),
+      loadPeopleSuggestions(req.user.id, 4, profile, 'home'),
       loadCommunitySuggestions(req.user.id, 4),
     ]);
     response.suggestedUsers = suggestedUsers;
@@ -194,9 +198,10 @@ router.get('/explore', asyncRoute(async (req, res) => {
   const userRows = query && !live
     ? await db.query(
       `SELECT id, fullname, username, bio, avatar_url, picture, verified
-         FROM users WHERE id <> ? AND (LOWER(fullname) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?))
+         FROM users WHERE id <> ? AND (COALESCE(is_synthetic, 0) = 0 OR LOWER(?) = 'true')
+           AND (LOWER(fullname) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?))
         ORDER BY fullname LIMIT ?`,
-      [req.user.id, likeQuery, likeQuery, clampLimit(req.query.userLimit, 10, 30)],
+      [req.user.id, String(String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true' && String(await getSetting('bots_show_explore', 'false')).toLowerCase() === 'true'), likeQuery, likeQuery, clampLimit(req.query.userLimit, 10, 30)],
     )
     : [];
 
@@ -220,7 +225,7 @@ router.get('/explore', asyncRoute(async (req, res) => {
   };
   if (!live) {
     const [suggestedUsers, suggestedCommunities] = await Promise.all([
-      loadPeopleSuggestions(req.user.id, 4, interestProfile),
+      loadPeopleSuggestions(req.user.id, 4, interestProfile, 'explore'),
       loadCommunitySuggestions(req.user.id, 4),
     ]);
     response.suggestedUsers = suggestedUsers;
@@ -255,13 +260,13 @@ router.get('/discover', asyncRoute(async (req, res) => {
   const trendingRows = await db.query(
     `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.source_link, p.media, p.video_id, p.created_at,
             p.hashtags, p.target_interests, p.visibility, u.fullname, u.username, u.avatar_url, u.picture, u.verified,
-            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS like_count,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
             EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
             EXISTS(SELECT 1 FROM bookmarks mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS bookmarked,
             EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
-            ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) * 2 +
+            ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) * 2 +
              (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) * 3 +
              (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) * 2) AS engagement_score
        FROM posts p JOIN users u ON u.id = p.author_id
@@ -269,6 +274,8 @@ router.get('/discover', asyncRoute(async (req, res) => {
       ORDER BY engagement_score DESC, p.created_at DESC, p.id DESC LIMIT 5`,
     [req.user.id, req.user.id, req.user.id],
   );
+  const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
+    && String(await getSetting('bots_show_find_friends', 'false')).toLowerCase() === 'true';
   const mediaRows = await db.query(
     `SELECT p.id, p.body, p.category, p.source_link, p.media, p.created_at, u.fullname
        FROM posts p JOIN users u ON u.id = p.author_id
@@ -278,11 +285,11 @@ router.get('/discover', asyncRoute(async (req, res) => {
   );
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
-       FROM users u WHERE u.id <> ?
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count
+       FROM users u WHERE u.id <> ? AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
          AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY follower_count DESC LIMIT ?`,
-    [req.user.id, req.user.id, 60],
+    [req.user.id, String(discoverBotsVisible), req.user.id, 60],
   );
   const interestProfile = await loadInterestProfile(db, req.user.id);
   const categoryRows = people.length
@@ -357,7 +364,7 @@ router.get('/creator/analytics', asyncRoute(async (req, res) => {
   const [summary, rows] = await Promise.all([
     db.getOne(
       `SELECT COUNT(*) AS posts,
-              COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id)), 0) AS likes,
+              COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
               COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
               COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
          FROM posts p WHERE p.author_id = ? AND p.created_at >= ?`,
@@ -366,7 +373,7 @@ router.get('/creator/analytics', asyncRoute(async (req, res) => {
     db.query(
     `SELECT p.category,
             COUNT(*) AS posts,
-            COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id)), 0) AS likes,
+            COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
             COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
             COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
        FROM posts p WHERE p.author_id = ? AND p.created_at >= ?
@@ -553,7 +560,7 @@ router.post('/posts/:postId/likes', asyncRoute(async (req, res) => {
     }
     await notify(post.author_id, req.user.id, 'like', postId, 'liked your post');
   }
-  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?', [postId]);
+  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ? AND COALESCE(is_synthetic, 0) = 0', [postId]);
   res.json({ liked: true, likes: recorded + legacyEngagementFor(post).likes });
 }));
 
@@ -563,7 +570,7 @@ router.delete('/posts/:postId/likes', asyncRoute(async (req, res) => {
   const post = await db.getOne('SELECT id, created_at FROM posts WHERE id = ?', [postId]);
   if (!post) return notFound(res, 'Post not found.');
   await db.delete('DELETE FROM post_likes WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
-  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?', [postId]);
+  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ? AND COALESCE(is_synthetic, 0) = 0', [postId]);
   res.json({ liked: false, likes: recorded + legacyEngagementFor(post).likes });
 }));
 

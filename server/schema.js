@@ -60,10 +60,12 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS follows (
       follower_id INTEGER NOT NULL, followed_id INTEGER NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      is_synthetic INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (follower_id, followed_id)
     )`,
     `CREATE TABLE IF NOT EXISTS post_likes (
       post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      is_synthetic INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (post_id, user_id)
     )`,
     `CREATE TABLE IF NOT EXISTS post_reposts (
@@ -296,6 +298,12 @@ async function initializePageTables() {
       conversion_type VARCHAR(50) DEFAULT 'lead', conversion_value REAL DEFAULT 0,
       reference VARCHAR(120), created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
+    // --- Synthetic QA account registry ---------------------------------
+    `CREATE TABLE IF NOT EXISTS bots (
+      id ${idColumn}, user_id INTEGER NOT NULL UNIQUE, bot_key VARCHAR(100) NOT NULL UNIQUE,
+      display_name VARCHAR(160) NOT NULL, username VARCHAR(80) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'active', created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
+    )`,
     // --- Boosted Posts and Accounts -------------------------------------
     `CREATE TABLE IF NOT EXISTS boosted_promotions (
       id ${idColumn}, user_id INTEGER NOT NULL, item_type VARCHAR(20) NOT NULL,
@@ -347,11 +355,34 @@ async function initializePageTables() {
   for (const statement of statements) await db.query(statement);
   await addMissingPostColumns();
   await addMissingBoostColumns();
+  await addMissingBotTestColumns();
+  await addMissingSyntheticEngagementColumns();
   await addMissingPaymentColumns();
   await addMissingNotificationColumns();
   await addMissingMessageColumns();
   await addMissingCommunityColumns();
   await ensureIndexes();
+}
+
+
+async function addMissingBotTestColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(boost_test_events)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', ['boost_test_events']).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM boost_test_events').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+  if (!columns.has('bot_id')) await db.query('ALTER TABLE boost_test_events ADD COLUMN bot_id INTEGER');
+}
+
+async function addMissingSyntheticEngagementColumns() {
+  for (const table of ['follows', 'post_likes']) {
+    const columns = db.type === 'sqlite'
+      ? await db.query(`PRAGMA table_info(${table})`).then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+      : db.type === 'postgres'
+        ? await db.query('SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?', [table]).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+        : await db.query(`SHOW COLUMNS FROM ${table}`).then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+    if (!columns.has('is_synthetic')) await db.query(`ALTER TABLE ${table} ADD COLUMN is_synthetic INTEGER NOT NULL DEFAULT 0`);
+  }
 }
 
 async function addMissingCommunityColumns() {

@@ -1,4 +1,7 @@
 const express = require('express');
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { faker } = require('@faker-js/faker');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
@@ -427,8 +430,8 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
             CASE WHEN EXISTS (SELECT 1 FROM account_bans b WHERE b.user_id = u.id AND b.revoked_at IS NULL) THEN 'banned'
                  WHEN EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP'}) THEN 'suspended'
                  ELSE 'active' END AS account_status,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
-            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS followers,
+            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS following,
             (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS posts
        FROM users u ${filter} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?`,
     [...params, limit, (page - 1) * limit],
@@ -697,7 +700,7 @@ router.get('/admin/moderation/posts', requirePermission('posts.view'), asyncRout
   const posts = await db.query(
     `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.media, p.visibility, p.created_at,
             u.username, u.fullname, u.avatar_url,
-            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS likes,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS likes,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS comments,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS reposts
        FROM posts p JOIN users u ON u.id = p.author_id ${where}
@@ -720,14 +723,96 @@ router.delete('/admin/moderation/posts/:id', requirePermission('posts.remove'), 
   res.json({ message: 'Post removed from QuickChat.' });
 }));
 
+
+router.get('/admin/bots', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(10, Number.parseInt(req.query.limit, 10) || 50));
+  const offset = (page - 1) * limit;
+  const [bots, total, follows, likes] = await Promise.all([
+    db.query(`SELECT b.id, b.user_id, b.display_name, b.username, b.status, b.created_at,
+                     u.avatar_url, u.email
+                FROM bots b JOIN users u ON u.id = b.user_id
+               ORDER BY b.id DESC LIMIT ? OFFSET ?`, [limit, offset]),
+    db.getCount('SELECT COUNT(*) AS count FROM bots'),
+    db.getCount("SELECT COUNT(*) AS count FROM boost_test_events WHERE event_type = 'follow' AND bot_id IS NOT NULL"),
+    db.getCount("SELECT COUNT(*) AS count FROM boost_test_events WHERE event_type = 'like' AND bot_id IS NOT NULL"),
+  ]);
+  res.json({ bots, total, page, pages: Math.max(1, Math.ceil(total / limit)), activity: { follows, likes } });
+}));
+
+router.post('/admin/bots/generate', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const requested = Math.trunc(Number(req.body?.count) || 0);
+  if (!Number.isSafeInteger(requested) || requested < 1 || requested > 10000) {
+    return res.status(400).json({ message: 'Choose between 1 and 10,000 bot accounts.' });
+  }
+  const enabled = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true';
+  if (enabled && process.env.NODE_ENV === 'production') {
+    return res.status(409).json({ message: 'Disable bot activity before generating test accounts in the live environment.' });
+  }
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 4);
+  let created = 0;
+  for (let offset = 0; offset < requested; offset += 100) {
+    const batchSize = Math.min(100, requested - offset);
+    const records = [];
+    for (let index = 0; index < batchSize; index += 1) {
+      const displayName = faker.person.fullName();
+      const username = `qc_test_${Date.now().toString(36)}_${crypto.randomBytes(5).toString('hex')}`;
+      const email = `${username}@quickchat.test`;
+      const interests = faker.helpers.arrayElements(['technology', 'music', 'sports', 'fashion', 'business', 'gaming', 'travel', 'food', 'photography', 'education'], { min: 2, max: 4 });
+      const avatar = faker.image.avatar();
+      records.push({ displayName, username, email, interests, avatar, bio: faker.person.bio() });
+    }
+    const userValues = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, CURRENT_TIMESTAMP)').join(', ');
+    const userParams = records.flatMap((record) => [
+      record.displayName, record.displayName, record.username, record.email, passwordHash,
+      JSON.stringify(record.interests), record.avatar, record.avatar, record.bio,
+    ]);
+    await db.query(
+      `INSERT INTO users (fullname, name, username, email, password, interests, picture, avatar_url, bio, verified, email_verified, is_synthetic, created_at) VALUES ${userValues}`,
+      userParams,
+    );
+    const emails = records.map((record) => record.email);
+    const placeholders = emails.map(() => '?').join(', ');
+    const savedUsers = await db.query(
+      `SELECT id, fullname, username FROM users WHERE email IN (${placeholders})`,
+      emails,
+    );
+    if (savedUsers.length) {
+      const botValues = savedUsers.map(() => '(?, ?, ?, ?, ?)').join(', ');
+      const botParams = savedUsers.flatMap((user) => [user.id, `faker_${user.id}`, user.fullname, user.username, 'active']);
+      await db.query(
+        `INSERT INTO bots (user_id, bot_key, display_name, username, status) VALUES ${botValues}`,
+        botParams,
+      );
+      created += savedUsers.length;
+    }
+  }
+  await audit(req, 'bots.generated', 'bots', null, `Generated ${created} synthetic QA accounts`, null, { requested, created });
+  res.status(201).json({ message: `${created} synthetic test accounts created.`, created });
+}));
+
+router.patch('/admin/bots/:id', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const id = Number(req.params.id);
+  const status = String(req.body?.status || '').toLowerCase();
+  if (!Number.isSafeInteger(id) || id < 1 || !['active', 'disabled'].includes(status)) {
+    return res.status(400).json({ message: 'A valid bot ID and status are required.' });
+  }
+  const bot = await db.getOne('SELECT id, user_id FROM bots WHERE id = ?', [id]);
+  if (!bot) return res.status(404).json({ message: 'Bot account not found.' });
+  await db.query('UPDATE bots SET status = ? WHERE id = ?', [status, id]);
+  await audit(req, 'bot.status_changed', 'bot', id, `Bot status changed to ${status}`);
+  res.json({ message: `Bot account ${status}.` });
+}));
+
 router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
-  const keys = ['boost_synthetic_test_mode', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id'];
+  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id'];
   const values = await Promise.all(keys.map((key) => getSetting(key, null)));
   const settings = Object.fromEntries(keys.map((key, index) => [key, values[index]]));
   for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token']) {
     if (settings[key]) settings[key] = '••••••••••••••••';
   }
   settings.boost_synthetic_test_mode = String(settings.boost_synthetic_test_mode ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
+  for (const key of ['bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore']) settings[key] = String(settings[key] || 'false').toLowerCase() === 'true';
   settings.verification_points = Number(settings.verification_points || 2000);
   settings.verification_reward_points = Number(settings.verification_reward_points || 2000);
   settings.google_drive_enabled = String(settings.google_drive_enabled || 'false').toLowerCase() === 'true';
@@ -735,7 +820,7 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const normal = ['boost_synthetic_test_mode', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id'];
+  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id'];
   const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token'];
   for (const key of normal) {
     if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
