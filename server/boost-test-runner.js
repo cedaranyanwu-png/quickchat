@@ -9,8 +9,8 @@ async function runSyntheticBoostTestPass() {
   running = true;
   try {
     const enabled = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true';
-    const boosterEnabled = String(await getSetting('boost_synthetic_test_mode', process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
-    if (!enabled || !boosterEnabled) return;
+    const testMode = String(await getSetting('boost_synthetic_test_mode', process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
+    if (!enabled || !testMode) return;
 
     const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
     const boosts = await db.query(
@@ -19,6 +19,7 @@ async function runSyntheticBoostTestPass() {
          FROM boosted_promotions
         WHERE status = 'active' AND expires_at > ?
           AND COALESCE(test_delivered_quantity, 0) < target_quantity
+          AND objective IN ('followers', 'likes')
         ORDER BY created_at ASC LIMIT 20`,
       [now],
     );
@@ -28,19 +29,18 @@ async function runSyntheticBoostTestPass() {
       `SELECT b.id AS bot_id, b.user_id
          FROM bots b JOIN users u ON u.id = b.user_id
         WHERE b.status = 'active' AND COALESCE(u.is_synthetic, 0) = 1
-          AND COALESCE(u.automation_status, 'active') = 'active'
         ORDER BY b.id ASC LIMIT 500`,
     );
     if (!bots.length) return;
 
     for (const boost of boosts) {
       const objective = String(boost.objective || '').toLowerCase();
-      const eventType = objective === 'followers' ? 'follow' : objective === 'likes' ? 'like' : 'reach';
+      const eventType = objective === 'followers' ? 'follow' : 'like';
       const remaining = Math.max(0, Number(boost.target_quantity || 0) - Number(boost.test_delivered_quantity || 0));
       if (!remaining) continue;
 
       const existingRows = await db.query(
-        'SELECT bot_id FROM boost_test_events WHERE boost_id = ? AND event_type = ?',
+        'SELECT bot_id, user_id FROM boost_test_events WHERE boost_id = ? AND event_type = ?',
         [boost.id, eventType],
       );
       const used = new Set(existingRows.map((row) => Number(row.bot_id || row.user_id)));
@@ -49,34 +49,43 @@ async function runSyntheticBoostTestPass() {
       for (const bot of bots) {
         if (delivered >= remaining) break;
         if (used.has(Number(bot.bot_id))) continue;
-        try {
-          if (eventType === 'follow' && boost.promoted_profile_id) {
-            await db.insert(
-              'INSERT INTO bot_follow_events (boost_id, bot_id, target_user_id) VALUES (?, ?, ?)',
-              [boost.id, bot.bot_id, boost.promoted_profile_id],
-            );
-          } else if (eventType === 'like' && boost.post_id) {
-            await db.insert(
-              'INSERT INTO bot_post_like_events (boost_id, bot_id, post_id) VALUES (?, ?, ?)',
-              [boost.id, bot.bot_id, boost.post_id],
-            );
-          } else {
-            await db.insert(
-              'INSERT INTO bot_reach_events (boost_id, bot_id, post_id) VALUES (?, ?, ?)',
-              [boost.id, bot.bot_id, boost.post_id || null],
-            );
-          }
-          await db.insert(
-            'INSERT INTO boost_test_events (boost_id, user_id, event_type, post_id, bot_id) VALUES (?, ?, ?, ?, ?)',
-            [boost.id, bot.user_id, eventType, boost.post_id || null, bot.bot_id],
+        if (eventType === 'follow') {
+          const targetId = Number(boost.promoted_profile_id);
+          if (!targetId || targetId === Number(bot.user_id)) continue;
+          const existing = await db.getOne(
+            'SELECT follower_id FROM follows WHERE follower_id = ? AND followed_id = ?',
+            [bot.user_id, targetId],
           );
-          used.add(Number(bot.bot_id));
-          delivered += 1;
-        } catch (error) {
-          if (!/unique|duplicate/i.test(String(error.message || ''))) {
-            console.error('[BoostTest] Event write failed:', error.message);
-          }
+          if (existing) continue;
+          await db.query(
+            'INSERT INTO follows (follower_id, followed_id, is_synthetic) VALUES (?, ?, 1)',
+            [bot.user_id, targetId],
+          );
+        } else {
+          const postId = Number(boost.post_id);
+          if (!postId) continue;
+          const post = await db.getOne(
+            "SELECT id FROM posts WHERE id = ? AND COALESCE(visibility, 'public') = 'public'",
+            [postId],
+          );
+          if (!post) continue;
+          const existing = await db.getOne(
+            'SELECT user_id FROM post_likes WHERE post_id = ? AND user_id = ?',
+            [postId, bot.user_id],
+          );
+          if (existing) continue;
+          await db.query(
+            'INSERT INTO post_likes (post_id, user_id, is_synthetic) VALUES (?, ?, 1)',
+            [postId, bot.user_id],
+          );
         }
+
+        await db.query(
+          'INSERT INTO boost_test_events (boost_id, user_id, event_type, post_id, bot_id) VALUES (?, ?, ?, ?, ?)',
+          [boost.id, bot.user_id, eventType, eventType === 'like' ? Number(boost.post_id) : null, bot.bot_id],
+        );
+        used.add(Number(bot.bot_id));
+        delivered += 1;
       }
 
       if (delivered > 0) {
