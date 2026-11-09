@@ -26,6 +26,7 @@ const liveRoutes = require('./routes/live');
 const pushRoutes = require('./routes/push');
 const adsRoutes = require('./routes/ads');
 const boostRoutes = require('./routes/boost');
+const { startSyntheticBoostTestRunner, stopSyntheticBoostTestRunner } = require('./boost-test-runner');
 const businessRoutes = require('./routes/business');
 const recommendationRoutes = require('./routes/recommendations');
 const adminRoutes = require('./routes/admin');
