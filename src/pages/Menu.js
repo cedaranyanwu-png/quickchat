@@ -15,7 +15,6 @@ const items = [
   { label: 'Saved articles', description: 'Read articles you have saved.', icon: 'fa-solid fa-newspaper', path: '/saved-articles' },
   { label: 'Lists', description: 'Organize accounts and people into lists.', icon: 'fa-solid fa-list', path: '/lists' },
   { label: 'Nova AI', description: 'Open your QuickChat AI assistant.', icon: 'fa-solid fa-wand-sparkles', path: '/nova' },
-  { label: 'RSS Publisher Admin', description: 'Manage RSS feeds and synchronization.', icon: 'fa-solid fa-rss', path: '/admin/rss' },
   { label: 'Settings', description: 'Account, notifications, payments, and preferences.', icon: 'fa-solid fa-gear', path: '/settings' },
 ];
 
