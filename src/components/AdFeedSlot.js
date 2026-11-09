@@ -1,12 +1,49 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { apiRequest } from '../api';
 
 function ScriptAdFrame({ ad }) {
-  const srcDoc = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;width:100%;min-height:100%;overflow-x:hidden;background:transparent}body{display:flex;justify-content:center;align-items:flex-start}#ad-root{width:100%;max-width:100%;overflow:hidden}img,iframe,video,ins,div{max-width:100%}</style></head><body><div id="ad-root">${ad.scriptCode || ''}</div></body></html>`;
-  return <section className="w-full overflow-hidden border-b border-slate-200 bg-white px-2 py-3" aria-label="Sponsored advertisement">
-    <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-wide text-slate-400">Sponsored</div>
-    <iframe title={`Advertisement: ${ad.title || 'Sponsored content'}`} srcDoc={srcDoc} sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation" referrerPolicy="strict-origin-when-cross-origin" loading="lazy" style={{ display: 'block', width: '100%', minHeight: 120, height: 320, border: 0, background: 'transparent' }} />
-  </section>;
+  const iframeRef = useRef(null);
+  const [height, setHeight] = useState(160);
+
+  useEffect(() => {
+    const onMessage = (event) => {
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
+      const nextHeight = Number(event.data?.quickchatAdHeight);
+      if (Number.isFinite(nextHeight) && nextHeight >= 80 && nextHeight <= 1200) {
+        setHeight(Math.ceil(nextHeight));
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
+  return (
+    <article className="border-b border-slate-200 bg-white px-4 py-3" aria-label="Sponsored advertisement">
+      <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+          <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Sponsored</span>
+          <span className="rounded-full bg-blue-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">Ad</span>
+        </div>
+        <iframe
+          ref={iframeRef}
+          title={`Advertisement: ${ad.title || 'Sponsored content'}`}
+          src={`/api/ads/render/${encodeURIComponent(ad.id)}`}
+          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+          referrerPolicy="strict-origin-when-cross-origin"
+          loading="lazy"
+          style={{
+            display: 'block',
+            width: '100%',
+            height: `${height}px`,
+            minHeight: 80,
+            border: 0,
+            background: 'transparent',
+          }}
+        />
+      </div>
+    </article>
+  );
 }
 
 function AdCard({ ad }) {
