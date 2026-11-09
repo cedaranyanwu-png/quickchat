@@ -1,8 +1,10 @@
 const db = require('../database');
 const { currentBalance, spendPoints } = require('../wallet');
 
-async function boostPost(userId, { postId, objective = 'reach', targetInterests = [], targetAudiences = [], budgetPoints = 500, durationDays = 7 }) {
+async function boostPost(userId, { postId, objective = 'reach', targetQuantity = 1000, targetInterests = [], targetAudiences = [], budgetPoints = 500, durationDays = 7 }) {
   const points = Math.max(100, Math.trunc(Number(budgetPoints) || 500));
+  const quantityFloor = objective === 'reach' ? 1000 : 100;
+  const quantity = Math.max(quantityFloor, Math.min(1000000, Math.trunc(Number(targetQuantity) || quantityFloor)));
   const days = Math.max(1, Math.min(30, Math.trunc(Number(durationDays) || 7)));
 
   // Validate ownership
@@ -28,25 +30,27 @@ async function boostPost(userId, { postId, objective = 'reach', targetInterests 
   const result = await db.insert(
     `INSERT INTO boosted_promotions (
       user_id, item_type, post_id, objective, target_interests, target_audiences,
-      budget_points, spent_points, daily_budget_points, status, expires_at
-    ) VALUES (?, 'post', ?, ?, ?, ?, ?, 0, ?, 'active', ?)`,
+      target_quantity, delivered_quantity, budget_points, spent_points, daily_budget_points, status, expires_at
+    ) VALUES (?, 'post', ?, ?, ?, ?, ?, 0, ?, 0, ?, 'active', ?)`,
     [
       userId,
       postId,
       objective,
       JSON.stringify(targetInterests),
       JSON.stringify(targetAudiences),
+      quantity,
       points,
       Math.ceil(points / days),
       expiresAt,
     ]
   );
 
-  return { id: result?.id, postId, budgetPoints: points, expiresAt };
+  return { id: result?.id, postId, targetQuantity: quantity, budgetPoints: points, deliveredQuantity: 0, expiresAt };
 }
 
-async function boostProfile(userId, { objective = 'followers', targetInterests = [], targetAudiences = [], budgetPoints = 1000, durationDays = 7 }) {
+async function boostProfile(userId, { objective = 'followers', targetQuantity = 500, targetInterests = [], targetAudiences = [], budgetPoints = 1000, durationDays = 7 }) {
   const points = Math.max(200, Math.trunc(Number(budgetPoints) || 1000));
+  const quantity = Math.max(100, Math.min(1000000, Math.trunc(Number(targetQuantity) || 500)));
   const days = Math.max(1, Math.min(30, Math.trunc(Number(durationDays) || 7)));
 
   const spendResult = await spendPoints(userId, points, {
@@ -66,21 +70,22 @@ async function boostProfile(userId, { objective = 'followers', targetInterests =
   const result = await db.insert(
     `INSERT INTO boosted_promotions (
       user_id, item_type, promoted_profile_id, objective, target_interests, target_audiences,
-      budget_points, spent_points, daily_budget_points, status, expires_at
-    ) VALUES (?, 'profile', ?, ?, ?, ?, ?, 0, ?, 'active', ?)`,
+      target_quantity, delivered_quantity, budget_points, spent_points, daily_budget_points, status, expires_at
+    ) VALUES (?, 'profile', ?, ?, ?, ?, ?, 0, ?, 0, ?, 'active', ?)`,
     [
       userId,
       userId,
       objective,
       JSON.stringify(targetInterests),
       JSON.stringify(targetAudiences),
+      quantity,
       points,
       Math.ceil(points / days),
       expiresAt,
     ]
   );
 
-  return { id: result?.id, profileId: userId, budgetPoints: points, expiresAt };
+  return { id: result?.id, profileId: userId, targetQuantity: quantity, budgetPoints: points, deliveredQuantity: 0, expiresAt };
 }
 
 async function getEligibleBoostedPosts({ userInterests = [], limit = 3 }) {
@@ -181,6 +186,8 @@ async function getUserBoosts(userId) {
     postCategory: b.post_category,
     promotedProfileId: b.promoted_profile_id,
     objective: b.objective,
+    targetQuantity: Number(b.target_quantity || 0),
+    deliveredQuantity: Number(b.delivered_quantity || 0),
     budgetPoints: b.budget_points,
     spentPoints: b.spent_points,
     status: b.status,
