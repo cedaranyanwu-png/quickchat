@@ -11,6 +11,7 @@ const { getAccountForUser, isFlutterwavePaymentsConfigured } = require('../flutt
 const { notifyMany, notifyUser } = require('../notify');
 const { getRecommendedFeed } = require('../services/recommendation-engine');
 const { analyzeContent } = require('../services/content-classifier');
+const { getSetting } = require('../platform-settings');
 
 const router = express.Router();
 let videoLibrarySyncPromise = null;
@@ -45,15 +46,20 @@ const COMMUNITY_ACCESS = `(p.community_id IS NULL OR c.monthly_price IS NULL OR 
                 AND cs.subscriber_id = ? AND cs.status = 'active'
                 AND cs.current_period_end > CURRENT_TIMESTAMP))`;
 
-async function loadPeopleSuggestions(userId, limit = 5, interestProfile) {
+async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface = 'find_friends') {
+  const visible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
+    && String(await getSetting(surface === 'home' ? 'bots_show_home' : 'bots_show_find_friends', 'false')).toLowerCase() === 'true';
+  const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
+    && String(await getSetting('bots_show_explore', 'false')).toLowerCase() === 'true';
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
        FROM users u
       WHERE u.id <> ?
+        AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
         AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY follower_count DESC, u.id DESC LIMIT ?`,
-    [userId, userId, Math.max(limit * 5, 30)],
+    [userId, String(visible), userId, Math.max(limit * 5, 30)],
   );
   if (!people.length) return [];
   const ids = people.map((person) => person.id);
@@ -127,7 +133,7 @@ router.get('/home', asyncRoute(async (req, res) => {
     };
     if (!live) {
       const [suggestedUsers, suggestedCommunities] = await Promise.all([
-        loadPeopleSuggestions(req.user.id, 4, profile),
+        loadPeopleSuggestions(req.user.id, 4, profile, 'home'),
         loadCommunitySuggestions(req.user.id, 4),
       ]);
       response.suggestedUsers = suggestedUsers;
@@ -165,7 +171,7 @@ router.get('/home', asyncRoute(async (req, res) => {
   const response = { posts: timelinePosts.slice(0, limit), tab };
   if (!live) {
     const [suggestedUsers, suggestedCommunities] = await Promise.all([
-      loadPeopleSuggestions(req.user.id, 4, profile),
+      loadPeopleSuggestions(req.user.id, 4, profile, 'explore'),
       loadCommunitySuggestions(req.user.id, 4),
     ]);
     response.suggestedUsers = suggestedUsers;
@@ -194,9 +200,10 @@ router.get('/explore', asyncRoute(async (req, res) => {
   const userRows = query && !live
     ? await db.query(
       `SELECT id, fullname, username, bio, avatar_url, picture, verified
-         FROM users WHERE id <> ? AND (LOWER(fullname) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?))
+         FROM users WHERE id <> ? AND (COALESCE(is_synthetic, 0) = 0 OR LOWER(?) = 'true')
+           AND (LOWER(fullname) LIKE LOWER(?) OR LOWER(username) LIKE LOWER(?))
         ORDER BY fullname LIMIT ?`,
-      [req.user.id, likeQuery, likeQuery, clampLimit(req.query.userLimit, 10, 30)],
+      [req.user.id, String(String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true' && String(await getSetting('bots_show_explore', 'false')).toLowerCase() === 'true'), likeQuery, likeQuery, clampLimit(req.query.userLimit, 10, 30)],
     )
     : [];
 
@@ -279,10 +286,10 @@ router.get('/discover', asyncRoute(async (req, res) => {
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
-       FROM users u WHERE u.id <> ?
+       FROM users u WHERE u.id <> ? AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
          AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY follower_count DESC LIMIT ?`,
-    [req.user.id, req.user.id, 60],
+    [req.user.id, String(discoverBotsVisible), req.user.id, 60],
   );
   const interestProfile = await loadInterestProfile(db, req.user.id);
   const categoryRows = people.length
