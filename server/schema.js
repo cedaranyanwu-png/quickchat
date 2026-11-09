@@ -298,6 +298,12 @@ async function initializePageTables() {
       daily_budget_points INTEGER DEFAULT 0, status VARCHAR(20) DEFAULT 'active',
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, expires_at ${dateType}
     )`,
+    // --- Booster synthetic test events -----------------------------------
+    `CREATE TABLE IF NOT EXISTS boost_test_events (
+      id ${idColumn}, boost_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+      event_type VARCHAR(20) NOT NULL, post_id INTEGER, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (boost_id, user_id, event_type, post_id)
+    )`,
     // --- Recommendation Engine Profiles & Feedback ----------------------
     `CREATE TABLE IF NOT EXISTS recommendation_profiles (
       user_id INTEGER PRIMARY KEY, personal_weights TEXT, business_weights TEXT,
@@ -376,6 +382,7 @@ async function addMissingBoostColumns() {
   const additions = {
     target_quantity: 'INTEGER NOT NULL DEFAULT 100',
     delivered_quantity: 'INTEGER NOT NULL DEFAULT 0',
+    test_delivered_quantity: 'INTEGER NOT NULL DEFAULT 0',
   };
   for (const [column, type] of Object.entries(additions)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE boosted_promotions ADD COLUMN ${column} ${type}`);
@@ -513,6 +520,7 @@ async function ensureIndexes() {
     ['ad_impressions_campaign_idx', 'ad_impressions (campaign_id, user_id)', false],
     ['boosted_promotions_user_idx', 'boosted_promotions (user_id, status)', false],
     ['boosted_promotions_post_idx', 'boosted_promotions (post_id, status)', false],
+    ['boost_test_events_boost_idx', 'boost_test_events (boost_id, created_at)', false],
     ['message_reactions_message_idx', 'message_reactions (message_id, created_at)', false],
     ['post_reactions_post_idx', 'post_reactions (post_id, created_at)', false],
     ['recommendation_feedback_user_idx', 'recommendation_feedback (user_id, item_type, action)', false],
