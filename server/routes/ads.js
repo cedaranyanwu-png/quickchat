@@ -31,8 +31,16 @@ router.get('/ads/render/:adId', asyncRoute(async (req, res) => {
     return res.status(404).type('html').send('<!doctype html><html><body></body></html>');
   }
 
-  // Keep the third-party snippet inside its own document. The parent QuickChat DOM is never exposed to it.
-  const scriptCode = String(ad.scriptCode);
+  // Ad network snippets often put an async script before its target container.
+  // Move script elements after the markup so the required container ID exists before invoke.js runs.
+  const rawSnippet = String(ad.scriptCode);
+  const scriptTags = [];
+  const snippetMarkup = rawSnippet.replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script\\s*>/gi, (tag) => {
+    scriptTags.push(tag);
+    return '';
+  });
+  const snippetHtml = `${snippetMarkup}\\n${scriptTags.join("\\n")}`;
+  // Keep third-party code inside the dedicated ad document rather than the QuickChat feed DOM.
   const heightReporter = `
     <script>
       (function () {
@@ -60,7 +68,7 @@ router.get('/ads/render/:adId', asyncRoute(async (req, res) => {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Frame-Options': 'SAMEORIGIN',
-    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' https: http:; style-src 'unsafe-inline' https: http:; img-src https: http: data: blob:; connect-src https: http: ws: wss:; frame-src https: http:; font-src https: http: data:; media-src https: http: data: blob:; base-uri 'none'; form-action https: http:;",
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'unsafe-inline' https: http:; img-src https: http: data: blob:; connect-src https: http: ws: wss:; frame-src https: http: blob:; worker-src blob: https: http:; font-src https: http: data:; media-src https: http: data: blob:; base-uri 'none'; form-action https: http:;",
   });
 
   return res.send(`<!doctype html>
@@ -76,7 +84,7 @@ body { display:flex; justify-content:center; align-items:flex-start; }
 </style>
 </head>
 <body>
-<div id="ad-root">${scriptCode}</div>
+<div id="ad-root">${snippetHtml}</div>
 ${heightReporter}
 </body>
 </html>`);
