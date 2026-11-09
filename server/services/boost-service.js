@@ -136,7 +136,7 @@ async function getEligibleBoostedProfiles({ userInterests = [], currentUserId, l
         AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(COALESCE(?, 'false')) = 'true')
         AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY bp.created_at DESC LIMIT 20`,
-    [now, currentUserId, currentUserId, await getSetting('boost_synthetic_test_mode', process.env.NODE_ENV === 'production' ? 'false' : 'true')]
+    [now, currentUserId, await getSetting('boost_synthetic_test_mode', process.env.NODE_ENV === 'production' ? 'false' : 'true'), currentUserId]
   );
 
   if (!rows.length) return [];
