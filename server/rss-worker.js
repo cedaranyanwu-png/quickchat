@@ -6,9 +6,31 @@ const { initializePageTables } = require('./schema');
 const { syncEnabledSources } = require('./services/rss-service');
 
 const cronExpression = process.env.RSS_SYNC_CRON || '*/15 * * * *';
+const initialActivationKey = 'rss_sources_initial_activation_v1';
 let job;
 let running = false;
 let stopping = false;
+
+async function activateExistingSourcesOnce() {
+  const completed = await db.getOne(
+    'SELECT setting_value FROM app_settings WHERE setting_key = ?',
+    [initialActivationKey],
+  );
+  if (completed) return;
+
+  const disabled = await db.getOne('SELECT COUNT(*) AS total FROM rss_sources WHERE enabled = 0 OR auto_sync = 0');
+  const activatedCount = Number(disabled && disabled.total || 0);
+  if (activatedCount > 0) {
+    await db.update(
+      'UPDATE rss_sources SET enabled = 1, auto_sync = 1, updated_at = CURRENT_TIMESTAMP WHERE enabled = 0 OR auto_sync = 0',
+    );
+  }
+  await db.insert(
+    'INSERT INTO app_settings (setting_key, setting_value) VALUES (?, ?)',
+    [initialActivationKey, new Date().toISOString()],
+  );
+  console.log('[RSS worker] Initial publisher activation completed: enabled ' + activatedCount + ' existing source(s).');
+}
 
 async function runSync(reason) {
   if (running || stopping) return;
@@ -42,6 +64,7 @@ async function shutdown(signal) {
 
 async function start() {
   await initializePageTables();
+  await activateExistingSourcesOnce();
   job = schedule.scheduleJob(cronExpression, () => runSync('scheduled'));
   if (!job) throw new Error('Invalid RSS_SYNC_CRON expression: ' + cronExpression);
   console.log('[RSS worker] Scheduled with "' + cronExpression + '".');

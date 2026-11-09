@@ -263,29 +263,29 @@ router.patch('/rss/admin/sources/:sourceId', asyncRoute(async (req, res) => {
 }));
 
 router.delete('/rss/admin/sources/:sourceId', asyncRoute(async (req, res) => {
-  const sourceId = positiveId(req.params.sourceId);
-  if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
-  await db.update('UPDATE rss_sources SET enabled = 0, auto_sync = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [sourceId]);
-  res.json({ disabled: true });
+    const sourceId = positiveId(req.params.sourceId);
+    if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
+    await db.update('UPDATE rss_sources SET enabled = 0, auto_sync = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [sourceId]);
+    res.json({ disabled: true });
 }));
 
 router.post('/rss/admin/sources/:sourceId/sync', asyncRoute(async (req, res) => {
-  const sourceId = positiveId(req.params.sourceId);
-  if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
-  const result = await syncSource(sourceId, { force: true });
-  res.json(result);
+    const sourceId = positiveId(req.params.sourceId);
+    if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
+    const result = await syncSource(sourceId, { force: true });
+    res.json(result);
 }));
 
 router.get('/rss/admin/logs', asyncRoute(async (req, res) => {
-  const sourceId = positiveId(req.query.sourceId);
-  const status = String(req.query.status || '').trim();
-  const conditions = [];
-  const params = [];
-  if (sourceId) { conditions.push('source_id = ?'); params.push(sourceId); }
-  if (['success', 'unchanged', 'failed'].includes(status)) { conditions.push('status = ?'); params.push(status); }
-  const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
-  const logs = await db.query('SELECT * FROM rss_sync_logs' + where + ' ORDER BY id DESC LIMIT ?', [...params, clampLimit(req.query.limit, 50, 200)]);
-  res.json({ logs });
+    const sourceId = positiveId(req.query.sourceId);
+    const status = String(req.query.status || '').trim();
+    const conditions = [];
+    const params = [];
+    if (sourceId) { conditions.push('source_id = ?'); params.push(sourceId); }
+    if (['success', 'unchanged', 'failed'].includes(status)) { conditions.push('status = ?'); params.push(status); }
+    const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
+    const logs = await db.query('SELECT * FROM rss_sync_logs' + where + ' ORDER BY id DESC LIMIT ?', [...params, clampLimit(req.query.limit, 50, 200)]);
+    res.json({ logs });
 }));
 
 module.exports = router;
