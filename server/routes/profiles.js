@@ -342,7 +342,6 @@ function toSuggestion(row) {
     bio: row.bio || '',
     picture: row.avatar_url || row.picture || null,
     verified: Boolean(Number(row.verified || 0)),
-    isAutomated: Boolean(Number(row.is_synthetic || 0)),
     following: Boolean(row.following),
   };
 }
