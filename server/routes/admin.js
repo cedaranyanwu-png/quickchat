@@ -49,6 +49,10 @@ async function initializeAdminTables() {
       id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, target_user_id INTEGER NOT NULL,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, target_user_id)
     )`,
+    `CREATE TABLE IF NOT EXISTS bot_reach_events (
+      id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, post_id INTEGER,
+      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, post_id)
+    )`,
     `CREATE TABLE IF NOT EXISTS bot_post_like_events (
       id ${idColumn}, boost_id INTEGER NOT NULL, bot_id INTEGER NOT NULL, post_id INTEGER NOT NULL,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE (boost_id, bot_id, post_id)
