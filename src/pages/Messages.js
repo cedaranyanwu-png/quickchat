@@ -22,6 +22,7 @@ export default function Messages() {
   const [startingConversation, setStartingConversation] = useState(false);
   const [replyingTo, setReplyingTo] = useState(null);
   const [replyMenuId, setReplyMenuId] = useState(null);
+  const [reactionMenuId, setReactionMenuId] = useState(null);
   const [swipedMessageId, setSwipedMessageId] = useState(null);
   const [uploadingMedia, setUploadingMedia] = useState(false);
   const [recordingMode, setRecordingMode] = useState('');
@@ -498,6 +499,24 @@ export default function Messages() {
     requestAnimationFrame(() => document.getElementById('quickchat-message-input')?.focus());
   }, []);
 
+  const reactToMessage = useCallback(async (message, reaction) => {
+    if (!activeId || !message?.id) return;
+    try {
+      if (message.myReaction === reaction) {
+        const result = await apiRequest(`/messages/conversations/${activeId}/messages/${message.id}/reaction`, { method: 'DELETE' });
+        setMessages((current) => current.map((row) => String(row.id) === String(message.id)
+          ? { ...row, myReaction: null, reactionCount: Number(result.reactionCount || 0) } : row));
+      } else {
+        const result = await apiRequest(`/messages/conversations/${activeId}/messages/${message.id}/reaction`, { method: 'POST', body: { reaction } });
+        setMessages((current) => current.map((row) => String(row.id) === String(message.id)
+          ? { ...row, myReaction: result.reaction, reactionCount: Number(result.reactionCount || 0) } : row));
+      }
+      setReactionMenuId(null);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }, [activeId]);
+
   const cancelReply = useCallback(() => {
     setReplyingTo(null);
     setReplyMenuId(null);
@@ -658,15 +677,33 @@ export default function Messages() {
                       <div className="mt-1 flex items-center justify-end gap-2">
                         <small className="opacity-70">{message.time}</small>
                         {isMine && <span className="inline-flex items-center" title={message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'} aria-label={message.readAt ? 'Seen' : message.deliveredAt ? 'Delivered' : 'Sent'}><i className={`fa-solid ${message.readAt ? 'fa-check-double text-sky-200' : message.deliveredAt ? 'fa-check-double opacity-70' : 'fa-check opacity-70'} text-[10px]`} /></span>}
-                        <button
-                          type="button"
-                          onClick={() => setReplyMenuId((current) => current === message.id ? null : message.id)}
+                        <button type="button" onClick={() => setReactionMenuId((current) => current === message.id ? null : message.id)}
                           className="grid h-5 w-5 place-items-center rounded-full text-current opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-70 lg:hidden"
-                          aria-label="Message actions"
-                        >
+                          aria-label="React to message" title="React to message">
+                          <i className="fa-regular fa-face-smile text-[11px]" />
+                        </button>
+                        <button type="button" onClick={() => setReplyMenuId((current) => current === message.id ? null : message.id)}
+                          className="grid h-5 w-5 place-items-center rounded-full text-current opacity-0 transition-opacity hover:bg-black/10 group-hover:opacity-70 lg:hidden"
+                          aria-label="Message actions">
                           <i className="fa-solid fa-ellipsis text-[10px]" />
                         </button>
                       </div>
+                    {reactionMenuId === message.id && (
+                      <div className={`absolute bottom-[-2.75rem] z-40 flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 shadow-lg ${isMine ? 'right-0' : 'left-0'}`}>
+                        {['❤️', '😂', '😍', '👍', '🔥', '😢', '😡'].map((reaction) => (
+                          <button key={reaction} type="button" onClick={() => reactToMessage(message, reaction)}
+                            className={`grid h-8 w-8 place-items-center rounded-full text-sm hover:bg-slate-100 ${message.myReaction === reaction ? 'bg-blue-50 ring-1 ring-blue-300' : ''}`} aria-label={`React ${reaction}`}>
+                            {reaction}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {message.reactionCount > 0 && (
+                      <button type="button" onClick={() => setReactionMenuId((current) => current === message.id ? null : message.id)}
+                        className={`absolute -bottom-4 z-20 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] shadow-sm ${isMine ? 'right-2' : 'left-2'}`}>
+                        {message.myReaction || '❤️'} {message.reactionCount}
+                      </button>
+                    )}
                     </div>
                     {isMenuOpen && (
                       <div className={`absolute bottom-[-2.75rem] z-40 flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1.5 shadow-lg ${isMine ? 'right-0' : 'left-0'}`}>
