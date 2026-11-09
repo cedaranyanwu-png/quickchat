@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { apiRequest } from '../api';
 
 function AdCard({ ad }) {
   if (!ad) return null;
@@ -24,8 +25,7 @@ export default function AdFeedSlot({ className = '', placement = 'home', slotInd
 
   useEffect(() => {
     let active = true;
-    fetch('/api/ads/placements', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Ad placements unavailable')))
+    apiRequest('/ads/placements')
       .then((result) => {
         if (!active) return;
         const eligible = (result.ads || []).filter((item) => item.active && (item.placement === 'both' || item.placement === placement));
