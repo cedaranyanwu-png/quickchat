@@ -1,61 +1,58 @@
 const { spawn } = require('node:child_process');
 
-// Production-style launcher: the API and the bot runtime share one lifecycle so
-// the character accounts keep following, liking, and replying while the app is up.
-// `npm run dev` starts the same two processes from dev.js instead.
+// Production launcher: the API, character bot runtime, and RSS synchronization
+// worker share one lifecycle so feeds continue importing while QuickChat is up.
+// `npm run dev` starts the same runtimes from dev.js instead.
 const serverDirectory = __dirname;
-const botRestartDelayMs = 5000;
+const restartDelayMs = 5000;
 let shuttingDown = false;
-let botRestartTimer;
+const restartTimers = new Map();
+const children = new Map();
 
-const api = spawn(process.execPath, ['--use-system-ca', 'index.js'], {
-  cwd: serverDirectory,
-  env: process.env,
-  stdio: 'inherit',
-});
-
-let bot = startBot();
-
-function startBot() {
-  const child = spawn(process.execPath, ['--use-system-ca', 'ai-poster.js'], {
+function startManagedProcess(name, script) {
+  const child = spawn(process.execPath, ['--use-system-ca', script], {
     cwd: serverDirectory,
     env: process.env,
     stdio: 'inherit',
   });
+  children.set(name, child);
+
   child.on('error', (error) => {
-    console.error('[Quickchat] Could not start the bot runtime:', error.message);
-    scheduleBotRestart();
+    console.error(`[Quickchat] Could not start ${name}:`, error.message);
+    children.delete(name);
+    scheduleRestart(name, script);
   });
-  child.on('exit', (code) => {
+  child.on('exit', (code, signal) => {
+    if (children.get(name) === child) children.delete(name);
     if (shuttingDown) return;
-    console.error(`[Quickchat] The bot runtime stopped${code ? ` (exit ${code})` : ''}; restarting it.`);
-    bot = null;
-    scheduleBotRestart();
+    console.error(`[Quickchat] ${name} stopped${code ? ` (exit ${code})` : ''}${signal ? ` (signal ${signal})` : ''}; restarting it.`);
+    scheduleRestart(name, script);
   });
   return child;
 }
 
-function scheduleBotRestart() {
-  if (shuttingDown || botRestartTimer) return;
-  botRestartTimer = setTimeout(() => {
-    botRestartTimer = null;
-    if (!shuttingDown) bot = startBot();
-  }, botRestartDelayMs);
+function scheduleRestart(name, script) {
+  if (shuttingDown || restartTimers.has(name)) return;
+  const timer = setTimeout(() => {
+    restartTimers.delete(name);
+    if (!shuttingDown && !children.has(name)) startManagedProcess(name, script);
+  }, restartDelayMs);
+  restartTimers.set(name, timer);
 }
+
+const api = startManagedProcess('API', 'index.js');
+startManagedProcess('character bot runtime', 'ai-poster.js');
+startManagedProcess('RSS synchronization worker', 'rss-worker.js');
 
 function stop(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  clearTimeout(botRestartTimer);
-  bot?.kill('SIGTERM');
-  api.kill('SIGTERM');
+  for (const timer of restartTimers.values()) clearTimeout(timer);
+  restartTimers.clear();
+  for (const child of children.values()) child.kill('SIGTERM');
   process.exitCode = code;
 }
 
-api.on('error', (error) => {
-  console.error('[Quickchat] Could not start the API:', error.message);
-  stop(1);
-});
 api.on('exit', (code) => {
   if (shuttingDown) return;
   console.error(`[Quickchat] The API stopped${code ? ` (exit ${code})` : ''}.`);
