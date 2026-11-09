@@ -60,7 +60,7 @@ router.get('/ads/render/:adId', asyncRoute(async (req, res) => {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-Frame-Options': 'SAMEORIGIN',
-    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' https: http:; style-src 'unsafe-inline' https: http:; img-src https: http: data: blob:; connect-src https: http:; frame-src https: http:; font-src https: http: data:; media-src https: http: data:; base-uri 'none'; form-action https: http:;",
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' https: http:; style-src 'unsafe-inline' https: http:; img-src https: http: data: blob:; connect-src https: http: ws: wss:; frame-src https: http:; font-src https: http: data:; media-src https: http: data: blob:; base-uri 'none'; form-action https: http:;",
   });
 
   return res.send(`<!doctype html>
