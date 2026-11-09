@@ -260,11 +260,13 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
   const messages = await db.query(
     `SELECT m.id, m.conversation_id, m.sender_id, m.text, m.is_read, m.created_at,
             m.reply_to_message_id, m.media_type, m.media_url, m.delivered_at, m.read_at,
+            (SELECT COUNT(*) FROM message_reactions mr WHERE mr.message_id = m.id) AS reaction_count,
+            (SELECT reaction FROM message_reactions mine_reaction WHERE mine_reaction.message_id = m.id AND mine_reaction.user_id = ? LIMIT 1) AS my_reaction,
             replied.id AS replied_id, replied.sender_id AS replied_sender_id, replied.text AS replied_text
        FROM messages m
        LEFT JOIN messages replied ON replied.id = m.reply_to_message_id
       WHERE m.conversation_id = ? ORDER BY m.id DESC LIMIT ?`,
-    [conversationId, clampLimit(req.query.limit, 100, 200)],
+    [req.user.id, conversationId, clampLimit(req.query.limit, 100, 200)],
   );
   await db.update(
     'UPDATE messages SET is_read = 1, delivered_at = COALESCE(delivered_at, CURRENT_TIMESTAMP), read_at = COALESCE(read_at, CURRENT_TIMESTAMP) WHERE conversation_id = ? AND sender_id <> ?',
@@ -280,6 +282,8 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
       mediaUrl: message.media_url || null,
       deliveredAt: message.delivered_at || null,
       readAt: message.read_at || null,
+      reactionCount: Number(message.reaction_count || 0),
+      myReaction: message.my_reaction || null,
       time: new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       createdAt: message.created_at,
       replyTo: message.replied_id ? {
@@ -290,6 +294,35 @@ router.get('/messages/conversations/:conversationId/messages', asyncRoute(async 
       } : null,
     })),
   });
+}));
+
+router.post('/messages/conversations/:conversationId/messages/:messageId/reaction', asyncRoute(async (req, res) => {
+  const conversationId = positiveId(req.params.conversationId);
+  const messageId = positiveId(req.params.messageId);
+  const reaction = String(req.body?.reaction || '').trim().slice(0, 20);
+  const allowed = ['❤️', '😂', '😍', '👍', '🔥', '😢', '😡'];
+  if (!conversationId || !messageId || !allowed.includes(reaction)) return res.status(400).json({ message: 'Choose a valid reaction.' });
+  if (!await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  const message = await db.getOne('SELECT id FROM messages WHERE id = ? AND conversation_id = ?', [messageId, conversationId]);
+  if (!message) return notFound(res, 'Message not found.');
+
+  const existing = await db.getOne('SELECT reaction FROM message_reactions WHERE message_id = ? AND user_id = ?', [messageId, req.user.id]);
+  if (existing) {
+    await db.update('UPDATE message_reactions SET reaction = ? WHERE message_id = ? AND user_id = ?', [reaction, messageId, req.user.id]);
+  } else {
+    await db.query('INSERT INTO message_reactions (message_id, user_id, reaction) VALUES (?, ?, ?)', [messageId, req.user.id, reaction]);
+  }
+  const count = await db.getCount('SELECT COUNT(*) AS count FROM message_reactions WHERE message_id = ?', [messageId]);
+  res.json({ reaction, reactionCount: count });
+}));
+
+router.delete('/messages/conversations/:conversationId/messages/:messageId/reaction', asyncRoute(async (req, res) => {
+  const conversationId = positiveId(req.params.conversationId);
+  const messageId = positiveId(req.params.messageId);
+  if (!conversationId || !messageId || !await isMember(conversationId, req.user.id)) return notFound(res, 'Conversation not found.');
+  await db.delete('DELETE FROM message_reactions WHERE message_id = ? AND user_id = ?', [messageId, req.user.id]);
+  const count = await db.getCount('SELECT COUNT(*) AS count FROM message_reactions WHERE message_id = ?', [messageId]);
+  res.json({ reaction: null, reactionCount: count });
 }));
 
 router.get('/messages/conversations/:conversationId/status', asyncRoute(async (req, res) => {
