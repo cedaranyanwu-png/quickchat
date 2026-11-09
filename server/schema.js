@@ -213,7 +213,8 @@ async function initializePageTables() {
     `CREATE TABLE IF NOT EXISTS post_reactions (
       post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (post_id, user_id)
-    )`,    `CREATE TABLE IF NOT EXISTS live_signals (
+    )`,
+    `CREATE TABLE IF NOT EXISTS live_signals (
       id ${idColumn}, session_id INTEGER NOT NULL, from_user_id INTEGER NOT NULL,
       to_user_id INTEGER NOT NULL, kind VARCHAR(20) NOT NULL, payload TEXT,
       created_at_ms ${epochType} NOT NULL DEFAULT 0
