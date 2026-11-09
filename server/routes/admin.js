@@ -463,8 +463,8 @@ router.get('/admin/users', requirePermission('users.view'), asyncRoute(async (re
             CASE WHEN EXISTS (SELECT 1 FROM account_bans b WHERE b.user_id = u.id AND b.revoked_at IS NULL) THEN 'banned'
                  WHEN EXISTS (SELECT 1 FROM account_suspensions s WHERE s.user_id = u.id AND s.lifted_at IS NULL AND ${db.type === 'sqlite' ? 'datetime(s.expires_at) > CURRENT_TIMESTAMP' : 's.expires_at > CURRENT_TIMESTAMP'}) THEN 'suspended'
                  ELSE 'active' END AS account_status,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS followers,
-            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS following,
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
+            (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following,
             (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS posts
        FROM users u ${filter} ORDER BY u.created_at DESC, u.id DESC LIMIT ? OFFSET ?`,
     [...params, limit, (page - 1) * limit],
