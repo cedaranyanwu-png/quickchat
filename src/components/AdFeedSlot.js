@@ -3,14 +3,16 @@ import { apiRequest } from '../api';
 
 function ScriptAdFrame({ ad }) {
   const iframeRef = useRef(null);
-  const [height, setHeight] = useState(160);
+  const [height, setHeight] = useState(96);
 
   useEffect(() => {
     const onMessage = (event) => {
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
       const nextHeight = Number(event.data?.quickchatAdHeight);
-      if (Number.isFinite(nextHeight) && nextHeight >= 80 && nextHeight <= 1200) {
-        setHeight(Math.ceil(nextHeight));
+      if (Number.isFinite(nextHeight) && nextHeight >= 72) {
+        // Keep feed ads compact so oversized third-party creatives cannot
+        // leave a large blank area between the ad and the posts.
+        setHeight(Math.min(Math.ceil(nextHeight), 360));
       }
     };
 
@@ -19,9 +21,9 @@ function ScriptAdFrame({ ad }) {
   }, []);
 
   return (
-    <article className="border-b border-slate-200 bg-white px-4 py-3" aria-label="Sponsored advertisement">
+    <article className="border-b border-slate-200 bg-white px-4 py-2" aria-label="Sponsored advertisement">
       <div className="mx-auto w-full max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+        <div className="flex items-center justify-between border-b border-slate-100 px-3 py-1.5">
           <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Sponsored</span>
           <span className="rounded-full bg-blue-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-blue-700">Ad</span>
         </div>
@@ -36,7 +38,8 @@ function ScriptAdFrame({ ad }) {
             display: 'block',
             width: '100%',
             height: `${height}px`,
-            minHeight: 80,
+            minHeight: 72,
+            maxHeight: 360,
             border: 0,
             background: 'transparent',
           }}
