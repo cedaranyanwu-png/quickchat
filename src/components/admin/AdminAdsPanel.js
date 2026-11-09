@@ -138,14 +138,14 @@ export default function AdminAdsPanel() {
             <textarea value={form.scriptCode} onChange={(e) => update('scriptCode', e.target.value)} maxLength={50000} rows={10} spellCheck={false} autoComplete="off" placeholder={'Paste the complete Native Banner snippet, including its &lt;script&gt; and container &lt;div&gt;...'} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 px-3 py-3 font-mono text-xs leading-5 text-emerald-300 outline-none focus:border-blue-500" />
             <span className="mt-1 block text-[11px] font-normal leading-5 text-slate-500">Up to 50,000 characters. The snippet runs inside an isolated responsive ad frame and keeps its original script/container pairing.</span>
           </label>
+          </>
+          }
           <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={Boolean(form.active)} onChange={(e) => update('active', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-700" /> Publish this advertisement</label>
           <div className="mt-5 flex flex-wrap gap-2">
-            <button disabled={saving} className="rounded-xl bg-blue-700 px-5 py-3 text-xs font-extrabold text-white hover:bg-blue-800 disabled:opacity-50">{saving ? 'Saving…' : editingId ? 'Save changes' : 'Add to app'}</button>
+            <button type="submit" disabled={saving} className="rounded-xl bg-blue-700 px-5 py-3 text-xs font-extrabold text-white hover:bg-blue-800 disabled:opacity-50">{saving ? 'Saving…' : editingId ? 'Save changes' : 'Add to app'}</button>
             <button type="button" onClick={reset} className="rounded-xl border border-slate-200 px-5 py-3 text-xs font-bold text-slate-600">Clear form</button>
           </div>
           <p className="mt-4 text-[11px] leading-5 text-slate-500">Native Banner snippets run inside an isolated responsive iframe so the third-party script can initialize while remaining separated from the main QuickChat page. Link and native ads continue to accept HTTP(S) destinations.</p>
-          </>
-          }
         </form>
 
         <div className="space-y-3">
