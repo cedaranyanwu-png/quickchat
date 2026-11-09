@@ -305,6 +305,12 @@ router.post('/users/:userId/follow', asyncRoute(async (req, res) => {
     if (!uniqueConstraint(error)) throw error;
   }
   if (created) {
+    await db.update(
+      `UPDATE boosted_promotions
+          SET delivered_quantity = CASE WHEN delivered_quantity < target_quantity THEN delivered_quantity + 1 ELSE delivered_quantity END
+        WHERE id = (SELECT id FROM boosted_promotions WHERE promoted_profile_id = ? AND objective = 'followers' AND status = 'active' ORDER BY created_at DESC LIMIT 1)`,
+      [targetId],
+    );
     await notifyUser({
       userId: targetId,
       actorId: req.user.id,
