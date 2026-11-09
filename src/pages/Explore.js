@@ -27,6 +27,8 @@ export default function Explore({ openModal, openVideo }) {
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'for_you');
   const [searchText, setSearchText] = useState(searchParams.get('q') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('cat') || '');
+  const [rssEnabled, setRssEnabled] = useState(false);
+  const [rssConfigLoaded, setRssConfigLoaded] = useState(false);
   
   const [data, setData] = useState({ categories: [], posts: [], users: [], people: [], communities: [] });
   const [businessData, setBusinessData] = useState({ opportunities: [], services: [], discussions: [] });
@@ -47,6 +49,20 @@ export default function Explore({ openModal, openVideo }) {
     params.set('tab', tab);
     setSearchParams(params);
   };
+
+  useEffect(() => {
+    let active = true;
+    apiRequest('/config').then((config) => {
+      if (!active) return;
+      setRssEnabled(Boolean(config?.features?.rssPublisher));
+      setRssConfigLoaded(true);
+    }).catch(() => { if (active) setRssConfigLoaded(true); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (rssConfigLoaded && !rssEnabled && activeTab === 'rss') setTab('for_you');
+  }, [rssConfigLoaded, rssEnabled, activeTab]);
 
   const handleSelectCategory = (cat) => {
     if (selectedCategory === cat) {
@@ -193,7 +209,7 @@ export default function Explore({ openModal, openVideo }) {
             { id: 'communities', label: 'Communities', icon: 'fa-solid fa-layer-group' },
             { id: 'business', label: 'Business & Services', icon: 'fa-solid fa-briefcase' },
             { id: 'sponsored', label: 'Sponsored', icon: 'fa-solid fa-bullhorn' },
-            { id: 'rss', label: 'RSS Feed', icon: 'fa-solid fa-rss' },
+            ...(rssEnabled ? [{ id: 'rss', label: 'RSS Feed', icon: 'fa-solid fa-rss' }] : []),
           ].map((tab) => (
             <button
               key={tab.id}
@@ -211,7 +227,7 @@ export default function Explore({ openModal, openVideo }) {
         </div>
       </div>
 
-      {activeTab === 'rss' ? <Discover embedded openModal={openModal} openVideo={openVideo} /> : <>
+      {activeTab === 'rss' && rssEnabled ? <Discover embedded openModal={openModal} openVideo={openVideo} /> : <>
       {/* Selected category pill alert */}
       {selectedCategory && (
         <div className="mx-4 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between text-xs text-blue-900">
