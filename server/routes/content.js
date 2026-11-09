@@ -557,6 +557,39 @@ router.delete('/posts/:postId/likes', asyncRoute(async (req, res) => {
   res.json({ liked: false, likes: recorded + legacyEngagementFor(post).likes });
 }));
 
+router.get('/posts/:postId/reactions', asyncRoute(async (req, res) => {
+  const postId = positiveId(req.params.postId);
+  if (!postId || !await db.getOne('SELECT id FROM posts WHERE id = ?', [postId])) return notFound(res, 'Post not found.');
+  const rows = await db.query('SELECT reaction, COUNT(*) AS count FROM post_reactions WHERE post_id = ? GROUP BY reaction ORDER BY count DESC', [postId]);
+  const mine = await db.getOne('SELECT reaction FROM post_reactions WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
+  res.json({ total: rows.reduce((sum, row) => sum + Number(row.count || 0), 0), reactions: rows.map((row) => ({ reaction: row.reaction, count: Number(row.count || 0) })), myReaction: mine?.reaction || null });
+}));
+
+router.post('/posts/:postId/reactions', asyncRoute(async (req, res) => {
+  const postId = positiveId(req.params.postId);
+  const reaction = String(req.body?.reaction || '').trim().slice(0, 20);
+  const allowed = ['❤️', '😂', '😍', '👍', '🔥', '😢', '😡'];
+  const post = postId ? await db.getOne('SELECT id, author_id FROM posts WHERE id = ?', [postId]) : null;
+  if (!post) return notFound(res, 'Post not found.');
+  if (!allowed.includes(reaction)) return res.status(400).json({ message: 'Choose a valid reaction.' });
+  if (!await canViewPost(postId, req.user.id)) return res.status(403).json({ message: 'Unlock this post before interacting with it.' });
+
+  const existing = await db.getOne('SELECT reaction FROM post_reactions WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
+  if (existing) await db.update('UPDATE post_reactions SET reaction = ? WHERE post_id = ? AND user_id = ?', [reaction, postId, req.user.id]);
+  else await db.query('INSERT INTO post_reactions (post_id, user_id, reaction) VALUES (?, ?, ?)', [postId, req.user.id, reaction]);
+
+  const total = await db.getCount('SELECT COUNT(*) AS count FROM post_reactions WHERE post_id = ?', [postId]);
+  res.json({ reaction, myReaction: reaction, total });
+}));
+
+router.delete('/posts/:postId/reactions', asyncRoute(async (req, res) => {
+  const postId = positiveId(req.params.postId);
+  if (!postId) return res.status(400).json({ message: 'Invalid post ID.' });
+  await db.delete('DELETE FROM post_reactions WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
+  const total = await db.getCount('SELECT COUNT(*) AS count FROM post_reactions WHERE post_id = ?', [postId]);
+  res.json({ reaction: null, myReaction: null, total });
+}));
+
 router.post('/posts/:postId/reposts', asyncRoute(async (req, res) => {
   const postId = positiveId(req.params.postId);
   const post = postId ? await db.getOne('SELECT id, author_id FROM posts WHERE id = ?', [postId]) : null;
