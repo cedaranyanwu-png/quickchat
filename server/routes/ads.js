@@ -18,6 +18,70 @@ router.get('/ads/placements', asyncRoute(async (_req, res) => {
   res.json({ ads: (Array.isArray(ads) ? ads : []).filter((ad) => ad && ad.active === true) });
 }));
 
+// Public renderer for managed third-party native ad snippets.
+router.get('/ads/render/:adId', asyncRoute(async (req, res) => {
+  let ads = [];
+  try { ads = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { ads = []; }
+
+  const ad = (Array.isArray(ads) ? ads : []).find(
+    (item) => item && item.active === true && item.type === 'script' && String(item.id) === String(req.params.adId),
+  );
+
+  if (!ad || !String(ad.scriptCode || '').trim()) {
+    return res.status(404).type('html').send('<!doctype html><html><body></body></html>');
+  }
+
+  // Keep the third-party snippet inside its own document. The parent QuickChat DOM is never exposed to it.
+  const scriptCode = String(ad.scriptCode);
+  const heightReporter = `
+    <script>
+      (function () {
+        function reportHeight() {
+          var root = document.documentElement;
+          var body = document.body;
+          var height = Math.max(
+            root ? root.scrollHeight : 0,
+            root ? root.offsetHeight : 0,
+            body ? body.scrollHeight : 0,
+            body ? body.offsetHeight : 0
+          );
+          parent.postMessage({ quickchatAdHeight: Math.min(Math.max(height + 8, 80), 1200) }, '*');
+        }
+        window.addEventListener('load', reportHeight);
+        setTimeout(reportHeight, 300);
+        setTimeout(reportHeight, 1000);
+        setTimeout(reportHeight, 2500);
+        setInterval(reportHeight, 3000);
+      }());
+    </script>
+  `;
+
+  res.set({
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'X-Frame-Options': 'SAMEORIGIN',
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline' https: http:; style-src 'unsafe-inline' https: http:; img-src https: http: data: blob:; connect-src https: http:; frame-src https: http:; font-src https: http: data:; media-src https: http: data:; base-uri 'none'; form-action https: http:;",
+  });
+
+  return res.send(`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body { margin:0; padding:0; width:100%; min-height:80px; overflow-x:hidden; background:transparent; }
+body { display:flex; justify-content:center; align-items:flex-start; }
+#ad-root { width:100%; max-width:100%; min-height:80px; overflow:hidden; }
+#ad-root img, #ad-root iframe, #ad-root video, #ad-root ins { max-width:100%; }
+</style>
+</head>
+<body>
+<div id="ad-root">${scriptCode}</div>
+${heightReporter}
+</body>
+</html>`);
+}));
+
 // Public secure click redirect endpoint (no authentication required)
 router.get('/ads/click/:campaignId', async (req, res) => {
   const campaignId = Number(req.params.campaignId);
