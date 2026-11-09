@@ -16,6 +16,7 @@ router.post('/boosts/post', asyncRoute(async (req, res) => {
   const result = await boostPost(req.user.id, {
     postId,
     objective: req.body?.objective || 'reach',
+    targetQuantity: Number(req.body?.targetQuantity) || 1000,
     targetInterests: Array.isArray(req.body?.targetInterests) ? req.body.targetInterests : [],
     targetAudiences: Array.isArray(req.body?.targetAudiences) ? req.body.targetAudiences : [],
     budgetPoints: Number(req.body?.budgetPoints) || 500,
@@ -28,6 +29,7 @@ router.post('/boosts/post', asyncRoute(async (req, res) => {
 router.post('/boosts/profile', asyncRoute(async (req, res) => {
   const result = await boostProfile(req.user.id, {
     objective: req.body?.objective || 'followers',
+    targetQuantity: Number(req.body?.targetQuantity) || 500,
     targetInterests: Array.isArray(req.body?.targetInterests) ? req.body.targetInterests : [],
     targetAudiences: Array.isArray(req.body?.targetAudiences) ? req.body.targetAudiences : [],
     budgetPoints: Number(req.body?.budgetPoints) || 1000,
