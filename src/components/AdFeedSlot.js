@@ -29,7 +29,7 @@ function ScriptAdFrame({ ad }) {
           ref={iframeRef}
           title={`Advertisement: ${ad.title || 'Sponsored content'}`}
           src={`/api/ads/render/${encodeURIComponent(ad.id)}`}
-          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
           referrerPolicy="strict-origin-when-cross-origin"
           loading="lazy"
           style={{
