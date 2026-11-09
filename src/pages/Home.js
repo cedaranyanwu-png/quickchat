@@ -93,7 +93,7 @@ export default function Home({ refreshKey, openModal, onOpenPost, openVideo }) {
 
       <LiveNowStrip />
 
-      <AdFeedSlot />
+      <AdFeedSlot placement="home" slotIndex={0} />
 
       <div className="flex items-center gap-3 p-4 border-b border-slate-200 hover:bg-slate-50">
         <Avatar name={profile?.fullName} picture={profile?.picture} size={38} />
