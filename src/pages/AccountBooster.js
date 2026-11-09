@@ -283,7 +283,10 @@ export default function AccountBooster() {
                       Target {Number(boost.targetQuantity || 0).toLocaleString()} · {Number(boost.budgetPoints || 0).toLocaleString()} points · expires {formatDate(boost.expiresAt)}
                     </span>
                     <span className="mt-1 block text-[10px] text-blue-600">
-                      Delivered {Number(boost.deliveredQuantity || 0).toLocaleString()}
+                      Genuine delivery: {Number(boost.deliveredQuantity || 0).toLocaleString()}
+                    </span>
+                    <span className="mt-1 block text-[10px] font-semibold text-violet-700">
+                      Synthetic QA delivery: {Number(boost.testDeliveredQuantity || 0).toLocaleString()}
                     </span>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-[9px] font-extrabold uppercase ${boost.status === 'active'
