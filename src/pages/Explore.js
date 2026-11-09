@@ -277,7 +277,7 @@ export default function Explore({ openModal, openVideo }) {
 
       {/* Main Tab Content */}
       <div className="px-4 pt-2">
-        {activeTab === 'sponsored' && <AdFeedSlot className="mb-3 rounded-xl border border-slate-200" />}
+        {activeTab === 'sponsored' && <AdFeedSlot placement="explore" slotIndex={0} className="mb-3 rounded-xl border border-slate-200" />}
         {error && <p className="p-4 text-sm text-red-600 bg-red-50 rounded-xl mb-3">{error}</p>}
         {loading && (
           <div className="py-12 text-center text-slate-400">
@@ -299,6 +299,7 @@ export default function Explore({ openModal, openVideo }) {
                   onBoost={(p) => setBoostTarget(p)}
                 />
                 {index === 2 && <FeedDiscovery people={data.people} communities={data.communities} />}
+                {index === 5 && <AdFeedSlot placement="explore" slotIndex={1} />}
               </React.Fragment>
             ))}
             {data.posts.length < 3 && <FeedDiscovery people={data.people} communities={data.communities} />}
@@ -328,15 +329,17 @@ export default function Explore({ openModal, openVideo }) {
               </span>
             </div>
 
-            {organicPosts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                openModal={openModal}
-                openVideo={openVideo}
-                onDismiss={(postId, reason) => handleFeedback(postId, reason)}
-                onBoost={(p) => setBoostTarget(p)}
-              />
+            {organicPosts.map((post, index) => (
+              <React.Fragment key={post.id}>
+                <PostCard
+                  post={post}
+                  openModal={openModal}
+                  openVideo={openVideo}
+                  onDismiss={(postId, reason) => handleFeedback(postId, reason)}
+                  onBoost={(p) => setBoostTarget(p)}
+                />
+                {index === 4 && <AdFeedSlot placement="explore" slotIndex={1} />}
+              </React.Fragment>
             ))}
             {organicPosts.length === 0 && (
               <p className="py-8 text-center text-xs text-slate-500">No trending discussions found right now.</p>
@@ -347,15 +350,17 @@ export default function Explore({ openModal, openVideo }) {
         {/* TAB 3: POSTS */}
         {!loading && !error && activeTab === 'posts' && (
           <div>
-            {organicPosts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                openModal={openModal}
-                openVideo={openVideo}
-                onDismiss={(postId, reason) => handleFeedback(postId, reason)}
-                onBoost={(p) => setBoostTarget(p)}
-              />
+            {organicPosts.map((post, index) => (
+              <React.Fragment key={post.id}>
+                <PostCard
+                  post={post}
+                  openModal={openModal}
+                  openVideo={openVideo}
+                  onDismiss={(postId, reason) => handleFeedback(postId, reason)}
+                  onBoost={(p) => setBoostTarget(p)}
+                />
+                {index === 4 && <AdFeedSlot placement="explore" slotIndex={1} />}
+              </React.Fragment>
             ))}
             {organicPosts.length === 0 && (
               <p className="py-8 text-center text-xs text-slate-500">No organic posts match your search query.</p>

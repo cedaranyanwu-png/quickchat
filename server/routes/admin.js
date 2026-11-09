@@ -294,6 +294,43 @@ async function audit(req, action, targetType, targetId, reason, previousState, n
 }
 
 
+
+router.get('/admin/ads', requirePermission('ads.manage'), asyncRoute(async (_req, res) => {
+  let ads = [];
+  try { ads = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { ads = []; }
+  res.json({ ads: Array.isArray(ads) ? ads : [] });
+}));
+
+router.put('/admin/ads', requirePermission('ads.manage'), asyncRoute(async (req, res) => {
+  if (!Array.isArray(req.body?.ads) || req.body.ads.length > 50) {
+    return res.status(400).json({ message: 'Provide an array containing no more than 50 advertisements.' });
+  }
+  const ads = [];
+  const seen = new Set();
+  for (const raw of req.body.ads) {
+    const id = String(raw?.id || '').trim().slice(0, 80);
+    const type = raw?.type === 'link' ? 'link' : raw?.type === 'native' ? 'native' : null;
+    const title = String(raw?.title || '').trim().slice(0, 120);
+    const description = String(raw?.description || '').trim().slice(0, 500);
+    const destinationUrl = String(raw?.destinationUrl || '').trim().slice(0, 2048);
+    const imageUrl = String(raw?.imageUrl || '').trim().slice(0, 2048);
+    const placement = ['home', 'explore', 'both'].includes(raw?.placement) ? raw.placement : 'both';
+    const isValidUrl = (value) => {
+      try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch (_error) { return false; }
+    };
+    if (!id || seen.has(id) || !type || !title || !isValidUrl(destinationUrl) || (imageUrl && !isValidUrl(imageUrl)) || (type === 'native' && !description)) {
+      return res.status(400).json({ message: 'Each ad needs a unique ID, valid format, title, valid HTTP(S) destination, and a description for native ads. Image URLs must also use HTTP(S).' });
+    }
+    seen.add(id);
+    ads.push({ id, type, title, description, destinationUrl, imageUrl, placement, active: raw.active !== false });
+  }
+  let previous = [];
+  try { previous = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { previous = []; }
+  await setSetting('managed_feed_ads', JSON.stringify(ads), { updatedBy: req.user.id });
+  await audit(req, 'ads.feed_placements_updated', 'ads', null, 'Managed feed advertisements updated', previous, ads);
+  res.json({ message: 'Feed advertisements saved.', ads });
+}));
+
 router.get('/admin/whatsapp/messages', requirePermission('notifications.send'), asyncRoute(async (_req, res) => {
   const logs = await db.query('SELECT id, recipient_user_id, recipient_phone, title, message, status, error, created_at FROM whatsapp_notification_logs ORDER BY id DESC LIMIT 100');
   res.json({ configured: whatsapp.isConfigured(), logs });

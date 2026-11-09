@@ -8,6 +8,15 @@ const {
 } = require('../services/ads-service');
 
 const router = express.Router();
+const { getSetting } = require('../platform-settings');
+
+// Public read-only feed placements. Only active, admin-approved destinations are returned.
+router.get('/ads/placements', asyncRoute(async (_req, res) => {
+  let ads = [];
+  try { ads = JSON.parse(await getSetting('managed_feed_ads', '[]') || '[]'); } catch (_error) { ads = []; }
+  res.set('Cache-Control', 'no-store');
+  res.json({ ads: (Array.isArray(ads) ? ads : []).filter((ad) => ad && ad.active === true) });
+}));
 
 // Public secure click redirect endpoint (no authentication required)
 router.get('/ads/click/:campaignId', async (req, res) => {

@@ -93,7 +93,7 @@ export default function Home({ refreshKey, openModal, onOpenPost, openVideo }) {
 
       <LiveNowStrip />
 
-      <AdFeedSlot />
+      <AdFeedSlot placement="home" slotIndex={0} />
 
       <div className="flex items-center gap-3 p-4 border-b border-slate-200 hover:bg-slate-50">
         <Avatar name={profile?.fullName} picture={profile?.picture} size={38} />
@@ -115,7 +115,7 @@ export default function Home({ refreshKey, openModal, onOpenPost, openVideo }) {
             onDismiss={(id) => setPosts((current) => current.filter((row) => (row.id || row.campaignId) !== id))}
           />
           {index === 2 && <FeedDiscovery people={discovery.people} communities={discovery.communities} />}
-          {index === 4 && <AdFeedSlot />}
+          {index === 4 && <AdFeedSlot placement="home" slotIndex={1} />}
         </React.Fragment>
       ))}
       {!loading && !error && posts.length > 0 && posts.length < 3 && <FeedDiscovery people={discovery.people} communities={discovery.communities} />}
