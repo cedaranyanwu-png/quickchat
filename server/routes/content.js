@@ -541,6 +541,12 @@ router.post('/posts/:postId/likes', asyncRoute(async (req, res) => {
   const alreadyLiked = await db.getOne('SELECT user_id FROM post_likes WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
   if (!alreadyLiked) {
     await db.query('INSERT INTO post_likes (post_id, user_id) VALUES (?, ?)', [postId, req.user.id]);
+    await db.update(
+      `UPDATE boosted_promotions
+          SET delivered_quantity = CASE WHEN delivered_quantity < target_quantity THEN delivered_quantity + 1 ELSE delivered_quantity END
+        WHERE id = (SELECT id FROM boosted_promotions WHERE post_id = ? AND objective = 'likes' AND status = 'active' ORDER BY created_at DESC LIMIT 1)`,
+      [postId],
+    );
     await notify(post.author_id, req.user.id, 'like', postId, 'liked your post');
   }
   const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?', [postId]);
