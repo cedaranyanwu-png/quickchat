@@ -172,7 +172,7 @@ router.get('/home', asyncRoute(async (req, res) => {
   const response = { posts: timelinePosts.slice(0, limit), tab };
   if (!live) {
     const [suggestedUsers, suggestedCommunities] = await Promise.all([
-      loadPeopleSuggestions(req.user.id, 4, profile, 'explore'),
+      loadPeopleSuggestions(req.user.id, 4, profile, 'home'),
       loadCommunitySuggestions(req.user.id, 4),
     ]);
     response.suggestedUsers = suggestedUsers;
@@ -228,7 +228,7 @@ router.get('/explore', asyncRoute(async (req, res) => {
   };
   if (!live) {
     const [suggestedUsers, suggestedCommunities] = await Promise.all([
-      loadPeopleSuggestions(req.user.id, 4, interestProfile),
+      loadPeopleSuggestions(req.user.id, 4, interestProfile, 'explore'),
       loadCommunitySuggestions(req.user.id, 4),
     ]);
     response.suggestedUsers = suggestedUsers;
