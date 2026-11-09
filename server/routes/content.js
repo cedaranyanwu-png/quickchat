@@ -27,7 +27,7 @@ const POST_SELECT = `
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
          (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
          (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
-         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS like_count,
          EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
          EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked,
          EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
@@ -52,7 +52,7 @@ async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface
     && String(await getSetting(visibilityKey, 'false')).toLowerCase() === 'true';
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count
        FROM users u
       WHERE u.id <> ?
         AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
@@ -261,13 +261,13 @@ router.get('/discover', asyncRoute(async (req, res) => {
   const trendingRows = await db.query(
     `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.source_link, p.media, p.video_id, p.created_at,
             p.hashtags, p.target_interests, p.visibility, u.fullname, u.username, u.avatar_url, u.picture, u.verified,
-            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+            (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS like_count,
             (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
             (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
             EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
             EXISTS(SELECT 1 FROM bookmarks mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS bookmarked,
             EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
-            ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) * 2 +
+            ((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) * 2 +
              (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) * 3 +
              (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) * 2) AS engagement_score
        FROM posts p JOIN users u ON u.id = p.author_id
@@ -286,7 +286,7 @@ router.get('/discover', asyncRoute(async (req, res) => {
   );
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
-            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
+            (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count
        FROM users u WHERE u.id <> ? AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(?) = 'true')
          AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY follower_count DESC LIMIT ?`,
@@ -365,7 +365,7 @@ router.get('/creator/analytics', asyncRoute(async (req, res) => {
   const [summary, rows] = await Promise.all([
     db.getOne(
       `SELECT COUNT(*) AS posts,
-              COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id)), 0) AS likes,
+              COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
               COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
               COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
          FROM posts p WHERE p.author_id = ? AND p.created_at >= ?`,
@@ -374,7 +374,7 @@ router.get('/creator/analytics', asyncRoute(async (req, res) => {
     db.query(
     `SELECT p.category,
             COUNT(*) AS posts,
-            COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id)), 0) AS likes,
+            COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
             COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
             COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
        FROM posts p WHERE p.author_id = ? AND p.created_at >= ?
@@ -561,7 +561,7 @@ router.post('/posts/:postId/likes', asyncRoute(async (req, res) => {
     }
     await notify(post.author_id, req.user.id, 'like', postId, 'liked your post');
   }
-  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?', [postId]);
+  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ? AND COALESCE(is_synthetic, 0) = 0', [postId]);
   res.json({ liked: true, likes: recorded + legacyEngagementFor(post).likes });
 }));
 
@@ -571,7 +571,7 @@ router.delete('/posts/:postId/likes', asyncRoute(async (req, res) => {
   const post = await db.getOne('SELECT id, created_at FROM posts WHERE id = ?', [postId]);
   if (!post) return notFound(res, 'Post not found.');
   await db.delete('DELETE FROM post_likes WHERE post_id = ? AND user_id = ?', [postId, req.user.id]);
-  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ?', [postId]);
+  const recorded = await db.getCount('SELECT COUNT(*) AS count FROM post_likes WHERE post_id = ? AND COALESCE(is_synthetic, 0) = 0', [postId]);
   res.json({ liked: false, likes: recorded + legacyEngagementFor(post).likes });
 }));
 
