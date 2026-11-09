@@ -51,7 +51,7 @@ async function loadPeopleSuggestions(userId, limit = 5, interestProfile, surface
   const visible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
     && String(await getSetting(visibilityKey, 'false')).toLowerCase() === 'true';
   const discoverBotsVisible = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true'
-    && String(await getSetting('bots_show_explore', 'false')).toLowerCase() === 'true';
+    && String(await getSetting('bots_show_find_friends', 'false')).toLowerCase() === 'true';
   const people = await db.query(
     `SELECT u.id, u.fullname, u.username, u.bio, u.interests, u.avatar_url, u.picture, u.verified, u.is_synthetic,
             (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count
