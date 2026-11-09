@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminRequest } from '../../api';
 
-const EMPTY = { id: '', type: 'native', title: '', description: '', imageUrl: '', destinationUrl: '', placement: 'both', active: true };
+const EMPTY = { id: '', type: 'native', title: '', description: '', imageUrl: '', destinationUrl: '', scriptCode: '', placement: 'both', active: true };
 
 function validWebUrl(value, required = false) {
   if (!value && !required) return true;
@@ -36,8 +36,9 @@ export default function AdminAdsPanel() {
     event.preventDefault();
     setError(''); setNotice('');
     if (!form.title.trim()) return setError('Enter an ad title.');
-    if (!validWebUrl(form.destinationUrl, true)) return setError('Destination must be a valid http:// or https:// URL.');
-    if (!validWebUrl(form.imageUrl)) return setError('Image URL must be a valid http:// or https:// URL.');
+    if (form.type === 'script' && !form.scriptCode.trim()) return setError('Paste the advertising network JavaScript snippet.');
+    if (form.type !== 'script' && !validWebUrl(form.destinationUrl, true)) return setError('Destination must be a valid http:// or https:// URL.');
+    if (form.type !== 'script' && !validWebUrl(form.imageUrl)) return setError('Image URL must be a valid http:// or https:// URL.');
     if (form.type === 'native' && !form.description.trim()) return setError('Native ads need a description.');
     const entry = {
       ...form,
@@ -46,6 +47,7 @@ export default function AdminAdsPanel() {
       description: form.description.trim(),
       imageUrl: form.imageUrl.trim(),
       destinationUrl: form.destinationUrl.trim(),
+      scriptCode: form.type === 'script' ? form.scriptCode : '',
     };
     setSaving(true);
     try {
@@ -108,7 +110,7 @@ export default function AdminAdsPanel() {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-bold text-slate-700">Ad format
               <select value={form.type} onChange={(e) => update('type', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm">
-                <option value="link">External ad link</option><option value="native">Native feed ad</option>
+                <option value="link">External ad link</option><option value="native">Native feed ad</option><option value="script">JavaScript snippet</option>
               </select>
             </label>
             <label className="text-xs font-bold text-slate-700">Feed placement
@@ -120,6 +122,7 @@ export default function AdminAdsPanel() {
           <label className="mt-3 block text-xs font-bold text-slate-700">Ad title
             <input value={form.title} onChange={(e) => update('title', e.target.value)} maxLength={120} required placeholder="e.g. Discover our new service" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-blue-500" />
           </label>
+          {form.type !== 'script' && <>
           <label className="mt-3 block text-xs font-bold text-slate-700">Description {form.type === 'native' ? '(required)' : '(optional)'}
             <textarea value={form.description} onChange={(e) => update('description', e.target.value)} maxLength={500} rows={3} placeholder="Short copy shown inside the feed card" className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-blue-500" />
           </label>
@@ -129,12 +132,17 @@ export default function AdminAdsPanel() {
           <label className="mt-3 block text-xs font-bold text-slate-700">Creative image URL (optional)
             <input type="url" value={form.imageUrl} onChange={(e) => update('imageUrl', e.target.value)} placeholder="https://cdn.example.com/ad-image.jpg" className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm outline-none focus:border-blue-500" />
           </label>
+          </>}
+          {form.type === 'script' && <label className="mt-3 block text-xs font-bold text-slate-700">Advertising JavaScript snippet
+            <textarea value={form.scriptCode} onChange={(e) => update('scriptCode', e.target.value)} maxLength={50000} rows={10} spellCheck={false} autoComplete="off" placeholder={'Paste the complete ad-network snippet, including its script tags...'} className="mt-1.5 w-full resize-y rounded-xl border border-slate-200 bg-slate-950 px-3 py-3 font-mono text-xs leading-5 text-emerald-300 outline-none focus:border-blue-500" />
+            <span className="mt-1 block text-[11px] font-normal leading-5 text-slate-500">Up to 50,000 characters. The snippet runs in a sandboxed ad frame, isolated from the main QuickChat page.</span>
+          </label>
           <label className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-700"><input type="checkbox" checked={Boolean(form.active)} onChange={(e) => update('active', e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-700" /> Publish this advertisement</label>
           <div className="mt-5 flex flex-wrap gap-2">
             <button disabled={saving} className="rounded-xl bg-blue-700 px-5 py-3 text-xs font-extrabold text-white hover:bg-blue-800 disabled:opacity-50">{saving ? 'Saving…' : editingId ? 'Save changes' : 'Add to app'}</button>
             <button type="button" onClick={reset} className="rounded-xl border border-slate-200 px-5 py-3 text-xs font-bold text-slate-600">Clear form</button>
           </div>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">Only http/https destinations are accepted. External ad scripts are not executed in the app; add the advertiser's landing-page URL instead.</p>
+          <p className="mt-4 text-[11px] leading-5 text-slate-500">JavaScript snippets run only inside an isolated sandboxed iframe. Link and native ads continue to accept HTTP(S) destinations.</p>
         </form>
 
         <div className="space-y-3">
@@ -149,7 +157,7 @@ export default function AdminAdsPanel() {
               <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3"><span className="text-[10px] font-semibold text-slate-400">Sponsored content</span><span className="rounded-full bg-blue-700 px-3 py-2 text-[10px] font-bold text-white">Learn more <i className="fa-solid fa-arrow-up-right-from-square ml-1" /></span></div>
             </article>
           </div>
-          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs leading-5 text-blue-900"><strong>Feed layout protection:</strong> creatives are constrained to the feed column, images use responsive sizing, and destinations open in a new tab. No injected third-party JavaScript can alter QuickChat's page layout.</div>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-xs leading-5 text-blue-900"><strong>Feed layout protection:</strong> third-party snippets execute inside a sandboxed iframe without access to the main QuickChat DOM. Ad scripts may still open advertiser links in a new tab.</div>
         </div>
       </div>
 
