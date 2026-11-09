@@ -18,8 +18,8 @@ const PROFILE_SELECT = `
          u.payout_country, u.creator_membership_price, u.creator_membership_currency,
          u.business_enabled, u.recommendation_preferences,
          u.picture, u.cover_url, u.verified, u.verified_at, u.verification_method, u.createdat, u.created_at,
-         (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count,
-         (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS following_count,
+         (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count,
+         (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following_count,
          (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS post_count,
          EXISTS(SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id) AS is_following
     FROM users u`;
@@ -277,7 +277,7 @@ function listRelationships(relationship) {
       `SELECT u.id, u.fullname, u.username, u.bio, u.avatar_url, u.picture, u.verified, u.is_synthetic,
               EXISTS(SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id) AS following
          FROM follows f JOIN users u ON u.id = ${personColumn}
-        WHERE ${relationColumn} = ? AND COALESCE(f.is_synthetic, 0) = 0
+        WHERE ${relationColumn} = ?
         ORDER BY f.created_at DESC, u.id DESC LIMIT ? OFFSET ?`,
       [req.user.id, userId, limit + 1, offset],
     );
