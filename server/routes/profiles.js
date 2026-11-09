@@ -18,8 +18,8 @@ const PROFILE_SELECT = `
          u.payout_country, u.creator_membership_price, u.creator_membership_currency,
          u.business_enabled, u.recommendation_preferences,
          u.picture, u.cover_url, u.verified, u.verified_at, u.verification_method, u.createdat, u.created_at,
-         (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count,
-         (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following_count,
+         (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS follower_count,
+         (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id AND COALESCE(f.is_synthetic, 0) = 0) AS following_count,
          (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS post_count,
          EXISTS(SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id) AS is_following
     FROM users u`;
@@ -33,7 +33,7 @@ const POST_SELECT = `
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
          (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,
          (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
-         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
+         (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0) AS like_count,
          EXISTS(SELECT 1 FROM post_likes mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS liked,
          EXISTS(SELECT 1 FROM bookmarks b WHERE b.post_id = p.id AND b.user_id = ?) AS bookmarked,
          EXISTS(SELECT 1 FROM post_reposts mine WHERE mine.post_id = p.id AND mine.user_id = ?) AS reposted,
@@ -277,7 +277,7 @@ function listRelationships(relationship) {
       `SELECT u.id, u.fullname, u.username, u.bio, u.avatar_url, u.picture, u.verified, u.is_synthetic,
               EXISTS(SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id) AS following
          FROM follows f JOIN users u ON u.id = ${personColumn}
-        WHERE ${relationColumn} = ?
+        WHERE ${relationColumn} = ? AND COALESCE(f.is_synthetic, 0) = 0
         ORDER BY f.created_at DESC, u.id DESC LIMIT ? OFFSET ?`,
       [req.user.id, userId, limit + 1, offset],
     );
