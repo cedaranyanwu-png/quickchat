@@ -5,6 +5,7 @@ import AdminSettingsPanel from '../components/admin/AdminSettingsPanel';
 import BackupRecoveryPanel from '../components/admin/BackupRecoveryPanel';
 import RewardsPanel from '../components/admin/RewardsPanel';
 import AdminAdsPanel from '../components/admin/AdminAdsPanel';
+import RSSAdmin from './RSSAdmin';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
@@ -12,6 +13,7 @@ const NAV = [
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
   { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
   { key: 'ads', label: 'Ad placements', icon: 'fa-rectangle-ad', permission: 'ads.manage' },
+  { key: 'rss', label: 'RSS publisher', icon: 'fa-rss', permission: 'rss.manage' },
   { key: 'moderation', label: 'Post moderation', icon: 'fa-shield-halved', permission: 'posts.view' },
   { key: 'verification', label: 'User verification', icon: 'fa-circle-check', permission: 'verification.review' },
   { key: 'reports', label: 'Reports & complaints', icon: 'fa-flag', permission: 'reports.view' },
@@ -463,6 +465,8 @@ export default function Admin() {
         {section === 'roles' && <section><div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><h2 className="text-lg font-black text-slate-900">Roles & permissions</h2><p className="mt-1 text-sm text-slate-500">Review system roles and the permissions assigned to each role.</p></div>{can('roles.create') && <button onClick={createRole} className="rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white"><i className="fa-solid fa-plus mr-2" />Create role</button>}</div><div className="grid gap-4 xl:grid-cols-2">{roles.map((role) => <article key={role.id} className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">{role.name}</h3><p className="mt-1 text-xs text-slate-500">{role.key} · {role.assigned_users} assigned users</p></div>{Number(role.is_system) ? <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">System role</span> : <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">Custom role</span>}</div><div className="mt-4 flex flex-wrap gap-2">{role.permissions.map((permission) => <span key={permission} className="rounded-md bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">{permission}</span>)}</div></article>)}</div><div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-extrabold text-slate-900">Permission catalogue</h3><p className="mt-1 text-xs text-slate-500">{permissions.length} permissions registered in the backend.</p><div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{permissions.map((permission) => <div key={permission.key} className="rounded-lg bg-slate-50 px-3 py-2"><p className="text-xs font-bold text-slate-800">{permission.key}</p><p className="mt-0.5 text-[10px] text-slate-500">{permission.description}</p></div>)}</div></div></section>}
 
         {section === 'ads' && <AdminAdsPanel />}
+
+        {section === 'rss' && <RSSAdmin />}
 
         {section === 'moderation' && <ModerationPanel can={can} />}
 
