@@ -21,6 +21,7 @@ export default function AdminSettingsPanel() {
       <div><h3 className="font-extrabold text-slate-900">Synthetic QA accounts</h3><p className="mt-1 text-xs leading-5 text-slate-500">Generate up to 10,000 Faker.js test profiles. Accounts are stored in the users table with an internal synthetic flag and indexed in the dedicated bots table. Bot follows and likes are tracked separately from genuine public engagement.</p></div>
       <div className="grid gap-3 md:grid-cols-2">
         {[
+          ['boost_synthetic_test_mode', 'Enable synthetic booster QA delivery'],
           ['bots_enabled', 'Enable bot test activity'],
           ['bots_show_find_friends', 'Show test profiles in Find Friends'],
           ['bots_show_home', 'Include test profiles in Home'],
