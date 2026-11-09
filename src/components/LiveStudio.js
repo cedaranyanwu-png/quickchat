@@ -665,7 +665,6 @@ export default function LiveStudio({ caption = '', profile, onCancel, onPosted }
                 ['Hearts', (summary?.likes ?? live.likes).toLocaleString()],
                 ['Comments', (summary?.comments ?? live.comments.length).toLocaleString()],
                 ['Gift points', (summary?.giftPoints ?? live.giftPoints).toLocaleString()],
-                ['Wallet', (summary?.walletBalance ?? 0).toLocaleString()],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-xl bg-white/5 px-2 py-2.5">
                   <p className="text-[10px] uppercase tracking-wide text-white/45">{label}</p>
