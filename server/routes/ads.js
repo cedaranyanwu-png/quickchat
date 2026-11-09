@@ -35,11 +35,11 @@ router.get('/ads/render/:adId', asyncRoute(async (req, res) => {
   // Move script elements after the markup so the required container ID exists before invoke.js runs.
   const rawSnippet = String(ad.scriptCode);
   const scriptTags = [];
-  const snippetMarkup = rawSnippet.replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script\\s*>/gi, (tag) => {
+  const snippetMarkup = rawSnippet.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, (tag) => {
     scriptTags.push(tag);
     return '';
   });
-  const snippetHtml = `${snippetMarkup}\\n${scriptTags.join("\\n")}`;
+  const snippetHtml = `${snippetMarkup}\n${scriptTags.join("\n")}`;
   // Keep third-party code inside the dedicated ad document rather than the QuickChat feed DOM.
   const heightReporter = `
     <script>
