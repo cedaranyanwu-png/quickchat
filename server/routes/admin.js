@@ -758,33 +758,53 @@ router.get('/admin/bots', requirePermission('settings.manage'), asyncRoute(async
 }));
 
 router.post('/admin/bots/generate', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const count = Math.max(1, Math.min(10000, Math.trunc(Number(req.body?.count) || 0)));
-  if (!count) return res.status(400).json({ message: 'Choose between 1 and 10,000 bot accounts.' });
+  const requested = Math.trunc(Number(req.body?.count) || 0);
+  if (!Number.isSafeInteger(requested) || requested < 1 || requested > 10000) {
+    return res.status(400).json({ message: 'Choose between 1 and 10,000 bot accounts.' });
+  }
   const enabled = String(await getSetting('bots_enabled', 'false')).toLowerCase() === 'true';
   if (enabled && process.env.NODE_ENV === 'production') {
     return res.status(409).json({ message: 'Disable bot activity before generating test accounts in the live environment.' });
   }
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 4);
   let created = 0;
-  for (let i = 0; i < count; i += 1) {
-    const displayName = faker.person.fullName();
-    const username = `qc_test_${Date.now().toString(36)}_${crypto.randomBytes(4).toString('hex')}`;
-    const email = `${username}@quickchat.test`;
-    const interests = faker.helpers.arrayElements(['technology', 'music', 'sports', 'fashion', 'business', 'gaming', 'travel', 'food', 'photography', 'education'], { min: 2, max: 4 });
-    const avatar = faker.image.avatar();
-    const user = await db.insert(
-      `INSERT INTO users (fullname, name, username, email, password, interests, picture, avatar_url, bio, verified, email_verified, is_synthetic, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, CURRENT_TIMESTAMP)`,
-      [displayName, displayName, username, email, passwordHash, JSON.stringify(interests), avatar, avatar, faker.person.bio()],
+  for (let offset = 0; offset < requested; offset += 100) {
+    const batchSize = Math.min(100, requested - offset);
+    const records = [];
+    for (let index = 0; index < batchSize; index += 1) {
+      const displayName = faker.person.fullName();
+      const username = `qc_test_${Date.now().toString(36)}_${crypto.randomBytes(5).toString('hex')}`;
+      const email = `${username}@quickchat.test`;
+      const interests = faker.helpers.arrayElements(['technology', 'music', 'sports', 'fashion', 'business', 'gaming', 'travel', 'food', 'photography', 'education'], { min: 2, max: 4 });
+      const avatar = faker.image.avatar();
+      records.push({ displayName, username, email, interests, avatar, bio: faker.person.bio() });
+    }
+    const userValues = records.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 1, 1, CURRENT_TIMESTAMP)').join(', ');
+    const userParams = records.flatMap((record) => [
+      record.displayName, record.displayName, record.username, record.email, passwordHash,
+      JSON.stringify(record.interests), record.avatar, record.avatar, record.bio,
+    ]);
+    await db.query(
+      `INSERT INTO users (fullname, name, username, email, password, interests, picture, avatar_url, bio, verified, email_verified, is_synthetic, created_at) VALUES ${userValues}`,
+      userParams,
     );
-    if (!user?.id) continue;
-    await db.insert(
-      'INSERT INTO bots (user_id, bot_key, display_name, username, status) VALUES (?, ?, ?, ?, ?)',
-      [user.id, `faker_${user.id}`, displayName, username, 'active'],
+    const emails = records.map((record) => record.email);
+    const placeholders = emails.map(() => '?').join(', ');
+    const savedUsers = await db.query(
+      `SELECT id, fullname, username FROM users WHERE email IN (${placeholders})`,
+      emails,
     );
-    created += 1;
+    if (savedUsers.length) {
+      const botValues = savedUsers.map(() => '(?, ?, ?, ?, ?)').join(', ');
+      const botParams = savedUsers.flatMap((user) => [user.id, `faker_${user.id}`, user.fullname, user.username, 'active']);
+      await db.query(
+        `INSERT INTO bots (user_id, bot_key, display_name, username, status) VALUES ${botValues}`,
+        botParams,
+      );
+      created += savedUsers.length;
+    }
   }
-  await audit(req, 'bots.generated', 'bots', null, `Generated ${created} synthetic QA accounts`, null, { requested: count, created });
+  await audit(req, 'bots.generated', 'bots', null, `Generated ${created} synthetic QA accounts`, null, { requested, created });
   res.status(201).json({ message: `${created} synthetic test accounts created.`, created });
 }));
 
