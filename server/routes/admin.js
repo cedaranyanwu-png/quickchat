@@ -6,6 +6,7 @@ const db = require('../database');
 const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
 const { getTrafficOverview } = require('../traffic-security');
+const { fetchFeed, validateFeedUrl, syncSource } = require('../services/rss-service');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -297,6 +298,115 @@ async function audit(req, action, targetType, targetId, reason, previousState, n
 }
 
 
+
+
+function parseRssCategories(value) {
+  try { const parsed = Array.isArray(value) ? value : JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; }
+  catch (_error) { return []; }
+}
+function positiveRssId(value) {
+  const id = Number(value);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+router.get('/admin/rss/status', requirePermission('rss.manage'), asyncRoute(async (_req, res) => {
+  const enabled = String(await getSetting('rss_publisher_enabled', 'false')).toLowerCase() === 'true';
+  res.json({ enabled });
+}));
+
+router.put('/admin/rss/status', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const enabled = Boolean(req.body && req.body.enabled);
+  const previous = String(await getSetting('rss_publisher_enabled', 'false')).toLowerCase() === 'true';
+  await setSetting('rss_publisher_enabled', enabled ? 'true' : 'false');
+  await audit(req, 'rss.publisher.toggled', 'rss_publisher', 'global', enabled ? 'RSS publisher enabled platform-wide' : 'RSS publisher disabled platform-wide', { enabled: previous }, { enabled });
+  res.json({ enabled });
+}));
+
+router.get('/admin/rss/sources', requirePermission('rss.manage'), asyncRoute(async (_req, res) => {
+  const rows = await db.query('SELECT s.*, (SELECT COUNT(*) FROM rss_articles a WHERE a.source_id = s.id) AS article_count FROM rss_sources s ORDER BY s.name ASC');
+  res.json({ sources: rows.map((row) => ({ ...row, categories: parseRssCategories(row.categories), articleCount: Number(row.article_count || 0) })) });
+}));
+
+router.post('/admin/rss/sources/test', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const feedUrl = String(req.body && req.body.feedUrl || '').trim();
+  await validateFeedUrl(feedUrl);
+  const result = await fetchFeed(feedUrl);
+  res.json({ valid: true, publisher: String(result.parsed.title || '').slice(0, 150), itemCount: result.items.length, sampleTitles: result.items.slice(0, 5).map((item) => String(item.title || '').slice(0, 180)) });
+}));
+
+router.post('/admin/rss/sources', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const name = String(req.body && req.body.name || '').trim().slice(0, 150);
+  const feedUrl = String(req.body && req.body.feedUrl || '').trim();
+  const categories = Array.isArray(req.body && req.body.categories) ? req.body.categories.map((value) => String(value).trim().slice(0, 80)).filter(Boolean).slice(0, 12) : [];
+  if (!name) return res.status(400).json({ message: 'Publisher name is required.' });
+  const test = await fetchFeed(feedUrl);
+  const enabled = req.body && req.body.enabled ? 1 : 0;
+  const row = await db.insert(
+    'INSERT INTO rss_sources (name, feed_url, publisher_name, publisher_url, region, categories, enabled, auto_sync, sync_interval_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)',
+    [name, feedUrl, String(test.parsed.title || name).slice(0, 150), String(req.body && req.body.publisherUrl || '').slice(0, 512) || null,
+      String(req.body && req.body.region || '').slice(0, 40) || null, JSON.stringify(categories), enabled,
+      Math.max(10, Math.min(60, Number(req.body && req.body.syncIntervalMinutes) || 15))],
+  );
+  await audit(req, 'rss.source.created', 'rss_source', row.id, 'RSS source created', null, { name, enabled: Boolean(enabled) });
+  res.status(201).json({ source: row, test: { itemCount: test.items.length, publisher: test.parsed.title || name } });
+}));
+
+router.patch('/admin/rss/sources/:sourceId', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const sourceId = positiveRssId(req.params.sourceId);
+  const source = sourceId ? await db.getOne('SELECT * FROM rss_sources WHERE id = ?', [sourceId]) : null;
+  if (!source) return res.status(404).json({ message: 'RSS source not found.' });
+  const feedUrl = req.body && req.body.feedUrl !== undefined ? String(req.body.feedUrl).trim() : source.feed_url;
+  const name = String(req.body && req.body.name !== undefined ? req.body.name : source.name).trim().slice(0, 150);
+  if (!name) return res.status(400).json({ message: 'Publisher name is required.' });
+  let publisher = source.publisher_name;
+  if (feedUrl !== source.feed_url || (req.body && req.body.enabled)) {
+    const test = await fetchFeed(feedUrl);
+    publisher = String(test.parsed.title || name).slice(0, 150);
+  } else await validateFeedUrl(feedUrl);
+  const categories = req.body && Array.isArray(req.body.categories) ? req.body.categories : parseRssCategories(source.categories);
+  const enabled = req.body && req.body.enabled !== undefined ? (req.body.enabled ? 1 : 0) : Number(source.enabled);
+  await db.update(
+    'UPDATE rss_sources SET name = ?, feed_url = ?, publisher_name = ?, categories = ?, enabled = ?, auto_sync = 0, sync_interval_minutes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [name, feedUrl, publisher, JSON.stringify(categories), enabled,
+      Math.max(10, Math.min(60, Number(req.body && req.body.syncIntervalMinutes) || Number(source.sync_interval_minutes) || 15)), sourceId],
+  );
+  await audit(req, 'rss.source.updated', 'rss_source', sourceId, 'RSS source settings updated', { enabled: Boolean(Number(source.enabled)) }, { enabled: Boolean(enabled) });
+  res.json({ success: true });
+}));
+
+router.delete('/admin/rss/sources/:sourceId', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const sourceId = positiveRssId(req.params.sourceId);
+  if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
+  const source = await db.getOne('SELECT id, name, enabled FROM rss_sources WHERE id = ?', [sourceId]);
+  if (!source) return res.status(404).json({ message: 'RSS source not found.' });
+  await db.update('UPDATE rss_sources SET enabled = 0, auto_sync = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [sourceId]);
+  await audit(req, 'rss.source.disabled', 'rss_source', sourceId, 'RSS source disabled', { enabled: Boolean(Number(source.enabled)) }, { enabled: false });
+  res.json({ disabled: true });
+}));
+
+router.post('/admin/rss/sources/:sourceId/sync', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const enabled = String(await getSetting('rss_publisher_enabled', 'false')).toLowerCase() === 'true';
+  if (!enabled) return res.status(409).json({ message: 'Enable the platform RSS publisher before syncing feeds.' });
+  const sourceId = positiveRssId(req.params.sourceId);
+  if (!sourceId) return res.status(400).json({ message: 'Invalid source ID.' });
+  const source = await db.getOne('SELECT id, enabled FROM rss_sources WHERE id = ?', [sourceId]);
+  if (!source || !Number(source.enabled)) return res.status(409).json({ message: 'Enable this publisher before syncing it.' });
+  const result = await syncSource(sourceId, { force: true });
+  await audit(req, 'rss.source.synced', 'rss_source', sourceId, 'RSS source manually synchronized', null, { imported: Number(result.imported || 0) });
+  res.json(result);
+}));
+
+router.get('/admin/rss/logs', requirePermission('rss.manage'), asyncRoute(async (req, res) => {
+  const sourceId = positiveRssId(req.query.sourceId);
+  const status = String(req.query.status || '').trim();
+  const conditions = [];
+  const params = [];
+  if (sourceId) { conditions.push('source_id = ?'); params.push(sourceId); }
+  if (['success', 'unchanged', 'failed'].includes(status)) { conditions.push('status = ?'); params.push(status); }
+  const where = conditions.length ? ' WHERE ' + conditions.join(' AND ') : '';
+  const logs = await db.query('SELECT * FROM rss_sync_logs' + where + ' ORDER BY id DESC LIMIT ?', [...params, Math.max(1, Math.min(200, Number(req.query.limit) || 50))]);
+  res.json({ logs });
+}));
 
 router.get('/admin/ads', requirePermission('ads.manage'), asyncRoute(async (_req, res) => {
   let ads = [];
