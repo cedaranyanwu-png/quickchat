@@ -206,7 +206,7 @@ async function initializePageTables() {
       PRIMARY KEY (session_id, user_id)
     )`,
     // WebRTC offers, answers, and ICE candidates are relayed through this table.
-    `CREATE TABLE IF NOT EXISTS live_signals (
+    `CREATE TABLE IF NOT EXISTS message_reactions (\n      message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (message_id, user_id)\n    )`,\n    `CREATE TABLE IF NOT EXISTS post_reactions (\n      post_id INTEGER NOT NULL, user_id INTEGER NOT NULL, reaction VARCHAR(20) NOT NULL,\n      created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (post_id, user_id)\n    )`,\n    `CREATE TABLE IF NOT EXISTS live_signals (
       id ${idColumn}, session_id INTEGER NOT NULL, from_user_id INTEGER NOT NULL,
       to_user_id INTEGER NOT NULL, kind VARCHAR(20) NOT NULL, payload TEXT,
       created_at_ms ${epochType} NOT NULL DEFAULT 0
@@ -332,6 +332,7 @@ async function initializePageTables() {
 
   for (const statement of statements) await db.query(statement);
   await addMissingPostColumns();
+  await addMissingBoostColumns();
   await addMissingPaymentColumns();
   await addMissingNotificationColumns();
   await addMissingMessageColumns();
@@ -360,6 +361,25 @@ async function addMissingCommunityColumns() {
   await db.query(
     "INSERT INTO community_members (community_id, user_id, role) SELECT c.id, c.created_by, 'owner' FROM communities c WHERE c.created_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = c.created_by)",
   );
+}
+
+async function addMissingBoostColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(boosted_promotions)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query(
+        'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?',
+        ['boosted_promotions'],
+      ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM boosted_promotions').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+
+  const additions = {
+    target_quantity: 'INTEGER NOT NULL DEFAULT 100',
+    delivered_quantity: 'INTEGER NOT NULL DEFAULT 0',
+  };
+  for (const [column, type] of Object.entries(additions)) {
+    if (!columns.has(column)) await db.query(`ALTER TABLE boosted_promotions ADD COLUMN ${column} ${type}`);
+  }
 }
 
 async function addMissingMessageColumns() {
@@ -493,6 +513,8 @@ async function ensureIndexes() {
     ['ad_impressions_campaign_idx', 'ad_impressions (campaign_id, user_id)', false],
     ['boosted_promotions_user_idx', 'boosted_promotions (user_id, status)', false],
     ['boosted_promotions_post_idx', 'boosted_promotions (post_id, status)', false],
+    ['message_reactions_message_idx', 'message_reactions (message_id, created_at)', false],
+    ['post_reactions_post_idx', 'post_reactions (post_id, created_at)', false],
     ['recommendation_feedback_user_idx', 'recommendation_feedback (user_id, item_type, action)', false],
     ['rss_sources_enabled_idx', 'rss_sources (enabled, auto_sync, last_sync_at)', false],
     ['posts_rss_article_idx', 'posts (rss_article_id)', false],
