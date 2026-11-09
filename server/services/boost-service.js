@@ -1,5 +1,6 @@
 const db = require('../database');
 const { currentBalance, spendPoints } = require('../wallet');
+const { getSetting } = require('../platform-settings');
 
 async function boostPost(userId, { postId, objective = 'reach', targetQuantity = 1000, targetInterests = [], targetAudiences = [], budgetPoints = 500, durationDays = 7 }) {
   const points = Math.max(100, Math.trunc(Number(budgetPoints) || 500));
@@ -132,10 +133,10 @@ async function getEligibleBoostedProfiles({ userInterests = [], currentUserId, l
         AND bp.status = 'active'
         AND bp.expires_at > ?
         AND bp.promoted_profile_id <> ?
-        AND COALESCE(u.is_synthetic, 0) = 0
+        AND (COALESCE(u.is_synthetic, 0) = 0 OR LOWER(COALESCE(?, 'false')) = 'true')
         AND NOT EXISTS (SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id)
       ORDER BY bp.created_at DESC LIMIT 20`,
-    [now, currentUserId, currentUserId]
+    [now, currentUserId, currentUserId, await getSetting('boost_synthetic_test_mode', process.env.NODE_ENV === 'production' ? 'false' : 'true')]
   );
 
   if (!rows.length) return [];
@@ -189,6 +190,7 @@ async function getUserBoosts(userId) {
     objective: b.objective,
     targetQuantity: Number(b.target_quantity || 0),
     deliveredQuantity: Number(b.delivered_quantity || 0),
+    testDeliveredQuantity: Number(b.test_delivered_quantity || 0),
     budgetPoints: b.budget_points,
     spentPoints: b.spent_points,
     status: b.status,
