@@ -1,7 +1,7 @@
 const { spawn } = require('node:child_process');
 
-// Production launcher: the API, character bot runtime, and RSS synchronization
-// worker share one lifecycle so feeds continue importing while QuickChat is up.
+// Production launcher: run the API and character bot runtime only.
+// RSS feed ingestion is manual-only through the administrator dashboard.
 // `npm run dev` starts the same runtimes from dev.js instead.
 const serverDirectory = __dirname;
 const restartDelayMs = 5000;
@@ -42,7 +42,6 @@ function scheduleRestart(name, script) {
 
 const api = startManagedProcess('API', 'index.js');
 startManagedProcess('character bot runtime', 'ai-poster.js');
-startManagedProcess('RSS synchronization worker', 'rss-worker.js');
 
 function stop(code = 0) {
   if (shuttingDown) return;
