@@ -5,7 +5,7 @@ const { pathToFileURL } = require('node:url');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const axios = require('axios');
-const { generateGeminiText, getGeminiConfig } = require('./gemini');
+const { generateGeminiText, getGeminiConfig, isGeminiBackoffError } = require('./gemini');
 const cheerio = require('cheerio');
 const Parser = require('rss-parser');
 const schedule = require('node-schedule');
@@ -38,8 +38,8 @@ axios.post = async (url, payload, config) => {
 
 const maxItemsPerFeed = positiveInteger(process.env.AI_POSTER_MAX_ITEMS_PER_FEED, 8);
 const scheduleExpression = process.env.AI_POSTER_SCHEDULE || '*/30 * * * *';
-const messageScheduleExpression = process.env.AI_POSTER_MESSAGE_SCHEDULE || '*/10 * * * * *';
-const socialScheduleExpression = process.env.AI_POSTER_SOCIAL_SCHEDULE || '*/20 * * * * *';
+const messageScheduleExpression = process.env.AI_POSTER_MESSAGE_SCHEDULE || '*/1 * * * *';
+const socialScheduleExpression = process.env.AI_POSTER_SOCIAL_SCHEDULE || '*/15 * * * *';
 const itemPauseMs = 5000;
 const adultFeedPath = path.join(__dirname, 'models', 'data', 'adult.xml');
 const parser = new Parser({
@@ -854,7 +854,7 @@ async function processFeed(feedConfig, stage, database) {
 async function publishOriginalCharacterPosts(database) {
   const config = await getGeminiConfig();
   if (!config.enabled || !config.apiKey) return;
-  const limit = positiveInteger(process.env.AI_POSTER_CHARACTER_POSTS_PER_RUN, 3);
+  const limit = positiveInteger(process.env.AI_POSTER_CHARACTER_POSTS_PER_RUN, 1);
   const characters = characterData.characters || [];
   let published = 0;
   for (const account of characterAccounts) {
@@ -886,7 +886,7 @@ async function publishOriginalCharacterPosts(database) {
       );
       published += 1;
       await sleep(1200);
-    } catch (error) { log(`Could not publish original post for AI character ${character.id}`, error); }
+    } catch (error) { log(`Could not publish original post for AI character ${character.id}`, error); if (isGeminiBackoffError(error)) break; }
   }
   if (published) log(`Published ${published} original Gemini character post(s).`);
 }
@@ -1172,7 +1172,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
         comments += 1;
         await sleep(itemPauseMs);
       } catch (error) {
-        log(`Could not reply to regular user's post ${post.id}`, error);
+        log(`Could not reply to regular user's post ${post.id}`, error);\n        if (isGeminiBackoffError(error)) break postsLoop;
       }
     }
   }
@@ -1262,7 +1262,7 @@ async function respondToHumanMessages(database) {
   if (!geminiConfig.enabled || !geminiConfig.apiKey) return;
   messageReplyInProgress = true;
   try {
-    const responseLimit = positiveInteger(process.env.AI_POSTER_MAX_MESSAGE_REPLIES_PER_RUN, 5);
+    const responseLimit = positiveInteger(process.env.AI_POSTER_MAX_MESSAGE_REPLIES_PER_RUN, 1);
     const pending = await database.query(
       `SELECT m.conversation_id, m.sender_id AS human_id,
               bot.id AS bot_id, bot.character_id, bot.interests, bot.personality_style
@@ -1312,7 +1312,7 @@ async function respondToHumanMessages(database) {
         }
         await sleep(itemPauseMs);
       } catch (error) {
-        log(`Could not reply to a message from regular user ${incoming.human_id}`, error);
+        log(`Could not reply to a message from regular user ${incoming.human_id}`, error);\n        if (isGeminiBackoffError(error)) break;
       }
     }
     if (sent) log(`Sent ${sent} reply/replies to regular user messages.`);
