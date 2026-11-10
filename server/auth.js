@@ -292,6 +292,42 @@ router.get('/email-status', authenticate, async (req, res) => {
   }
 });
 
+router.post('/change-unverified-email', async (req, res) => {
+  const currentEmail = normalizeEmail(req.body?.email);
+  const newEmail = normalizeEmail(req.body?.newEmail);
+  const password = String(req.body?.password || '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(currentEmail) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    return res.status(400).json({ message: 'Enter valid current and new email addresses.' });
+  }
+  if (!password) return res.status(400).json({ message: 'Enter your account password to change the email.' });
+  try {
+    const user = await db.getOne('SELECT id, fullname, email, password, email_verified FROM users WHERE LOWER(email) = LOWER(?)', [currentEmail]);
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: 'Email or password is incorrect.' });
+    }
+    if (Number(user.email_verified || 0) === 1) return res.status(409).json({ message: 'This email is already verified. Change it from account settings instead.' });
+    if (recentlySent(`change-unverified:${user.id}`)) return res.status(429).json({ message: 'Please wait one minute before changing this email again.' });
+    const duplicate = await db.getOne('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id <> ?', [newEmail, user.id]);
+    if (duplicate) return res.status(409).json({ message: 'That email address is already in use.' });
+    await db.update(
+      `UPDATE users SET email = ?, email_verified = 0, email_verification_notice = 0,
+         email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?`,
+      [newEmail, user.id],
+    );
+    const delivery = await sendVerificationEmail({ id: user.id, fullname: user.fullname, email: newEmail });
+    return res.json({
+      message: delivery.delivered
+        ? 'Email updated. A verification link has been sent to the new address.'
+        : 'Email updated, but delivery is not configured yet. Use resend after SMTP is configured.',
+      email: newEmail,
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) return res.status(409).json({ message: 'That email address is already in use.' });
+    console.error('[Auth] Unverified email correction failed:', error.message);
+    return res.status(500).json({ message: 'Could not change the email address.' });
+  }
+});
+
 router.post('/change-email', authenticate, async (req, res) => {
   const email = normalizeEmail(req.body?.email);
   const password = String(req.body?.password || '');
