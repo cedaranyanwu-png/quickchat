@@ -83,13 +83,19 @@ export default function AdminSettingsPanel() {
               setTestingEmail(true); setEmailTestMessage('');
               try {
                 await adminRequest('/admin/settings', { method: 'PUT', body: {
-                  email_provider_mode: 'resend', smtp_from: form.smtp_from,
-                  ...(form.resend_api_key && !String(form.resend_api_key).startsWith('••') ? { resend_api_key: form.resend_api_key } : {}),
+                  email_provider_mode: form.email_provider_mode,
+                  smtp_from: form.smtp_from,
+                  ...(form.email_provider_mode === 'brevo' && form.brevo_api_key && !String(form.brevo_api_key).startsWith('••') ? { brevo_api_key: form.brevo_api_key } : {}),
+                  ...(form.email_provider_mode === 'resend' && form.resend_api_key && !String(form.resend_api_key).startsWith('••') ? { resend_api_key: form.resend_api_key } : {}),
+                  ...(form.email_provider_mode === 'gmail' || form.email_provider_mode === 'custom' ? {
+                    smtp_user: form.smtp_user, smtp_password: form.smtp_password, smtp_host: form.smtp_host,
+                    smtp_port: form.smtp_port, smtp_secure: form.smtp_secure,
+                  } : {}),
                 }});
                 const result = await adminRequest('/admin/email/test', { method: 'POST', body: { to: emailTestTo } });
                 setEmailTestMessage(result.message || 'Test email sent.');
                 update(form.email_provider_mode === 'brevo' ? 'brevo_api_key' : 'resend_api_key', '');
-              } catch (e) { setEmailTestMessage(e.message || 'Resend test failed.'); }
+              } catch (e) { setEmailTestMessage(e.message || 'Email test failed.'); }
               finally { setTestingEmail(false); }
             }} className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-xs font-extrabold text-sky-800 disabled:opacity-50">{testingEmail ? 'Sending test…' : (form.email_provider_mode === 'brevo' ? 'Save & test Brevo' : 'Save & test Resend')}</button>
           </div>
