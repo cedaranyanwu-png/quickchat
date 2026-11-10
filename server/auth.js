@@ -277,7 +277,7 @@ router.post('/google', async (req, res) => {
   }
 });
 
-router.get('/email-status', authenticate, async (req, res) => {
+router.get('/email-status', (req, res, next) => authenticate(req, res, next, { allowUnverified: true }), async (req, res) => {
   try {
     const user = await db.getOne('SELECT id, email, email_verified, email_verification_notice FROM users WHERE id = ?', [req.user.id]);
     if (!user) return res.status(404).json({ message: 'Account not found.' });
