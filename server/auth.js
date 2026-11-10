@@ -254,7 +254,7 @@ router.post('/google', async (req, res) => {
     if (!user) throw new Error('The Google account was verified but could not be loaded.');
     if (Number(user.email_verified) === 0) {
       await db.update(
-        `UPDATE users SET email_verified = 1, email_verification_token = NULL,
+        `UPDATE users SET email_verified = 1, email_verification_notice = 0, email_verification_token = NULL,
            email_verification_expires = NULL WHERE id = ?`,
         [user.id],
       );
