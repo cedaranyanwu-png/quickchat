@@ -132,6 +132,7 @@ async function verifyAndProcessPayment({ chargeId, txRef }) {
   if (!checkout) {
     return verifyPointsPurchase(verifiedRef, payment);
   }
+  if (checkout.item_type === 'points') return verifyPointsPurchase(verifiedRef, payment);
   if (!['post', 'creator', 'community'].includes(checkout.item_type)) return false;
 
   const currency = String(payment.currency || '').toUpperCase();
