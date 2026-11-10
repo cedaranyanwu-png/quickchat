@@ -10,7 +10,7 @@ function createToken(user) {
   return jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
 }
 
-async function authenticate(req, res, next) {
+async function authenticate(req, res, next, options = {}) {
   const authorization = req.get('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
   if (!token) return res.status(401).json({ message: 'Sign in to use this feature.' });
@@ -21,8 +21,16 @@ async function authenticate(req, res, next) {
     if (!Number.isSafeInteger(userId) || userId < 1) {
       return res.status(401).json({ message: 'Your session is invalid. Sign in again.' });
     }
-    const account = await db.getOne('SELECT id FROM users WHERE id = ?', [userId]);
+    const account = await db.getOne('SELECT id, email, email_verified FROM users WHERE id = ?', [userId]);
     if (!account) return res.status(401).json({ message: 'This account is no longer available. Sign in again.' });
+    if (!options.allowUnverified && Number(account.email_verified || 0) !== 1) {
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        requiresEmailVerification: true,
+        email: account.email,
+        message: 'Verify your email address before using QuickChat. Check your inbox, Spam, or Junk folder for the verification link.',
+      });
+    }
     const activeBan = await db.getOne('SELECT id FROM account_bans WHERE user_id = ? AND revoked_at IS NULL LIMIT 1', [userId]);
     if (activeBan) return res.status(403).json({ message: 'This account has been permanently restricted. Contact QuickChat support if you believe this is an error.' });
     const expiryCondition = db.type === 'sqlite' ? 'datetime(expires_at) > CURRENT_TIMESTAMP' : 'expires_at > CURRENT_TIMESTAMP';
