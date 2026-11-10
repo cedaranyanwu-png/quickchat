@@ -1120,6 +1120,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
     const matches = botCandidatesForHuman(user, context, characterAccounts.length);
     if (!matches.length) continue;
 
+    if (options.includeLikes !== false) {
     const existingLikes = await database.query(
       `SELECT l.user_id FROM post_likes l JOIN users bot ON bot.id = l.user_id
         WHERE l.post_id = ? AND bot.is_synthetic = 1`,
@@ -1142,6 +1143,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
       }
+    }
     }
 
     if (comments >= commentLimit) continue;
@@ -1469,9 +1471,24 @@ async function writeCharacterComment(post, character, matchingInterests) {
 }
 
 async function runSocialPass() {
-  // Automated likes and follows are intentionally disabled; public engagement must be genuine.
+  if (socialInProgress || shuttingDown) return;
+  socialInProgress = true;
+  try {
+    const config = await getGeminiConfig();
+    if (!config.enabled || !config.apiKey) return;
+    if (Date.now() - lastFollowSweepAt < 15 * 60 * 1000) return;
+    lastFollowSweepAt = Date.now();
+    const database = await getApplicationDatabase();
+    await engageWithHumanPosts(database, {
+      includeLikes: false,
+      commentLimit: 2,
+      commentsPerPost: 1,
+      scanLimit: 20,
+      activeHours: 72,
+    });
+  } catch (error) { log('Scheduled AI character comment pass failed', error); }
+  finally { socialInProgress = false; }
 }
-
 async function closeConnections() {
   const closers = [];
   if (scheduledJob) scheduledJob.cancel();
