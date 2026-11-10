@@ -851,11 +851,49 @@ async function processFeed(feedConfig, stage, database) {
   log(`${feedConfig.name}: checked ${visited}, published ${publishedThisFeed}, already staged ${alreadyStaged}, outside character interests ${outsideInterests}, no description ${missingDescription}.`);
 }
 
+async function publishOriginalCharacterPosts(database) {
+  const limit = positiveInteger(process.env.AI_POSTER_CHARACTER_POSTS_PER_RUN, 3);
+  const characters = characterData.characters || [];
+  let published = 0;
+  for (const account of characterAccounts) {
+    if (published >= limit || shuttingDown) break;
+    const character = characters.find((entry) => entry.id === account.character_id);
+    if (!character) continue;
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const sourceLink = `quickchat://ai-character/${encodeURIComponent(character.id)}/${dayKey}`;
+    const exists = await database.getOne('SELECT id FROM posts WHERE source_link = ? LIMIT 1', [sourceLink]);
+    if (exists) continue;
+    try {
+      const body = await generateGeminiText({
+        system: [
+          'Create one original, engaging social post for this clearly disclosed fictional AI character on QuickChat.',
+          `Character personality: ${character.behavior}`,
+          `Interests: ${(character.interests || []).join(', ')}.`,
+          'Write in a distinct, natural voice. Do not claim to be human or invent real-world personal experiences, memories, work, travel, or offline activities.',
+          'Make the post useful, entertaining, or conversational. Avoid engagement bait and do not ask for likes or follows. Return only the post text.',
+        ].join('\\n'),
+        prompt: 'Write a fresh standalone post for today. Keep it between 40 and 100 words.',
+        temperature: 0.85,
+        maxOutputTokens: 180,
+      });
+      const text = String(body || '').trim().slice(0, 5000);
+      if (!text) continue;
+      await database.insert(
+        'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals, source_link) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [Number(account.id), text, 'text', (character.interests || [])[0] || 'community', '[]', JSON.stringify(character.interests || []), null, '[]', null, 'public', null, null, '[]', '[]', '[]', sourceLink],
+      );
+      published += 1;
+      await sleep(1200);
+    } catch (error) { log(`Could not publish original post for AI character ${character.id}`, error); }
+  }
+  if (published) log(`Published ${published} original Gemini character post(s).`);
+}
 async function runOnce() {
   if (runInProgress || shuttingDown) return;
   runInProgress = true;
   try {
     const database = await getApplicationDatabase();
+    await publishOriginalCharacterPosts(database);
     const feeds = rssPublishingDisabled ? [] : configuredFeeds();
   const geminiConfig = await getGeminiConfig();
     if (!rssPublishingDisabled) {
@@ -871,15 +909,9 @@ async function runOnce() {
       log('Staged-story publishing pass complete; feed polling was skipped.');
       return;
     }
-    await followHumanUsers(database);
-    await followBackHumans(database);
-    await engageWithHumanPosts(database);
-    await startHumanConversations(database);
+    // Only reply to humans who have already messaged an AI character. Do not cold-DM users or fabricate likes/follows.
     await respondToHumanMessages(database);
-    if (rssPublishingDisabled) {
-      if (!shuttingDown) await engageWithRecentPosts(database);
-      return;
-    }
+    if (rssPublishingDisabled) return;
     if (!feeds.length) {
       log('No valid URLs are configured in AI_POSTER_FEEDS.');
       return;
@@ -888,7 +920,7 @@ async function runOnce() {
       if (shuttingDown) break;
       await processFeed(feed, stageDatabase, database);
     }
-    if (!shuttingDown) await engageWithRecentPosts(database);
+
   } catch (error) {
     log('Scheduled run failed', error);
   } finally {
