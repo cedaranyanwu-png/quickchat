@@ -13,19 +13,15 @@ export default function Sidebar({ onOpenPost, onLogout }) {
   const [showMenu, setShowMenu] = useState(false);
   const [showRecommendationOnboarding, setShowRecommendationOnboarding] = useState(false);
   const { unreadCounts } = useUnreadCounts();
+  // Keep the desktop sidebar focused on the primary destinations.
+  // Secondary tools and discovery features are available from the Menu page.
   const navItems = [
     ['Home', 'fa-solid fa-house', '/home'],
     ['Explore', 'fa-solid fa-compass', '/explore'],
-    ['Recommendations', 'fa-solid fa-wand-magic-sparkles', '/recommendations'],
     ['Notifications', 'fa-solid fa-bell', '/notifications'],
     ['Messages', 'fa-solid fa-envelope', '/messages'],
-    ['Live', 'fa-solid fa-tower-broadcast', '/live'],
-    ['Wallet & earnings', 'fa-solid fa-wallet', '/settings/wallet'],
-    ['Videos', 'fa-solid fa-video', '/videos'],
-    ['Communities', 'fa-solid fa-users', '/communities'],
-    ['People', 'fa-solid fa-user-plus', '/follow'],
-    ['Ads', 'fa-solid fa-bullhorn', '/ads'],
     ['Profile', 'fa-solid fa-user', '/profile'],
+    ['Menu', 'fa-solid fa-bars', '/menu'],
   ];
 
   useEffect(() => {
