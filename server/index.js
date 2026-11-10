@@ -369,6 +369,7 @@ async function addMissingColumns() {
     creator_membership_currency: 'VARCHAR(3)',
     creator_membership_product_id: 'VARCHAR(100)',
     email_verified: 'INTEGER NOT NULL DEFAULT 0',
+    email_verification_notice: 'INTEGER NOT NULL DEFAULT 0',
     email_verification_token: 'TEXT',
     email_verification_expires: db.type === 'sqlite' ? 'TEXT' : 'TIMESTAMP',
     whatsapp_phone: db.type === 'sqlite' ? 'TEXT' : 'VARCHAR(24)',
@@ -387,7 +388,7 @@ async function addMissingColumns() {
   };
 
   // Existing databases may have the older `name` and `google_id` column names.
-  const hadEmailVerified = columns.has('email_verified');
+  const hadEmailVerificationNotice = columns.has('email_verification_notice');
   const hadCreatedAt = columns.has('created_at');
   for (const [column, type] of Object.entries(columnTypes)) {
     if (!columns.has(column)) await db.query(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
@@ -395,10 +396,13 @@ async function addMissingColumns() {
   if (!hadCreatedAt) {
     await db.query('UPDATE users SET created_at = COALESCE(createdat, CURRENT_TIMESTAMP)');
   }
-  if (!hadEmailVerified) {
-    // Accounts created before email verification existed must keep signing in.
-    await db.query('UPDATE users SET email_verified = 1');
-    console.log('[Database] Existing accounts were marked email-verified.');
+  if (!hadEmailVerificationNotice) {
+    // One-time rollout: require legacy password accounts to verify ownership of
+    // their stored email. Google-linked accounts remain trusted because Google
+    // already supplied a verified email claim; their next Google sign-in also
+    // refreshes the local verification flag.
+    await db.query("UPDATE users SET email_verified = 0, email_verification_notice = 1 WHERE COALESCE(googleid, '') = ''");
+    console.log('[Database] Legacy password accounts were queued for email verification.');
   }
 }
 
