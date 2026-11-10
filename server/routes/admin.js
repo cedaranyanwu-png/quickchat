@@ -965,7 +965,7 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
+  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_client_id', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
   const secrets = ['flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'smtp_password', 'resend_api_key', 'brevo_api_key'];
   for (const key of normal) {
     if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
