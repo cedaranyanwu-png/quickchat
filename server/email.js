@@ -36,13 +36,18 @@ function senderEmail() {
 function logPreview({ to, subject, text }) {
   console.log(`[Email preview]\\nTo: ${to}\\nSubject: ${subject}\\n\\n${text}\\n`);
 }
-async function sendWithResend({ to, subject, text, html }) {
+async function sendWithResend({ to, subject, text, html }, apiKey, from) {
+  if (!apiKey) throw new Error('Add and save your Resend API key in Admin Settings.');
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: senderAddress(), to: [to], subject, text, html }),
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: from || senderAddress(), to: [to], subject, text, html }),
   });
-  if (!response.ok) throw new Error(`Resend rejected the email (${response.status}).`);
+  if (!response.ok) {
+    let detail = '';
+    try { const body = await response.json(); detail = body.message || body.error || ''; } catch (_error) {}
+    throw new Error(detail ? `Resend error (${response.status}): ${detail}` : `Resend rejected the email (${response.status}).`);
+  }
   return { delivered: true, provider: 'resend' };
 }
 async function sendWithSendGrid({ to, subject, text, html }) {
@@ -80,21 +85,34 @@ async function sendWithSmtp({ to, subject, text, html }, config) {
 }
 async function sendEmail({ to, subject, text, html }) {
   if (!to) throw new Error('An email recipient is required.');
+  const mode = (await setting('email_provider_mode', 'env')).toLowerCase();
+  if (mode === 'resend') {
+    const apiKey = await setting('resend_api_key') || process.env.RESEND_API_KEY;
+    const from = await setting('smtp_from') || process.env.EMAIL_FROM || process.env.SMTP_FROM;
+    return sendWithResend({ to, subject, text, html }, apiKey, from);
+  }
   const config = await smtpConfig();
   if (config) return sendWithSmtp({ to, subject, text, html }, config);
-  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html });
-  if (process.env.SENDGRID_API_KEY) return sendWithSendGrid({ to, subject, text, html });
+  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html }, process.env.RESEND_API_KEY);
   if (process.env.SMTP_HOST || process.env.SMTP_URL) return sendWithSmtp({ to, subject, text, html }, null);
   logPreview({ to, subject, text });
   return { delivered: false, provider: 'preview', preview: text };
 }
 async function testEmailConnection(to) {
+  const mode = (await setting('email_provider_mode', 'env')).toLowerCase();
+  const message = { to, subject: 'QuickChat email delivery test', text: 'Your QuickChat email delivery configuration is working.', html: '<p>Your QuickChat email delivery configuration is working.</p>' };
+  if (mode === 'resend') {
+    const apiKey = await setting('resend_api_key') || process.env.RESEND_API_KEY;
+    const from = await setting('smtp_from') || process.env.EMAIL_FROM || process.env.SMTP_FROM;
+    return sendWithResend(message, apiKey, from);
+  }
   const config = await smtpConfig();
-  if (!config) throw new Error('Choose Gmail App Password or Custom SMTP and save the settings first.');
-  return sendWithSmtp({ to, subject: 'QuickChat SMTP connection test', text: 'Your QuickChat email delivery configuration is working.', html: '<p>Your QuickChat email delivery configuration is working.</p>' }, config);
+  if (!config) throw new Error('Choose Resend API, Gmail App Password or Custom SMTP and save the settings first.');
+  return sendWithSmtp(message, config);
 }
 async function emailProvider() {
   const mode = await setting('email_provider_mode', 'env');
+  if (mode === 'resend') return 'resend';
   if (mode === 'gmail' || mode === 'custom') return 'smtp';
   if (process.env.RESEND_API_KEY) return 'resend';
   if (process.env.SENDGRID_API_KEY) return 'sendgrid';
