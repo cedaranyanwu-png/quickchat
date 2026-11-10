@@ -208,9 +208,33 @@ export default function Discover({ openModal, openVideo, embedded = false }) {
           <div className="grid gap-3 sm:grid-cols-2">
             {articles.map((article) => (
               <article key={article.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-blue-200 hover:shadow-md">
-                {article.imageUrl && <button type="button" onClick={() => readArticle(article)} className="block h-40 w-full overflow-hidden bg-slate-100 text-left">
-                  <img src={article.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
-                </button>}
+                {Array.isArray(article.media) && article.media.length > 0 ? (
+                  <div className="relative h-40 w-full overflow-hidden bg-slate-950">
+                    {article.media[0].type === 'video' ? (
+                      <video
+                        src={article.media[0].url}
+                        controls
+                        preload="metadata"
+                        playsInline
+                        className="h-full w-full object-cover"
+                        onClick={() => recordInteraction(article.id, 'click')}
+                      />
+                    ) : (
+                      <button type="button" onClick={() => readArticle(article)} className="block h-full w-full overflow-hidden bg-slate-100 text-left">
+                        <img src={article.media[0].url} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
+                      </button>
+                    )}
+                    {article.media.length > 1 && (
+                      <span className="absolute right-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold text-white">
+                        {article.media.filter((item) => item.type === 'image').length} images · {article.media.filter((item) => item.type === 'video').length} videos
+                      </span>
+                    )}
+                  </div>
+                ) : article.imageUrl ? (
+                  <button type="button" onClick={() => readArticle(article)} className="block h-40 w-full overflow-hidden bg-slate-100 text-left">
+                    <img src={article.imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-full w-full object-cover transition duration-300 hover:scale-[1.02]" />
+                  </button>
+                ) : null}
                 <div className="p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700"><i className="fa-solid fa-rss" /> Publisher article</span>
