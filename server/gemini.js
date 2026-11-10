@@ -1,13 +1,22 @@
 const axios = require('axios');
 const { getSetting } = require('./platform-settings');
 
-const DEFAULT_MODEL = 'gemini-2.5-flash';
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_MODEL = 'gemini-3.8-flash';
+const API_URL = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+
+function normalizeModel(value) {
+  let model = String(value || DEFAULT_MODEL).trim().replace(/^models\//i, '');
+  // Migrate previously saved model selections automatically.
+  if (!model || ['gemini-2.5-flash', 'gemini-2.5-pro'].includes(model)) {
+    model = DEFAULT_MODEL;
+  }
+  return model;
+}
 
 async function getGeminiConfig() {
   const enabled = String(await getSetting('gemini_enabled', 'false')).toLowerCase() === 'true';
   const apiKey = String(await getSetting('gemini_api_key', '') || '').trim();
-  const model = String(await getSetting('gemini_model', DEFAULT_MODEL) || DEFAULT_MODEL).trim();
+  const model = normalizeModel(await getSetting('gemini_model', DEFAULT_MODEL));
   return { enabled, apiKey, model };
 }
 
@@ -17,22 +26,38 @@ async function generateGeminiText({ system, prompt, temperature = 0.7, maxOutput
   if (!apiKey) throw new Error('Gemini API key is not configured. Add it in Admin → Admin settings.');
   if (!suppliedKey && !config.enabled) throw new Error('Gemini character AI is disabled in Admin settings.');
 
-  const response = await axios.post(
-    `${API_BASE}/${encodeURIComponent(config.model)}:generateContent`,
-    {
-      ...(system ? { systemInstruction: { parts: [{ text: String(system).slice(0, 12000) }] } } : {}),
-      contents: [{ role: 'user', parts: [{ text: String(prompt || '').slice(0, 12000) }] }],
-      generationConfig: {
-        temperature: Math.max(0, Math.min(1.5, Number(temperature) || 0.7)),
-        maxOutputTokens: Math.max(32, Math.min(2048, Number(maxOutputTokens) || 256)),
-      },
+  const payload = {
+    model: config.model,
+    input: String(prompt || '').slice(0, 12000),
+    generation_config: {
+      temperature: Math.max(0, Math.min(1.5, Number(temperature) || 0.7)),
+      max_output_tokens: Math.max(32, Math.min(2048, Number(maxOutputTokens) || 256)),
     },
-    { timeout: 45000, headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' } },
-  );
-  const text = (response.data?.candidates?.[0]?.content?.parts || []).map((part) => part.text || '').join('').trim();
+    store: false,
+  };
+  if (system) payload.system_instruction = String(system).slice(0, 12000);
+
+  const response = await axios.post(API_URL, payload, {
+    timeout: 45000,
+    headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+  });
+
+  const steps = Array.isArray(response.data?.steps) ? response.data.steps : [];
+  const text = steps
+    .filter((step) => step.type === 'model_output')
+    .flatMap((step) => Array.isArray(step.content) ? step.content : [])
+    .filter((part) => part.type === 'text' || typeof part.text === 'string')
+    .map((part) => part.text || '')
+    .join('')
+    .trim() || String(response.data?.output_text || '').trim();
+
   if (!text) {
-    const reason = response.data?.promptFeedback?.blockReason;
-    throw new Error(reason ? `Gemini blocked this prompt (${reason}).` : 'Gemini returned an empty response.');
+    const apiError = response.data?.error?.message ||
+      response.data?.errors?.map((item) => item.message).filter(Boolean).join('; ');
+    if (response.data?.status === 'failed' || apiError) {
+      throw new Error(apiError || 'Gemini interaction failed.');
+    }
+    throw new Error('Gemini returned an empty response.');
   }
   return text;
 }
