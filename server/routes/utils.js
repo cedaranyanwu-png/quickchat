@@ -52,7 +52,7 @@ function toPost(row) {
   return {
     id: fields.id,
     authorId: fields.author_id,
-    aiCharacter: String(fields.source_link || '').startsWith('quickchat://ai-character/'),
+    aiCharacter: Boolean(fields.author_character_id) || String(fields.source_link || '').startsWith('quickchat://ai-character/'),
     text: isPaywalled ? '' : fields.body || '',
     type: fields.kind || 'text',
     category: fields.category || null,
