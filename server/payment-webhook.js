@@ -299,11 +299,6 @@ async function activateThirtyDayPass(checkout) {
   }
 }
 
-function safeEqual(left, right) {
-  const leftBytes = Buffer.from(String(left || ''), 'utf8');
-  const rightBytes = Buffer.from(String(right || ''), 'utf8');
-  return leftBytes.length === rightBytes.length && leftBytes.length > 0 && crypto.timingSafeEqual(leftBytes, rightBytes);
-}
 
 function amountString(cents) {
   return `${Math.floor(cents / 100)}.${String(cents % 100).padStart(2, '0')}`;
