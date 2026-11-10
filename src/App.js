@@ -45,6 +45,7 @@ import Menu from './pages/Menu';
 import AccountBooster from './pages/AccountBooster';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
+import EmailVerificationPrompt from './components/EmailVerificationPrompt';
 import { UnreadCountsProvider } from './components/UnreadCountsProvider';
 import { AdultContentProvider, getAgeConsentIdentity } from './components/AdultContent';
 import { registerServiceWorker, syncPushSubscription } from './push';
@@ -154,6 +155,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         </div>
         <main className="h-screen flex-1 bg-white" style={isVideosPage || isMessagesPage ? { overflow: 'hidden' } : { overflowY: 'auto' }}>
           <PushNotificationPrompt />
+          <EmailVerificationPrompt />
           <div className="lg:hidden"><TopNav /></div>
           <Routes>
             <Route path="/home" element={<Home refreshKey={feedRevision} openModal={openModal} onOpenPost={openPostModal} openVideo={setActiveVideoId} />} />
