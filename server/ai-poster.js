@@ -1256,6 +1256,8 @@ async function ensureConversation(database, firstUserId, secondUserId) {
 
 async function respondToHumanMessages(database) {
   if (messageReplyInProgress || shuttingDown) return;
+  const geminiConfig = await getGeminiConfig();
+  if (!geminiConfig.enabled || !geminiConfig.apiKey) return;
   messageReplyInProgress = true;
   try {
     const responseLimit = positiveInteger(process.env.AI_POSTER_MAX_MESSAGE_REPLIES_PER_RUN, 5);
