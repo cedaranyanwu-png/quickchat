@@ -65,6 +65,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         {unverifiedEmail && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-bold text-amber-900">Email verification required</p>
           <p className="mt-1 text-xs leading-5 text-amber-800">{resendMessage}</p>
+          <p className="mt-2 text-xs leading-5 text-amber-800">After requesting a verification link, check your inbox. If it is not there, look in your Spam or Junk folder.</p>
           <button type="button" disabled={isLoading} onClick={async () => {
             setIsLoading(true);
             try {
