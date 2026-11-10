@@ -46,7 +46,7 @@ function mapArticle(row) {
     publisherName: row.source_name || row.publisher || 'Publisher',
     articleUrl: row.article_url,
     imageUrl: row.image_url || null,
-    media: parseMedia(row.media),
+    media: parseMedia(row.media).length ? parseMedia(row.media) : (row.image_url ? [{ type: 'image', url: row.image_url }] : []),
     category: row.category || 'News',
     keywords: parseArray(row.keywords),
     publishedAt: row.published_at || row.imported_at,
