@@ -39,7 +39,7 @@ Flutterwave's v4 documentation recommends verifying the final charge status, amo
 
 ## Creator payout accounts
 
-QuickChat no longer creates Flutterwave v3 collection subaccounts.
+QuickChat creates Flutterwave v4 transfer recipients for creator payout accounts.
 
 When a creator connects a Nigerian bank account, QuickChat:
 
@@ -48,7 +48,7 @@ When a creator connects a Nigerian bank account, QuickChat:
 3. Creates a v4 transfer recipient.
 4. Stores the returned recipient ID and only a masked account number.
 
-Creator earnings are transferred using Flutterwave's v4 transfer API rather than the removed collection-subaccount split flow. citeturn737014search0turn811053search2
+Creator earnings are transferred using Flutterwave's v4 transfer API using the v4 transfer API. citeturn737014search0turn811053search2
 
 ## Webhooks
 
