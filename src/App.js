@@ -250,6 +250,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!localStorage.getItem('token')) return undefined;
+    let active = true;
+    apiRequest('/auth/email-status')
+      .then((status) => {
+        if (!active || status?.emailVerified) return;
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setIsAuthenticated(false);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
     if (googleClientId) return undefined;
     let isActive = true;
     fetch(`${API_BASE_URL}/config`)
