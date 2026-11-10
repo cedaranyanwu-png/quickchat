@@ -954,6 +954,7 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   for (const key of ['flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'smtp_password', 'resend_api_key', 'brevo_api_key']) {
     if (settings[key]) settings[key] = '••••••••••••••••';
   }
+  settings.flw_env = String(settings.flw_env || (process.env.NODE_ENV === 'production' ? 'live' : 'test')).toLowerCase();
   settings.boost_synthetic_test_mode = String(settings.boost_synthetic_test_mode ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
   for (const key of ['bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore']) settings[key] = String(settings[key] || 'false').toLowerCase() === 'true';
   settings.verification_points = Number(settings.verification_points || 2000);
