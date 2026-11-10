@@ -205,7 +205,7 @@ async function getAccountForUser(userId) {
        FROM flutterwave_creator_accounts WHERE user_id = ?`,
     [userId],
   );
-  return account ? { ...account, ready: account.status === 'active' && Boolean(account.flw_recipient_id || account.flw_subaccount_id) } : null;
+  return account ? { ...account, ready: account.status === 'active' && Boolean(account.flw_recipient_id) } : null;
 }
 
 async function createHostedCheckout({ buyer, sellerId, itemType, itemId, amount, currency = 'NGN', productName, productDescription }) {
