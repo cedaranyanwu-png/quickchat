@@ -6,7 +6,7 @@ const db = require('./database');
 const { sendEmail } = require('./email');
 const { createToken, authenticate } = require('./middleware/authenticate');
 const { recordRegistration } = require('./traffic-security');
-const { awardReferral } = require('./rewards');
+const { createReferral, qualifyNewUser } = require('./routes/rewards-program');
 
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
@@ -143,7 +143,7 @@ router.post('/register', async (req, res) => {
     await recordRegistration(req, user.id);
     const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
     const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
-    if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
+    if (referrerMatch) await createReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral tracking could not be created:', error.message));
     const delivery = await sendVerificationEmail(user);
     return res.status(201).json({
       emailVerificationRequired: true,
@@ -261,11 +261,12 @@ router.post('/google', async (req, res) => {
       user.email_verified = 1;
     }
     if (createdAccount) {
+      await qualifyNewUser(user.id).catch((error) => console.warn('[Rewards] Registration reward could not be issued:', error.message));
       await createWelcomeNotification(user.id);
       await recordRegistration(req, user.id);
       const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
       const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
-      if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
+      if (referrerMatch) await createReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral tracking could not be created:', error.message));
     }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
@@ -379,6 +380,7 @@ router.post('/verify-email', async (req, res) => {
          email_verification_expires = NULL WHERE id = ?`,
       [user.id],
     );
+    await qualifyNewUser(user.id).catch((error) => console.warn('[Rewards] Registration reward could not be issued:', error.message));
     return res.json({ message: 'Email verified. You can sign in now.', email: user.email });
   } catch (error) {
     console.error('[Auth] Email verification failed:', error);
@@ -467,6 +469,7 @@ router.post('/reset-password', async (req, res) => {
          password_reset_expires = NULL WHERE id = ?`,
       [passwordHash, user.id],
     );
+    await qualifyNewUser(user.id).catch((error) => console.warn('[Rewards] Registration reward could not be issued:', error.message));
     return res.json({ message: 'Password updated. Sign in with your new password.', email: user.email });
   } catch (error) {
     console.error('[Auth] Password reset failed:', error);

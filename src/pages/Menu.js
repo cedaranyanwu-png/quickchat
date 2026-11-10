@@ -10,6 +10,7 @@ const items = [
   { label: 'Account Booster', description: 'Promote your profile and grow content reach.', icon: 'fa-solid fa-rocket', path: '/account-booster' },
   { label: 'Ads', description: 'Manage your advertising campaigns.', icon: 'fa-solid fa-bullhorn', path: '/ads' },
   { label: 'Wallet & earnings', description: 'Manage points, payments, and earnings.', icon: 'fa-solid fa-wallet', path: '/settings/wallet' },
+  { label: 'Rewards & tasks', description: 'Earn Stars, points and withdrawable rewards.', icon: 'fa-solid fa-star', path: '/rewards' },
   { label: 'Verification', description: 'Manage account verification.', icon: 'fa-solid fa-circle-check', path: '/verification' },
   { label: 'Saved posts', description: 'View your bookmarks and saved posts.', icon: 'fa-solid fa-bookmark', path: '/books' },
   { label: 'Saved articles', description: 'Read articles you have saved.', icon: 'fa-solid fa-newspaper', path: '/saved-articles' },

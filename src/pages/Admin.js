@@ -4,6 +4,8 @@ import ModerationPanel from '../components/admin/ModerationPanel';
 import AdminSettingsPanel from '../components/admin/AdminSettingsPanel';
 import BackupRecoveryPanel from '../components/admin/BackupRecoveryPanel';
 import RewardsPanel from '../components/admin/RewardsPanel';
+import AdminNotificationsPanel from '../components/admin/AdminNotificationsPanel';
+import AdminRewardsProgramPanel from '../components/admin/AdminRewardsProgramPanel';
 import AdminAdsPanel from '../components/admin/AdminAdsPanel';
 import RSSAdmin from './RSSAdmin';
 
@@ -12,6 +14,7 @@ const NAV = [
   { key: 'traffic', label: 'Traffic & bot security', icon: 'fa-chart-line', permission: 'analytics.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
   { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
+  { key: 'notifications', label: 'Notifications centre', icon: 'fa-paper-plane', permission: 'notifications.send' },
   { key: 'ads', label: 'Ad placements', icon: 'fa-rectangle-ad', permission: 'ads.manage' },
   { key: 'rss', label: 'RSS publisher', icon: 'fa-rss', permission: 'rss.manage' },
   { key: 'moderation', label: 'Post moderation', icon: 'fa-shield-halved', permission: 'posts.view' },
@@ -472,7 +475,9 @@ export default function Admin() {
 
         {section === 'backups' && <BackupRecoveryPanel can={can} />}
 
-        {section === 'rewards' && <RewardsPanel />}
+        {section === 'notifications' && <AdminNotificationsPanel />}
+
+        {section === 'rewards' && <><RewardsPanel /><AdminRewardsProgramPanel /></>}
 
         {section === 'settings' && <AdminSettingsPanel />}
 

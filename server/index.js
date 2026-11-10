@@ -12,6 +12,7 @@ const adminAuth = require('./admin-auth');
 const { initializePageTables } = require('./schema');
 const rewardService = require('./rewards');
 const rewardRoutes = require('./routes/rewards');
+const rewardProgramRoutes = require('./routes/rewards-program');
 const { initializeSecurityTables, botDetector, trafficRouter } = require('./traffic-security');
 const contentRoutes = require('./routes/content');
 const statusRoutes = require('./routes/statuses');
@@ -262,6 +263,7 @@ app.use('/api', rssRoutes);
 app.use('/api', adminRoutes.router);
 app.use('/api', adminBackupRoutes);
 app.use('/api', rewardRoutes);
+app.use('/api', rewardProgramRoutes.router);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -329,6 +331,7 @@ async function initializeDB() {
   await ensureUniqueIndexes();
   await initializePageTables();
   await rewardService.initializeRewardTables();
+  await rewardProgramRoutes.initializeRewardProgram();
   // Backfill the one-time 1,000-point bonus for every previously verified human account.
   const previouslyVerified = await db.query('SELECT id FROM users WHERE verified = 1 AND COALESCE(is_synthetic, 0) = 0 ORDER BY id');
   for (const account of previouslyVerified) {
