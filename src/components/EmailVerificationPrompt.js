@@ -52,7 +52,7 @@ export default function EmailVerificationPrompt() {
       <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700"><i className="fa-solid fa-envelope-circle-check text-xl" /></div>
       <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-blue-700">QuickChat account notice</p>
       <h2 id="email-verify-title" className="mt-2 text-xl font-black text-slate-900">Verify your email address</h2>
-      <p className="mt-2 text-sm leading-6 text-slate-600">QuickChat now verifies email ownership to protect accounts and support password recovery. Your existing account and paid verification badge are not affected.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">QuickChat now verifies email ownership to protect accounts and support password recovery. Your existing account and paid verification badge are not affected. After requesting a verification link, check your inbox first, then your Spam or Junk folder if you cannot find the email.</p>
       <form onSubmit={changeEmail} className="mt-5 space-y-3">
         <label className="block text-xs font-bold text-slate-700">Email address
           <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
