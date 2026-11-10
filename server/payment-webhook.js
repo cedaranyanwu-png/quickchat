@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const db = require('./database');
-const { flutterwaveRequest, parseMoney, splitMoney, webhookSignature, safeEqual, getAccountForUser, createCreatorPayout } = require('./flutterwave');
+const { flutterwaveRequest, moneyString, parseMoney, splitMoney, webhookSignature, safeEqual, getAccountForUser, createCreatorPayout } = require('./flutterwave');
 const { creditPoints } = require('./wallet');
 
 async function verifyPointsPurchase(verifiedRef, payment) {
