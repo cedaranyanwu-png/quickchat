@@ -948,10 +948,10 @@ router.patch('/admin/bots/:id', requirePermission('settings.manage'), asyncRoute
 }));
 
 router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
-  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id', 'gemini_enabled', 'gemini_api_key', 'gemini_model'];
+  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id', 'gemini_enabled', 'gemini_api_key', 'gemini_model', 'email_provider_mode', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
   const values = await Promise.all(keys.map((key) => getSetting(key, null)));
   const settings = Object.fromEntries(keys.map((key, index) => [key, values[index]]));
-  for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key']) {
+  for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'smtp_password']) {
     if (settings[key]) settings[key] = '••••••••••••••••';
   }
   settings.boost_synthetic_test_mode = String(settings.boost_synthetic_test_mode ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
@@ -965,8 +965,8 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model'];
-  const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key'];
+  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
+  const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'smtp_password'];
   for (const key of normal) {
     if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
   }
@@ -977,6 +977,21 @@ router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   await audit(req, 'platform.settings_updated', 'settings', null, 'Platform configuration updated', null, { keys: [...normal, ...secrets] });
   res.json({ message: 'Platform configuration saved.' });
 }));
+router.post('/admin/email/test', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const recipient = String(req.body?.to || '').trim().toLowerCase();
+  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient)) {
+    return res.status(400).json({ message: 'Enter a valid destination email address for the test.' });
+  }
+  try {
+    const { testEmailConnection } = require('../email');
+    await testEmailConnection(recipient);
+    await audit(req, 'platform.email_test_sent', 'email', recipient, 'SMTP test email sent', null, null);
+    return res.json({ message: `Test email sent to ${recipient}. Check that inbox.` });
+  } catch (error) {
+    return res.status(400).json({ message: error.message || 'SMTP connection test failed.' });
+  }
+}));
+
 router.post('/admin/gemini/test', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
   const { testGeminiConnection } = require('../gemini');
   try {
