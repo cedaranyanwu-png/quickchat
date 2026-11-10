@@ -213,8 +213,8 @@ router.post('/rewards-program/tasks/:taskId/complete', asyncRoute(async (req, re
   if (task.task_type === 'profile') {
     const profile = await db.getOne('SELECT bio, picture, avatar_url FROM users WHERE id = ?', [req.user.id]);
     if (!profile || !String(profile.bio || '').trim() || !(profile.picture || profile.avatar_url)) return res.status(400).json({ message: 'Add a profile photo and bio before completing this task.' });
-  } else if (task.task_type !== 'manual') {
-    return res.status(400).json({ message: 'This task is verified automatically by QuickChat.' });
+  } else {
+    return res.status(400).json({ message: 'This task requires server-side verification and cannot be self-reported.' });
   }
   const reference = `task_${task.id}_user_${req.user.id}`;
   try { await db.insert('INSERT INTO qc_reward_task_completions (task_id, user_id, reference) VALUES (?, ?, ?)', [task.id, req.user.id, reference]); }
