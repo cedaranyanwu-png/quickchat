@@ -29,6 +29,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       if (!response.ok) {
         const requestError = new Error(data.message || 'Login failed');
         requestError.code = data.code;
+        requestError.email = data.email;
         throw requestError;
       }
 
