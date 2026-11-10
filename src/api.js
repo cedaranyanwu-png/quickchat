@@ -59,12 +59,15 @@ export async function apiRequest(path, options = {}) {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event('quickchat:network-restored'));
   const data = response.status === 204 ? null : await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (response.status === 401 && token) {
+    if ((response.status === 401 || data?.code === 'EMAIL_NOT_VERIFIED') && token) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.dispatchEvent(new Event('quickchat:session-expired'));
     }
-    throw new Error(data?.message || `Request failed (${response.status}).`);
+    const requestError = new Error(data?.message || `Request failed (${response.status}).`);
+    requestError.code = data?.code;
+    requestError.email = data?.email;
+    throw requestError;
   }
   return data;
 }
