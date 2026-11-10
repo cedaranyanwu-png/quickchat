@@ -311,7 +311,8 @@ router.post('/change-unverified-email', async (req, res) => {
     if (duplicate) return res.status(409).json({ message: 'That email address is already in use.' });
     await db.update(
       `UPDATE users SET email = ?, email_verified = 0, email_verification_notice = 0,
-         email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?`,
+         email_verification_token = NULL, email_verification_expires = NULL,
+         password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?`,
       [newEmail, user.id],
     );
     const delivery = await sendVerificationEmail({ id: user.id, fullname: user.fullname, email: newEmail });
@@ -342,7 +343,8 @@ router.post('/change-email', authenticate, async (req, res) => {
     if (duplicate) return res.status(409).json({ message: 'That email address is already in use.' });
     await db.update(
       `UPDATE users SET email = ?, email_verified = 0, email_verification_notice = 1,
-         email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?`,
+         email_verification_token = NULL, email_verification_expires = NULL,
+         password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?`,
       [email, req.user.id],
     );
     const delivery = await sendVerificationEmail({ id: user.id, fullname: user.fullname, email });
