@@ -35,7 +35,7 @@ const rssRoutes = require('./routes/rss');
 const adminBackupRoutes = require('./routes/admin-backups');
 const backupEngine = require('./backup-engine');
 const { handleFlutterwaveWebhook, verifyAndProcessPayment } = require('./payment-webhook');
-const { publicAppUrl } = require('./flutterwave');
+const { publicAppUrl, createV4CardOrder, getFlutterwaveEncryptionKey, isFlutterwaveEncryptionKeyConfigured } = require('./flutterwave');
 const { emailProvider } = require('./email');
 const { getSetting } = require('./platform-settings');
 const { initializePush, getPublicKey, isPushReady } = require('./push');
@@ -54,9 +54,12 @@ if (appEnvironment === 'live') app.set('trust proxy', 1);
 app.use(cors(configuredOrigins?.length ? { origin: configuredOrigins } : undefined));
 // Flutterwave signs webhook requests with the configured verif-hash header.
 // This route and the hosted-checkout callback stay outside bearer auth.
-app.post('/api/webhooks/flutterwave', express.json({ limit: '1mb' }), async (req, res, next) => {
+app.post('/api/webhooks/flutterwave', express.json({
+  limit: '1mb',
+  verify: (req, _res, buf) => { req.rawBody = Buffer.from(buf); },
+}), async (req, res, next) => {
   try {
-    await handleFlutterwaveWebhook(req.body, req.headers);
+    await handleFlutterwaveWebhook(req.body, req.headers, req.rawBody);
     res.status(200).json({ received: true });
   } catch (error) {
     next(error);
@@ -100,13 +103,14 @@ app.get('/api/ads/click/:campaignId', adsRoutes);
 
 app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
   try {
-    const pointsPurchase = String(req.query.tx_ref || '').startsWith('qcpts_');
-    const paid = await verifyAndProcessPayment({
-      transactionId: req.query.transaction_id,
-      txRef: req.query.tx_ref,
-    });
-    const result = paid ? 'success' : 'failed';
-    // Points buyers return to the live hub, where the wallet balance is shown.
+    const reference = String(req.query.reference || req.query.tx_ref || '').trim();
+    const pointsPurchase = /^QCPTS-/i.test(reference);
+    const chargeId = String(req.query.charge_id || req.query.transaction_id || '').trim();
+    let result = 'pending';
+    if (chargeId.startsWith('chg_')) {
+      const paid = await verifyAndProcessPayment({ chargeId, txRef: reference });
+      result = paid ? 'success' : 'failed';
+    }
     res.redirect(pointsPurchase
       ? `${publicAppUrl()}/settings/wallet?points=${result}`
       : `${publicAppUrl()}/home?payment=${result}`);
@@ -114,6 +118,112 @@ app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
     next(error);
   }
 });
+
+app.get('/api/payments/flutterwave/v4-checkout/:checkoutId', async (req, res, next) => {
+  try {
+    const checkout = await db.getOne(
+      `SELECT id, buyer_id, item_type, item_id, amount, currency, status
+         FROM payment_checkouts WHERE id = ?`,
+      [String(req.params.checkoutId)],
+    );
+    if (!checkout || !['open', 'creating'].includes(String(checkout.status))) {
+      return res.status(404).send('This payment session is unavailable or has expired.');
+    }
+    if (!isFlutterwaveEncryptionKeyConfigured()) {
+      return res.status(503).send('Flutterwave v4 secure card payments are not configured yet.');
+    }
+    const buyer = await db.getOne('SELECT fullname, username, email FROM users WHERE id = ?', [checkout.buyer_id]);
+    const encryptionKey = await getFlutterwaveEncryptionKey();
+    const amount = Number(checkout.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const currency = String(checkout.currency || 'NGN').toUpperCase();
+    const title = checkout.item_type === 'post' ? 'Unlock premium post' : checkout.item_type === 'creator' ? 'Creator fan pass' : checkout.item_type === 'points' ? 'Buy QuickChat points' : 'Community pass';
+    const page = renderFlutterwaveV4CheckoutPage({
+      checkoutId: checkout.id,
+      email: buyer?.email || '',
+      name: buyer?.fullname || buyer?.username || 'QuickChat member',
+      amount,
+      currency,
+      title,
+      encryptionKey,
+    });
+    res.type('html').send(page);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/payments/flutterwave/v4-charge', express.json({ limit: '32kb' }), async (req, res, next) => {
+  try {
+    const checkoutId = String(req.body?.checkoutId || '').trim();
+    const encryptedCard = req.body?.card;
+    if (!checkoutId || !encryptedCard) return res.status(400).json({ message: 'Secure payment details are incomplete.' });
+    const result = await createV4CardOrder({ checkoutId, encryptedCard });
+    if (result.redirectUrl) return res.json({ redirectUrl: result.redirectUrl, status: result.status, orderId: result.orderId });
+    res.json({ status: result.status, orderId: result.orderId, message: 'Payment was submitted. Waiting for confirmation.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+function renderFlutterwaveV4CheckoutPage({ checkoutId, email, name, amount, currency, title, encryptionKey }) {
+  const safe = (value) => String(value || '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const safeJson = (value) => JSON.stringify(String(value || '')).replace(/</g, '\\u003c');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Secure payment · QuickChat</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f8fc;color:#0f172a;min-height:100vh;display:grid;place-items:center;padding:24px}
+.card{width:min(460px,100%);background:#fff;border:1px solid #e2e8f0;border-radius:24px;box-shadow:0 24px 70px rgba(15,23,42,.12);overflow:hidden}.top{padding:24px;background:linear-gradient(135deg,#0f172a,#172554);color:#fff}.brand{font-weight:900;letter-spacing:-.02em}.secure{font-size:11px;color:#a7f3d0;margin-top:8px}.body{padding:24px}.price{font-size:28px;font-weight:900;margin:8px 0 20px}.muted{color:#64748b;font-size:12px}.field{margin:13px 0}.field label{display:block;font-size:11px;font-weight:800;color:#334155;margin-bottom:6px}.field input{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:12px;font-size:14px;outline:none}.field input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.button{width:100%;border:0;border-radius:999px;padding:13px;background:#2563eb;color:#fff;font-size:13px;font-weight:900;cursor:pointer;margin-top:8px}.button:disabled{opacity:.55;cursor:not-allowed}.notice{display:none;margin-top:14px;border-radius:12px;padding:11px;font-size:12px}.error{background:#fef2f2;color:#b91c1c}.info{background:#eff6ff;color:#1d4ed8}.footer{text-align:center;margin-top:16px;font-size:10px;color:#94a3b8}.brandmark{display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:#2563eb;font-weight:900;margin-right:8px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="top"><div><span class="brandmark">Q</span><span class="brand">QuickChat</span></div><div class="secure">🔒 Secure payment powered by Flutterwave v4</div></div>
+  <div class="body">
+    <div class="muted">${safe(title)}</div>
+    <div class="price">${safe(currency)} ${safe(amount)}</div>
+    <div class="muted">Paying as ${safe(name)} · ${safe(email)}</div>
+    <form id="pay">
+      <div class="field"><label for="number">Card number</label><input id="number" autocomplete="cc-number" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456" required></div>
+      <div class="grid">
+        <div class="field"><label for="month">Expiry month</label><input id="month" autocomplete="cc-exp-month" inputmode="numeric" maxlength="2" placeholder="MM" required></div>
+        <div class="field"><label for="year">Expiry year</label><input id="year" autocomplete="cc-exp-year" inputmode="numeric" maxlength="4" placeholder="YY" required></div>
+      </div>
+      <div class="field"><label for="cvv">CVV</label><input id="cvv" autocomplete="cc-csc" inputmode="numeric" maxlength="4" placeholder="123" required></div>
+      <button class="button" id="submit" type="submit">Pay ${safe(currency)} ${safe(amount)}</button>
+    </form>
+    <div id="notice" class="notice"></div>
+    <div class="footer">Your card details are encrypted in this browser before QuickChat sends them to Flutterwave.</div>
+  </div>
+</div>
+<script>
+const checkoutId=${safeJson(checkoutId)};
+const encryptionKey=${safeJson(encryptionKey)};
+const form=document.getElementById('pay'),button=document.getElementById('submit'),notice=document.getElementById('notice');
+function show(message,type='info'){notice.textContent=message;notice.className='notice '+type;notice.style.display='block'}
+function nonce(){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';let out='';const bytes=new Uint8Array(12);crypto.getRandomValues(bytes);for(const b of bytes)out+=chars[b%chars.length];return out}
+function b64(bytes){let s='';const arr=new Uint8Array(bytes);for(let i=0;i<arr.length;i++)s+=String.fromCharCode(arr[i]);return btoa(s)}
+async function encrypt(value,keyB64,iv){const keyBytes=Uint8Array.from(atob(keyB64),c=>c.charCodeAt(0));const key=await crypto.subtle.importKey('raw',keyBytes,{name:'AES-GCM'},false,['encrypt']);const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv:new TextEncoder().encode(iv)},key,new TextEncoder().encode(value));return b64(encrypted)}
+form.addEventListener('submit',async(e)=>{e.preventDefault();button.disabled=true;button.textContent='Securing payment…';notice.style.display='none';try{
+ const n=nonce();const card={nonce:n,
+ encrypted_card_number:await encrypt(document.getElementById('number').value.replace(/\s+/g,''),encryptionKey,n),
+ encrypted_expiry_month:await encrypt(document.getElementById('month').value.trim(),encryptionKey,n),
+ encrypted_expiry_year:await encrypt(document.getElementById('year').value.trim(),encryptionKey,n),
+ encrypted_cvv:await encrypt(document.getElementById('cvv').value.trim(),encryptionKey,n)};
+ const response=await fetch('/api/payments/flutterwave/v4-charge',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkoutId,card})});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw new Error(data.message||'Payment could not be started.');
+ if(data.redirectUrl){show('Continue to your bank or Flutterwave to complete the payment…','info');window.location.assign(data.redirectUrl);return;}
+ show(data.message||'Payment submitted. You can return to QuickChat while it is being confirmed.','info');
+ button.textContent='Payment submitted';
+}catch(error){show(error.message||'Payment could not be completed.','error');button.disabled=false;button.textContent='Try payment again'}});
+</script>
+</body>
+</html>`;
+}
 
 // Social crawlers do not execute the React app, so share URLs need their metadata
 // in the initial HTML response (not just in SharePreview after it loads).

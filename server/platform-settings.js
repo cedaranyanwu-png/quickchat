@@ -3,8 +3,10 @@ const db = require('./database');
 
 let initialized = false;
 const ENV_MAP = {
-  flw_secret_key: 'FLW_SECRET_KEY',
-  flw_secret_hash: 'FLW_SECRET_HASH',
+  flw_client_id: 'FLW_CLIENT_ID',
+  flw_client_secret: 'FLW_CLIENT_SECRET',
+  flw_encryption_key: 'FLW_ENCRYPTION_KEY',
+  flw_webhook_secret: 'FLW_WEBHOOK_SECRET',
   flw_webhook_url: 'FLW_WEBHOOK_URL',
   public_app_url: 'PUBLIC_APP_URL',
 };
