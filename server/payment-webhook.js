@@ -1,6 +1,6 @@
 const crypto = require('node:crypto');
 const db = require('./database');
-const { flutterwaveRequest, parseMoney, splitMoney, webhookSignature, safeEqual } = require('./flutterwave');
+const { flutterwaveRequest, parseMoney, splitMoney, webhookSignature, safeEqual, getAccountForUser, createCreatorPayout } = require('./flutterwave');
 const { creditPoints } = require('./wallet');
 
 async function verifyPointsPurchase(verifiedRef, payment) {
@@ -158,6 +158,23 @@ async function verifyAndProcessPayment({ chargeId, txRef }) {
   }
 
   await recordPayment(checkout, verifiedId, chargedCents, feeCents, currency);
+  if (checkout.item_type !== 'points') {
+    const transaction = await db.getOne('SELECT id, flutterwave_transfer_id FROM payment_transactions WHERE checkout_id = ?', [checkout.id]);
+    const account = await getAccountForUser(checkout.seller_id);
+    if (transaction && !transaction.flutterwave_transfer_id && account?.flw_recipient_id) {
+      try {
+        const payout = await createCreatorPayout({
+          recipientId: account.flw_recipient_id,
+          amount: moneyString(chargedCents - feeCents),
+          reference: `QCPAYOUT-${String(checkout.id).replace(/[^A-Za-z0-9-]/g, '').slice(0, 28)}`,
+          checkoutId: checkout.id,
+        });
+        if (payout?.id) await db.update('UPDATE payment_transactions SET flutterwave_transfer_id = ? WHERE id = ?', [String(payout.id), transaction.id]);
+      } catch (payoutError) {
+        console.error('[Flutterwave v4] Creator payout could not be initiated:', payoutError.message);
+      }
+    }
+  }
   if (checkout.item_type === 'post') await unlockPost(checkout);
   else await activateThirtyDayPass(checkout);
   await db.update('UPDATE payment_checkouts SET status = ? WHERE id = ?', ['paid', checkout.id]);
