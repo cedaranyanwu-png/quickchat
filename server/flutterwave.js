@@ -361,6 +361,24 @@ async function createV4CardOrder({ checkoutId, encryptedCard }) {
   };
 }
 
+async function createCreatorPayout({ recipientId, amount, reference, checkoutId }) {
+  const cents = parseMoney(amount);
+  if (!recipientId || !cents || cents < 100) return null;
+  const result = await flutterwaveRequest('POST', 'transfers', {
+    action: 'instant',
+    reference: String(reference).slice(0, 42),
+    narration: `QuickChat creator payout ${String(checkoutId || '').slice(0, 24)}`,
+    meta: { quickchat_checkout_id: String(checkoutId || '') },
+    payment_instruction: {
+      source_currency: 'NGN',
+      destination_currency: 'NGN',
+      amount: { applies_to: 'destination_currency', value: Number(moneyString(cents)) },
+      recipient_id: String(recipientId),
+    },
+  }, { idempotencyKey: `qc-payout-${String(checkoutId || reference)}` });
+  return result?.data || null;
+}
+
 async function getFlutterwaveEncryptionKey() {
   if (!isFlutterwaveEncryptionKeyConfigured()) {
     const error = new Error('Set FLW_ENCRYPTION_KEY in server/.env to enable secure v4 card payments.');
@@ -374,6 +392,7 @@ module.exports = {
   PLATFORM_FEE_PERCENT,
   createHostedCheckout,
   createV4CardOrder,
+  createCreatorPayout,
   flutterwaveRequest,
   flutterwaveWebhookUrl,
   getAccountForUser,
