@@ -40,6 +40,8 @@ import Live from './pages/Live';
 import RecommendationAssistant from './pages/RecommendationAssistant';
 import AdsDashboard from './pages/AdsDashboard';
 import Wallet from './pages/Wallet';
+import RewardsProgram from './pages/RewardsProgram';
+import RewardPopupHost from './components/RewardPopupHost';
 import Admin from './pages/Admin';
 import Menu from './pages/Menu';
 import AccountBooster from './pages/AccountBooster';
@@ -155,6 +157,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         </div>
         <main className="h-screen flex-1 bg-white" style={isVideosPage || isMessagesPage ? { overflow: 'hidden' } : { overflowY: 'auto' }}>
           <PushNotificationPrompt />
+          <RewardPopupHost />
           <EmailVerificationPrompt />
           <div className="lg:hidden"><TopNav /></div>
           <Routes>
@@ -183,6 +186,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             }} />} />
 
             <Route path="/settings/wallet" element={<Wallet />} />
+            <Route path="/rewards" element={<RewardsProgram />} />
             <Route path="/wallet" element={<Navigate to="/settings/wallet" replace />} />
             <Route path="/verification" element={<Verification />} />
             <Route path="/compose/advanced" element={<AdvancedComposer onPublished={() => setFeedRevision((revision) => revision + 1)} />} />
