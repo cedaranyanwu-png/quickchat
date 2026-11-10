@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { adminRequest } from '../../api';
 
 export default function AdminSettingsPanel() {
-  const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_public_key: '', flw_secret_key: '', flw_secret_hash: '', flw_webhook_url: '', public_app_url: '', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-2.5-flash' });
+  const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_public_key: '', flw_secret_key: '', flw_secret_hash: '', flw_webhook_url: '', public_app_url: '', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash' });
   const [testingGemini, setTestingGemini] = useState(false);
   const [geminiMessage, setGeminiMessage] = useState('');
   const [bots, setBots] = useState([]); const [botTotal, setBotTotal] = useState(0); const [botCount, setBotCount] = useState(100); const [generatingBots, setGeneratingBots] = useState(false); const [botMessage, setBotMessage] = useState('');
   const [saving, setSaving] = useState(false); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const load = async () => { try { const data = await adminRequest('/admin/settings'); setForm(v => ({ ...v, ...data.settings })); } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
+  const load = async () => { try { const data = await adminRequest('/admin/settings'); const settings = { ...data.settings }; if (!settings.gemini_model || ['gemini-2.5-flash', 'gemini-2.5-pro', 'models/gemini-2.5-flash'].includes(settings.gemini_model)) settings.gemini_model = 'gemini-3.8-flash'; setForm(v => ({ ...v, ...settings })); } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
   const loadBots = async () => { try { const data = await adminRequest('/admin/bots'); setBots(data.bots || []); setBotTotal(Number(data.total || 0)); } catch (e) { setBotMessage(e.message || 'Unable to load bot accounts.'); } };
   useEffect(() => { load(); loadBots(); }, []);
   const generateBots = async () => { const count = Math.max(1, Math.min(10000, Number(botCount) || 1)); setGeneratingBots(true); setBotMessage(''); try { const result = await adminRequest('/admin/bots/generate', { method: 'POST', body: { count } }); setBotMessage(result.message || 'Bot accounts generated.'); await loadBots(); } catch (e) { setBotMessage(e.message || 'Bot generation failed.'); } finally { setGeneratingBots(false); } };
@@ -17,7 +17,7 @@ export default function AdminSettingsPanel() {
     setTestingGemini(true); setGeminiMessage('');
     try {
       if (form.gemini_api_key && !String(form.gemini_api_key).startsWith('••')) {
-        await adminRequest('/admin/settings', { method: 'PUT', body: { gemini_api_key: form.gemini_api_key, gemini_enabled: Boolean(form.gemini_enabled), gemini_model: form.gemini_model || 'gemini-2.5-flash' } });
+        await adminRequest('/admin/settings', { method: 'PUT', body: { gemini_api_key: form.gemini_api_key, gemini_enabled: Boolean(form.gemini_enabled), gemini_model: form.gemini_model || 'gemini-3.8-flash' } });
       }
       const result = await adminRequest('/admin/gemini/test', { method: 'POST', body: {} });
       setGeminiMessage(result.message || 'Gemini connection successful.');
@@ -34,7 +34,7 @@ export default function AdminSettingsPanel() {
       <div className="flex items-start justify-between gap-4"><div><h3 className="font-extrabold text-slate-900">Gemini AI · character engine</h3><p className="mt-1 text-xs leading-5 text-slate-600">Connect Google's Gemini API to power the existing character accounts. The key is encrypted in platform settings and is never returned to the browser.</p></div>
         <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={Boolean(form.gemini_enabled)} onChange={e => update('gemini_enabled', e.target.checked)} /> Enable character AI</label></div>
       <label className="block text-xs font-bold text-slate-700">Gemini API key<input type="password" autoComplete="new-password" value={form.gemini_api_key || ''} onChange={e => update('gemini_api_key', e.target.value)} placeholder="Paste your Gemini API key" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
-      <label className="block max-w-sm text-xs font-bold text-slate-700">Gemini model<select value={form.gemini_model || 'gemini-2.5-flash'} onChange={e => update('gemini_model', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-pro">Gemini 2.5 Pro</option></select></label>
+      <label className="block max-w-sm text-xs font-bold text-slate-700">Gemini model<select value={form.gemini_model || 'gemini-3.8-flash'} onChange={e => update('gemini_model', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm"><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-pro">Gemini 2.5 Pro</option></select></label>
       <div className="flex flex-wrap items-center gap-3"><button type="button" disabled={testingGemini} onClick={testGemini} className="rounded-xl border border-violet-300 bg-white px-4 py-2.5 text-xs font-extrabold text-violet-800 disabled:opacity-50">{testingGemini ? 'Testing connection…' : 'Test Gemini connection'}</button>{geminiMessage && <span className="text-xs font-semibold text-slate-700">{geminiMessage}</span>}</div>
       <p className="text-[11px] leading-5 text-slate-500">Save or test after entering a key. Never place this key in frontend environment variables or commit it to GitHub. AI character accounts must be clearly identified as AI.</p>
     </section>
