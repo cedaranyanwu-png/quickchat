@@ -103,7 +103,7 @@ app.get('/api/ads/click/:campaignId', adsRoutes);
 app.get('/api/payments/flutterwave/callback', async (req, res, next) => {
   try {
     const reference = String(req.query.reference || req.query.tx_ref || '').trim();
-    const pointsPurchase = reference.startsWith('qcpts_');
+    const pointsPurchase = /^QCPTS-/i.test(reference);
     const chargeId = String(req.query.charge_id || req.query.transaction_id || '').trim();
     let result = 'pending';
     if (chargeId.startsWith('chg_')) {
@@ -135,7 +135,7 @@ app.get('/api/payments/flutterwave/v4-checkout/:checkoutId', async (req, res, ne
     const encryptionKey = await getFlutterwaveEncryptionKey();
     const amount = Number(checkout.amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const currency = String(checkout.currency || 'NGN').toUpperCase();
-    const title = checkout.item_type === 'post' ? 'Unlock premium post' : checkout.item_type === 'creator' ? 'Creator fan pass' : 'Community pass';
+    const title = checkout.item_type === 'post' ? 'Unlock premium post' : checkout.item_type === 'creator' ? 'Creator fan pass' : checkout.item_type === 'points' ? 'Buy QuickChat points' : 'Community pass';
     const page = renderFlutterwaveV4CheckoutPage({
       checkoutId: checkout.id,
       email: buyer?.email || '',
