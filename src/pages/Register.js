@@ -11,6 +11,8 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [step, setStep] = useState('register'); // 'register' or 'interests'
   const [selectedInterests, setSelectedInterests] = useState([]);
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
 
@@ -33,6 +35,12 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
         throw new Error(data.message || 'Registration failed');
       }
 
+      if (data.emailVerificationRequired) {
+        setVerificationEmail(data.email || formData.email);
+        setStep('email-verification');
+        setResendMessage(data.message || 'Check your inbox for the verification link.');
+        return;
+      }
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       onAuthenticated?.();
@@ -63,6 +71,27 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       setIsLoading(false);
     }
   };
+
+  if (step === 'email-verification') {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl">
+        <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-700"><i className="fa-solid fa-envelope-circle-check text-2xl" /></div>
+        <h1 className="text-2xl font-extrabold text-slate-900">Verify your email</h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">We sent a verification link to <strong>{verificationEmail}</strong>. Open that message and confirm the address before signing in.</p>
+        {resendMessage && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">{resendMessage}</p>}
+        <button type="button" onClick={async () => {
+          setResendMessage('Sending a new verification link…');
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: verificationEmail }) });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Could not resend the link.');
+            setResendMessage(result.message || 'If the account needs verification, a new link is on its way.');
+          } catch (e) { setResendMessage(e.message || 'Could not resend the link.'); }
+        }} className="mt-5 w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white">Resend verification email</button>
+        <Link to="/login" className="mt-4 inline-block text-sm font-bold text-blue-700 hover:underline">Return to sign in</Link>
+      </div>
+    </div>;
+  }
 
   if (step === 'interests') {
     return (
