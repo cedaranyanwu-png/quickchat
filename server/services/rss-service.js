@@ -149,7 +149,55 @@ async function isPublicExternalUrl(value) {
   } catch { return false; }
 }
 
+function mediaCandidates(item) {
+  const values = [];
+  const add = (value) => {
+    if (!value) return;
+    if (Array.isArray(value)) value.forEach(add);
+    else if (typeof value === 'object') {
+      const attrs = value.$ || value;
+      add(attrs.url || attrs.href);
+    } else if (typeof value === 'string') values.push(value);
+  };
+  add(item.enclosure);
+  add(item.enclosures);
+  add(item.image);
+  add(item.mediaThumbnail);
+  add(item.mediaContent);
+  add(item['media:thumbnail']);
+  add(item['media:content']);
+  add(item['media:group']);
+  const html = String(item.contentEncoded || item.content || item.description || '');
+  const $ = cheerio.load(html);
+  $('img[src], video[src], source[src]').each((_index, element) => add($(element).attr('src')));
+  return [...new Set(values.map((value) => validExternalUrl(value, false)).filter(Boolean))];
+}
+
+function mediaTypeFromUrl(value) {
+  const lower = String(value || '').toLowerCase();
+  return /\\.(mp4|webm|mov|m4v|m3u8)(?:[?#]|$)/i.test(lower) ? 'video' : 'image';
+}
+
+async function itemMedia(item) {
+  const urls = mediaCandidates(item);
+  const media = [];
+  for (const url of urls) {
+    if (!await isPublicExternalUrl(url)) continue;
+    media.push({ type: mediaTypeFromUrl(url), url });
+  }
+  const image = media.find((entry) => entry.type === 'image') || null;
+  const video = media.find((entry) => entry.type === 'video') || null;
+  return {
+    imageUrl: image?.url || null,
+    media: media.slice(0, 6),
+    videoUrl: video?.url || null,
+  };
+}
+
 async function itemImage(item) {
+  return (await itemMedia(item)).imageUrl;
+}
+
   const candidates = [
     item.enclosure && item.enclosure.url, item.image && item.image.url,
     item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url,
@@ -226,9 +274,11 @@ async function publishArticleToFeed(article) {
   if (existing) return false;
   const publisherId = await ensureRssPublisher();
   const body = String(article.excerpt || article.title).trim().slice(0, 5000);
+  const articleMedia = parseJson(article.media, []);
   await db.insert(
-    'INSERT INTO posts (author_id, body, kind, category, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [publisherId, body || article.title, 'text', article.category || 'News', article.article_url, article.id, 'public'],
+    'INSERT INTO posts (author_id, body, kind, category, media, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [publisherId, body || article.title, articleMedia.length ? 'media' : 'text', article.category || 'News',
+      articleMedia.length ? JSON.stringify(articleMedia) : null, article.article_url, article.id, 'public'],
   );
   return true;
 }
@@ -242,10 +292,12 @@ async function publishExistingArticles(sourceId) {
   let published = 0;
   for (const article of rows) {
     const body = String(article.excerpt || article.title).trim().slice(0, 5000);
+    const articleMedia = parseJson(article.media, []);
     try {
       await db.insert(
-        'INSERT INTO posts (author_id, body, kind, category, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [publisherId, body || article.title, 'text', article.category || 'News', article.article_url, article.id, 'public'],
+        'INSERT INTO posts (author_id, body, kind, category, media, source_link, rss_article_id, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [publisherId, body || article.title, articleMedia.length ? 'media' : 'text', article.category || 'News',
+          articleMedia.length ? JSON.stringify(articleMedia) : null, article.article_url, article.id, 'public'],
       );
       published += 1;
     } catch (error) {
@@ -281,13 +333,14 @@ async function syncSource(sourceId, { force = false } = {}) {
       const guidHash = crypto.createHash('sha256').update(guid).digest('hex');
       const urlHash = crypto.createHash('sha256').update(normalizedUrlForHash(articleUrl)).digest('hex');
       const excerpt = plainExcerpt(item.contentSnippet || item.contentEncoded || item.content || item.description);
-      const imageUrl = await itemImage(item);
+      const articleMedia = await itemMedia(item);
+      const imageUrl = articleMedia.imageUrl;
       const category = String(item.categories && item.categories[0] || sourceCategories[0] || 'News').slice(0, 80);
       const keywords = [...new Set([...(item.categories || []), ...title.toLowerCase().split(/[^a-z0-9]+/).filter((word) => word.length > 3)])].slice(0, 24);
       try {
         await db.insert(
-          'INSERT INTO rss_articles (source_id, publisher, guid, guid_hash, url_hash, article_url, title, excerpt, image_url, category, keywords, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [sourceId, publisher, guid, guidHash, urlHash, articleUrl, title, excerpt || null, imageUrl, category, JSON.stringify(keywords), parsePublishedAt(item)],
+          'INSERT INTO rss_articles (source_id, publisher, guid, guid_hash, url_hash, article_url, title, excerpt, image_url, media, category, keywords, published_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [sourceId, publisher, guid, guidHash, urlHash, articleUrl, title, excerpt || null, imageUrl, JSON.stringify(articleMedia.media), category, JSON.stringify(keywords), parsePublishedAt(item)],
         );
         counts.imported += 1;
       } catch (error) {
