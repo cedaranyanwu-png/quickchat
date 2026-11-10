@@ -1,136 +1,104 @@
-function senderAddress() {
-  return process.env.EMAIL_FROM
-    || process.env.SMTP_FROM
-    || process.env.SMTP_USER
-    || 'QuickChat <onboarding@resend.dev>';
+const { getSetting } = require('./platform-settings');
+
+async function setting(key, fallback = '') {
+  try {
+    const value = await getSetting(key, fallback);
+    return value == null ? fallback : String(value);
+  } catch (_error) {
+    return fallback;
+  }
 }
 
+async function smtpConfig() {
+  const mode = (await setting('email_provider_mode', 'env')).toLowerCase();
+  if (mode === 'gmail' || mode === 'custom') {
+    const host = mode === 'gmail' ? 'smtp.gmail.com' : await setting('smtp_host');
+    const port = Number(mode === 'gmail' ? 465 : await setting('smtp_port', '587'));
+    const secure = mode === 'gmail' ? true : (await setting('smtp_secure', 'false')) === 'true';
+    const user = mode === 'gmail' ? await setting('smtp_user') : await setting('smtp_user');
+    const pass = mode === 'gmail' ? await setting('smtp_password') : await setting('smtp_password');
+    const from = await setting('smtp_from', user);
+    if (!host || !Number.isInteger(port) || port < 1 || port > 65535 || !user || !pass || !from) {
+      throw new Error('Complete the SMTP host, port, username, password and sender address in Admin Settings.');
+    }
+    return { mode, host, port, secure, user, pass, from };
+  }
+  return null;
+}
+
+function senderAddress(config) {
+  return config?.from || process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || 'QuickChat <onboarding@resend.dev>';
+}
 function senderEmail() {
   const value = senderAddress();
   return value.match(/<([^>]+)>/)?.[1] || value;
 }
-
 function logPreview({ to, subject, text }) {
-  console.log(`[Email preview]\nTo: ${to}\nSubject: ${subject}\n\n${text}\n`);
+  console.log(`[Email preview]\\nTo: ${to}\\nSubject: ${subject}\\n\\n${text}\\n`);
 }
-
 async function sendWithResend({ to, subject, text, html }) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: senderAddress(),
-      to: [to],
-      subject,
-      text,
-      html,
-    }),
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: senderAddress(), to: [to], subject, text, html }),
   });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Resend rejected the email (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
-  }
+  if (!response.ok) throw new Error(`Resend rejected the email (${response.status}).`);
   return { delivered: true, provider: 'resend' };
 }
-
 async function sendWithSendGrid({ to, subject, text, html }) {
   const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      personalizations: [{ to: [{ email: to }] }],
-      from: { email: senderEmail() },
-      subject,
-      content: [
-        { type: 'text/plain', value: text },
-        { type: 'text/html', value: html },
-      ],
-    }),
+    headers: { Authorization: `Bearer ${process.env.SENDGRID_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ personalizations: [{ to: [{ email: to }] }], from: { email: senderEmail() }, subject,
+      content: [{ type: 'text/plain', value: text }, { type: 'text/html', value: html }] }),
   });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`SendGrid rejected the email (${response.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`);
-  }
+  if (!response.ok) throw new Error(`SendGrid rejected the email (${response.status}).`);
   return { delivered: true, provider: 'sendgrid' };
 }
-
-async function sendWithSmtp({ to, subject, text, html }) {
-  // Nodemailer is installed with the server dependencies so a custom domain or
-  // Google Workspace/Gmail SMTP account can be configured entirely in .env.
-  let nodemailer;
-  try {
-    nodemailer = require('nodemailer');
-  } catch (_error) {
-    throw new Error('SMTP is configured but nodemailer is not installed. Run: npm --prefix server install nodemailer');
-  }
-  if (!process.env.SMTP_URL && !process.env.SMTP_HOST) {
-    throw new Error('Set SMTP_HOST (and SMTP_PORT) or SMTP_URL in server/.env.');
-  }
-  if (!process.env.EMAIL_FROM && !process.env.SMTP_FROM && !process.env.SMTP_USER) {
-    throw new Error('Set EMAIL_FROM (the address emails should come from) in server/.env.');
-  }
-  if (!process.env.SMTP_URL && process.env.SMTP_USER && !process.env.SMTP_PASS) {
-    throw new Error('SMTP_USER is set but SMTP_PASS is missing. Use your mail password or Gmail App Password.');
-  }
-
+async function sendWithSmtp({ to, subject, text, html }, config) {
+  const nodemailer = require('nodemailer');
+  const envMode = !config;
   const port = Number(process.env.SMTP_PORT || 587);
   const secureSetting = String(process.env.SMTP_SECURE || '').toLowerCase();
-  const secure = secureSetting
-    ? ['true', '1', 'yes'].includes(secureSetting)
-    : port === 465;
-  const transporter = process.env.SMTP_URL
-    ? nodemailer.createTransport(process.env.SMTP_URL)
-    : nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port,
-      secure,
+  const options = config ? {
+    host: config.host, port: config.port, secure: config.secure,
+    auth: { user: config.user, pass: config.pass },
+    connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 30000,
+  } : {
+    ...(process.env.SMTP_URL ? { } : { host: process.env.SMTP_HOST, port,
+      secure: secureSetting ? ['true','1','yes'].includes(secureSetting) : port === 465,
       requireTLS: String(process.env.SMTP_REQUIRE_TLS || '').toLowerCase() === 'true',
-      tls: {
-        // Keep certificate verification on by default. Only disable this for a
-        // local/self-hosted mail server that you control.
-        rejectUnauthorized: String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() !== 'false',
-      },
-      auth: process.env.SMTP_USER
-        ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-        : undefined,
-      connectionTimeout: Number(process.env.SMTP_CONNECTION_TIMEOUT_MS || 15000),
-      greetingTimeout: Number(process.env.SMTP_GREETING_TIMEOUT_MS || 10000),
-      socketTimeout: Number(process.env.SMTP_SOCKET_TIMEOUT_MS || 30000),
-    });
-
-  const info = await transporter.sendMail({
-    from: senderAddress(),
-    to,
-    subject,
-    text,
-    html,
-  });
+      tls: { rejectUnauthorized: String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() !== 'false' },
+      auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined }),
+    connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 30000,
+  };
+  const transporter = !config && process.env.SMTP_URL
+    ? nodemailer.createTransport(process.env.SMTP_URL)
+    : nodemailer.createTransport(options);
+  const info = await transporter.sendMail({ from: senderAddress(config), to, subject, text, html });
   return { delivered: true, provider: 'smtp', messageId: info.messageId || null };
 }
-
-function emailProvider() {
+async function sendEmail({ to, subject, text, html }) {
+  if (!to) throw new Error('An email recipient is required.');
+  const config = await smtpConfig();
+  if (config) return sendWithSmtp({ to, subject, text, html }, config);
+  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html });
+  if (process.env.SENDGRID_API_KEY) return sendWithSendGrid({ to, subject, text, html });
+  if (process.env.SMTP_HOST || process.env.SMTP_URL) return sendWithSmtp({ to, subject, text, html }, null);
+  logPreview({ to, subject, text });
+  return { delivered: false, provider: 'preview', preview: text };
+}
+async function testEmailConnection(to) {
+  const config = await smtpConfig();
+  if (!config) throw new Error('Choose Gmail App Password or Custom SMTP and save the settings first.');
+  return sendWithSmtp({ to, subject: 'QuickChat SMTP connection test', text: 'Your QuickChat email delivery configuration is working.', html: '<p>Your QuickChat email delivery configuration is working.</p>' }, config);
+}
+async function emailProvider() {
+  const mode = await setting('email_provider_mode', 'env');
+  if (mode === 'gmail' || mode === 'custom') return 'smtp';
   if (process.env.RESEND_API_KEY) return 'resend';
   if (process.env.SENDGRID_API_KEY) return 'sendgrid';
   if (process.env.SMTP_HOST || process.env.SMTP_URL) return 'smtp';
   return 'preview';
 }
-
-async function sendEmail({ to, subject, text, html }) {
-  if (!to) throw new Error('An email recipient is required.');
-  if (process.env.RESEND_API_KEY) return sendWithResend({ to, subject, text, html });
-  if (process.env.SENDGRID_API_KEY) return sendWithSendGrid({ to, subject, text, html });
-  if (process.env.SMTP_HOST || process.env.SMTP_URL) return sendWithSmtp({ to, subject, text, html });
-
-  // Local development without a provider: keep the flow usable by logging the
-  // message and returning the link to the caller for a dev-only preview.
-  logPreview({ to, subject, text });
-  return { delivered: false, provider: 'preview', preview: text };
-}
-
-module.exports = { sendEmail, emailProvider };
+module.exports = { sendEmail, emailProvider, testEmailConnection };
