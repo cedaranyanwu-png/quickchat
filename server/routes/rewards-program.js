@@ -104,8 +104,8 @@ async function qualifyNewUser(userId) {
     // A referral qualifies only after the invitee verifies their email and returns on a separate day.
     const claims = await db.getCount('SELECT COUNT(*) AS count FROM qc_reward_daily_claims WHERE user_id = ?', [userId]);
     if (claims >= 1) {
-      await db.update("UPDATE qc_reward_referrals SET status = 'qualified', qualified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [referral.id]);
       await ledgerCredit(referral.referrer_id, 'referral_reward', REFERRAL_POINTS, `referral_${userId}`);
+      await db.update("UPDATE qc_reward_referrals SET status = 'qualified', qualified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [referral.id]);
     }
   }
 }
@@ -140,8 +140,8 @@ router.post('/rewards-program/daily-claim', asyncRoute(async (req, res) => {
   await db.update('UPDATE qc_reward_wallets SET stars = stars + 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', [req.user.id]);
   const referral = await db.getOne("SELECT * FROM qc_reward_referrals WHERE referred_user_id = ? AND status = 'pending'", [req.user.id]);
   if (referral) {
-    await db.update("UPDATE qc_reward_referrals SET status = 'qualified', qualified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [referral.id]);
     await ledgerCredit(referral.referrer_id, 'referral_reward', REFERRAL_POINTS, `referral_${req.user.id}`);
+    await db.update("UPDATE qc_reward_referrals SET status = 'qualified', qualified_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'pending'", [referral.id]);
   }
   const wallet = await db.getOne('SELECT stars FROM qc_reward_wallets WHERE user_id = ?', [req.user.id]);
   res.json({ message: 'Daily Star claimed.', stars: Number(wallet?.stars || 0) });
