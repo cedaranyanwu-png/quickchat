@@ -361,6 +361,7 @@ async function initializePageTables() {
   await addMissingNotificationColumns();
   await addMissingMessageColumns();
   await addMissingCommunityColumns();
+  await addMissingRssMediaColumns();
   await ensureIndexes();
 }
 
@@ -406,6 +407,19 @@ async function addMissingCommunityColumns() {
   await db.query(
     "INSERT INTO community_members (community_id, user_id, role) SELECT c.id, c.created_by, 'owner' FROM communities c WHERE c.created_by IS NOT NULL AND NOT EXISTS (SELECT 1 FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = c.created_by)",
   );
+}
+
+async function addMissingRssMediaColumns() {
+  const columns = db.type === 'sqlite'
+    ? await db.query('PRAGMA table_info(rss_articles)').then((rows) => new Set(rows.map((row) => row.name.toLowerCase())))
+    : db.type === 'postgres'
+      ? await db.query(
+        'SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = ?',
+        ['rss_articles'],
+      ).then((rows) => new Set(rows.map((row) => row.column_name.toLowerCase())))
+      : await db.query('SHOW COLUMNS FROM rss_articles').then((rows) => new Set(rows.map((row) => row.Field.toLowerCase())));
+
+  if (!columns.has('media')) await db.query('ALTER TABLE rss_articles ADD COLUMN media TEXT');
 }
 
 async function addMissingBoostColumns() {
