@@ -192,6 +192,8 @@ router.post('/rewards-program/withdrawals', asyncRoute(async (req, res) => {
   if (!Number.isSafeInteger(amount) || amount < MIN_WITHDRAWAL_KOBO) return res.status(400).json({ message: 'Minimum withdrawal is ₦100.' });
   const account = await db.getOne("SELECT bank_name, account_name, account_masked FROM flutterwave_creator_accounts WHERE user_id = ? AND status = 'active'", [req.user.id]);
   if (!account) return res.status(409).json({ message: 'Connect and verify your payout bank account in Settings first.' });
+  const pending = await db.getOne("SELECT id FROM qc_reward_withdrawals WHERE user_id = ? AND status = 'pending'", [req.user.id]);
+  if (pending) return res.status(409).json({ message: 'You already have a pending withdrawal request.' });
   await ensureWallet(req.user.id);
   const debited = await db.update('UPDATE qc_reward_wallets SET cash_kobo = cash_kobo - ? WHERE user_id = ? AND cash_kobo >= ?', [amount, req.user.id, amount]);
   if (!debited) return res.status(402).json({ message: 'Insufficient withdrawable balance.' });
@@ -251,9 +253,10 @@ router.post('/admin/notifications', requirePermission('notifications.send'), asy
     for (const user of recipients) {
       for (const channel of channels) {
         try {
-          if (channel === 'in_app' || channel === 'popup') {
+          if (channel === 'in_app') {
             await db.insert('INSERT INTO notifications (user_id, actor_id, type, text, is_read) VALUES (?, NULL, ?, ?, 0)', [user.id, 'system', message.slice(0,255)]);
-            if (channel === 'popup') await db.insert('INSERT INTO qc_notification_popups (user_id, campaign_id, title, message) VALUES (?, ?, ?, ?)', [user.id, campaign.id, title, message]);
+          } else if (channel === 'popup') {
+            await db.insert('INSERT INTO qc_notification_popups (user_id, campaign_id, title, message) VALUES (?, ?, ?, ?)', [user.id, campaign.id, title, message]);
           } else if (channel === 'email') {
             if (!user.email) throw new Error('No email address on account.');
             const result = await sendEmail({ to: user.email, subject: title, text: message, html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:24px"><h2>${title.replace(/[&<>"]/g, '')}</h2><p style="white-space:pre-wrap">${message.replace(/[&<>"]/g, '')}</p><p>QuickChat</p></div>` });
