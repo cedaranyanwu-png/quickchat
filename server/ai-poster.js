@@ -1113,7 +1113,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
   let likes = 0;
   let comments = 0;
 
-  for (const post of posts) {
+  postsLoop: for (const post of posts) {
     if (shuttingDown) break;
     const context = `${post.category || ''} ${post.hashtags || ''} ${post.body || ''}`;
     const user = { id: post.author_id, interests: post.author_interests, bio: post.author_bio };
@@ -1172,7 +1172,8 @@ async function engageWithHumanPostsNow(database, options = {}) {
         comments += 1;
         await sleep(itemPauseMs);
       } catch (error) {
-        log(`Could not reply to regular user's post ${post.id}`, error);\n        if (isGeminiBackoffError(error)) break postsLoop;
+        log(`Could not reply to regular user's post ${post.id}`, error);
+        if (isGeminiBackoffError(error)) break postsLoop;
       }
     }
   }
@@ -1312,7 +1313,8 @@ async function respondToHumanMessages(database) {
         }
         await sleep(itemPauseMs);
       } catch (error) {
-        log(`Could not reply to a message from regular user ${incoming.human_id}`, error);\n        if (isGeminiBackoffError(error)) break;
+        log(`Could not reply to a message from regular user ${incoming.human_id}`, error);
+        if (isGeminiBackoffError(error)) break;
       }
     }
     if (sent) log(`Sent ${sent} reply/replies to regular user messages.`);
