@@ -230,8 +230,8 @@ router.post('/rewards-program/tasks/:taskId/complete', asyncRoute(async (req, re
   res.json({ message: `Task completed. You earned ${task.points} points.` });
 }));
 router.get('/rewards-program/popup', asyncRoute(async (req, res) => {
-  const rows = await db.query('SELECT id, title, message FROM qc_notification_popups WHERE user_id = ? AND is_read = 0 ORDER BY id ASC LIMIT 3', [req.user.id]);
-  if (rows.length) await db.update('UPDATE qc_notification_popups SET is_read = 1 WHERE user_id = ? AND is_read = 0 AND id IN (${rows.map(() => '?').join(',')})', [req.user.id, ...rows.map(r => r.id)]);
+  const rows = await db.query('SELECT id, title, message FROM qc_notification_popups WHERE user_id = ? AND is_read = 0 ORDER BY id ASC LIMIT 1', [req.user.id]);
+  if (rows.length) await db.update('UPDATE qc_notification_popups SET is_read = 1 WHERE id = ? AND user_id = ?', [rows[0].id, req.user.id]);
   res.json({ popups: rows });
 }));
 router.get('/admin/notifications', requirePermission('notifications.send'), asyncRoute(async (_req, res) => {
