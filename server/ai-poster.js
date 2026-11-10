@@ -897,8 +897,6 @@ async function runOnce() {
     const database = await getApplicationDatabase();
     await publishOriginalCharacterPosts(database);
     const feeds = rssPublishingDisabled ? [] : configuredFeeds();
-  const geminiConfig = await getGeminiConfig();
-  log(`Gemini character engine: ${geminiConfig.enabled && geminiConfig.apiKey ? 'enabled' : 'disabled'}.`);
     if (!rssPublishingDisabled) {
       if (!stageDatabase) {
         stageDatabase = createStageDatabase();
@@ -1492,9 +1490,11 @@ async function shutdown(signal) {
 
 async function start() {
   const feeds = rssPublishingDisabled ? [] : configuredFeeds();
+  const geminiConfig = await getGeminiConfig();
+  log(`Gemini character engine: ${geminiConfig.enabled && geminiConfig.apiKey ? 'enabled' : 'disabled'}.`);
   if (rssPublishingDisabled) log('RSS publishing disabled; the dedicated RSS worker owns all feed posts.');
   else if (!feeds.length) log('No valid URLs are configured in AI_POSTER_FEEDS.');
-  log(`Starting with ${feeds.length} feed(s), model ${model}, schedule "${scheduleExpression}".`);
+  log(`Starting with ${feeds.length} feed(s), Gemini ${geminiConfig.enabled ? geminiConfig.model : 'disabled'}, schedule "${scheduleExpression}".`);
   if (process.env.AI_POSTER_RUN_ONCE === '1') {
     await runOnce();
     await closeConnections();
