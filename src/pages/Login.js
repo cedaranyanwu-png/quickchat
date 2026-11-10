@@ -8,6 +8,8 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -34,6 +36,10 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       onAuthenticated?.();
       navigate('/home');
     } catch (err) {
+      if (err.code === 'EMAIL_NOT_VERIFIED') {
+        setUnverifiedEmail(err.email || formData.email);
+        setResendMessage(err.message || 'Verify your email before signing in.');
+      }
       setError(normalizeNetworkError(err));
     } finally {
       setIsLoading(false);
@@ -55,6 +61,20 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
           </div>
         )}
 
+        {unverifiedEmail && <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-xs font-bold text-amber-900">Email verification required</p>
+          <p className="mt-1 text-xs leading-5 text-amber-800">{resendMessage}</p>
+          <button type="button" disabled={isLoading} onClick={async () => {
+            setIsLoading(true);
+            try {
+              const response = await fetch(`${API_BASE_URL}/auth/resend-verification`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: unverifiedEmail }) });
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.message || 'Could not resend verification email.');
+              setResendMessage(result.message || 'If the account needs verification, a new link is on its way.');
+            } catch (e) { setResendMessage(e.message || 'Could not resend verification email.'); }
+            finally { setIsLoading(false); }
+          }} className="mt-3 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Resend verification link</button>
+        </div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
