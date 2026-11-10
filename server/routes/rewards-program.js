@@ -279,7 +279,7 @@ router.post('/admin/rewards-program/tasks', requirePermission('rewards.manage'),
   const title = String(req.body?.title || '').trim().slice(0,160);
   const description = String(req.body?.description || '').trim().slice(0,1000);
   const points = Math.trunc(Number(req.body?.points));
-  const taskType = ['manual','profile'].includes(String(req.body?.taskType)) ? String(req.body.taskType) : 'manual';
+  const taskType = 'profile';
   if (!title || !Number.isSafeInteger(points) || points < 1 || points > 10000) return res.status(400).json({ message: 'Enter a task title and reward between 1 and 10,000 points.' });
   const key = `admin_${crypto.randomUUID().replace(/-/g,'').slice(0,24)}`;
   const row = await db.insert('INSERT INTO qc_reward_tasks (task_key, title, description, points, task_type) VALUES (?, ?, ?, ?, ?)', [key,title,description,points,taskType]);
