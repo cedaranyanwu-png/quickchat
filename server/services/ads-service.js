@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const db = require('../database');
 
-const HMAC_SECRET = process.env.JWT_SECRET || process.env.FLW_SECRET_HASH || 'quickchat-ad-secure-token-secret-2026';
+const HMAC_SECRET = process.env.JWT_SECRET || 'quickchat-ad-secure-token-secret-2026';
 const DEFAULT_CPC = 50.00; // 50 NGN per valid click
 
 function generateClickToken(campaignId, userId = 0) {
