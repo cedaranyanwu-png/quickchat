@@ -1,7 +1,7 @@
 const crypto = require('node:crypto');
 const db = require('./database');
 const {
-  flutterwaveRequest, isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured,
+  isFlutterwaveSecretConfigured, isFlutterwaveEncryptionKeyConfigured, isFlutterwaveWebhookSecretConfigured,
   isPublicAppUrlConfigured, publicAppUrl,
 } = require('./flutterwave');
 const { packFor } = require('./gifts');
@@ -28,14 +28,15 @@ async function createPointsCheckout({ user, packKey }) {
     error.status = 400;
     throw error;
   }
-  if (!isFlutterwaveSecretConfigured() || !isFlutterwaveWebhookSecretConfigured()) {
-    const error = new Error('Points top-ups need Flutterwave keys in server/.env before they can be purchased.');
+  if (!isFlutterwaveSecretConfigured() || !isFlutterwaveEncryptionKeyConfigured() || !isFlutterwaveWebhookSecretConfigured()) {
+    const error = new Error('Points top-ups need the Flutterwave v4 credentials, encryption key and webhook secret before they can be purchased.');
     error.status = 503;
     throw error;
   }
+
   const origin = publicAppUrl();
   const purchaseId = crypto.randomUUID();
-  const txRef = `qcpts_${purchaseId}`;
+  const txRef = `QCPTS-${purchaseId.replace(/[^A-Za-z0-9-]/g, '').slice(0, 34)}`;
   await db.insert(
     `INSERT INTO point_purchases (id, user_id, pack_key, points, amount, currency, flw_tx_ref, status)
      VALUES (?, ?, ?, ?, ?, 'NGN', ?, 'creating')`,
@@ -43,44 +44,20 @@ async function createPointsCheckout({ user, packKey }) {
   );
 
   try {
-    const checkout = await flutterwaveRequest('POST', 'payments', {
-      tx_ref: txRef,
-      amount: pack.amount,
-      currency: 'NGN',
-      redirect_url: `${origin}/api/payments/flutterwave/callback`,
-      customer: {
-        email: user.email,
-        name: user.fullname || user.username || 'QuickChat member',
-      },
-      customizations: {
-        title: 'QuickChat points',
-        description: `${pack.points.toLocaleString('en-NG')} live gift points`,
-      },
-      meta: {
-        quickchat_kind: 'points',
-        quickchat_purchase_id: purchaseId,
-        quickchat_points: String(pack.points),
-      },
-    });
-    const checkoutUrl = checkout?.data?.link;
-    if (!checkoutUrl) {
-      const error = new Error('Flutterwave did not return a checkout link. Please try again.');
-      error.status = 502;
-      throw error;
-    }
-    await db.update(
-      'UPDATE point_purchases SET checkout_url = ?, status = ? WHERE id = ?',
-      [checkoutUrl, 'open', purchaseId],
+    await db.insert(
+      `INSERT INTO payment_checkouts
+       (id, flutterwave_tx_ref, buyer_id, seller_id, item_type, item_id, amount, currency, platform_fee, status)
+       VALUES (?, ?, ?, ?, 'points', 0, ?, 'NGN', '0.00', 'open')`,
+      [purchaseId, txRef, user.id, user.id, pack.amount],
     );
+    const checkoutUrl = `${origin}/api/payments/flutterwave/v4-checkout/${encodeURIComponent(purchaseId)}`;
     return { checkoutUrl, purchaseId, points: pack.points, amount: pack.amount };
   } catch (error) {
-    if (!error.outcomeUnknown) {
-      await db.update('UPDATE point_purchases SET status = ? WHERE id = ?', ['failed', purchaseId]);
-    } else {
-      await db.update('UPDATE point_purchases SET status = ? WHERE id = ?', ['open', purchaseId]);
-    }
+    await db.update('UPDATE point_purchases SET status = ? WHERE id = ?', ['failed', purchaseId]).catch(() => {});
+    await db.delete('DELETE FROM payment_checkouts WHERE id = ?', [purchaseId]).catch(() => {});
     throw error;
   }
 }
+
 
 module.exports = { createPointsCheckout, topUpAvailable, topUpMissingConfig };
