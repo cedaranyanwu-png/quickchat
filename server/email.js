@@ -54,10 +54,10 @@ async function sendWithResend({ to, subject, text, html }, apiKey, from) {
 async function sendWithBrevo({ to, subject, text, html }, apiKey, from) {
   if (!apiKey) throw new Error('Add and save your Brevo API key in Admin Settings.');
   const sender = String(from || process.env.EMAIL_FROM || process.env.SMTP_FROM || '').trim();
-  const match = sender.match(/^(.*?)\\s*<([^>]+)>$/);
+  const match = sender.match(/^(.*?)\s*<([^>]+)>$/);
   const senderEmailValue = match ? match[2].trim() : sender;
   const senderName = match && match[1].trim() ? match[1].trim().replace(/^["']|["']$/g, '') : 'QuickChat';
-  if (!senderEmailValue || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(senderEmailValue)) {
+  if (!senderEmailValue || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(senderEmailValue)) {
     throw new Error('Enter a valid sender email address verified in Brevo.');
   }
   const response = await fetch('https://api.brevo.com/v3/smtp/email', {
