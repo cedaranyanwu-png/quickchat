@@ -141,7 +141,7 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS flutterwave_creator_accounts (
       user_id INTEGER PRIMARY KEY, flw_id VARCHAR(40) NOT NULL,
-      flw_subaccount_id VARCHAR(100) NOT NULL UNIQUE,
+      flw_subaccount_id VARCHAR(100), flw_recipient_id VARCHAR(100) UNIQUE,
       payout_country VARCHAR(2) NOT NULL DEFAULT 'NG', bank_code VARCHAR(20) NOT NULL,
       bank_name VARCHAR(120) NOT NULL, account_name VARCHAR(120) NOT NULL,
       account_masked VARCHAR(32) NOT NULL, status VARCHAR(30) NOT NULL DEFAULT 'active',
@@ -353,6 +353,7 @@ async function initializePageTables() {
   );
 
   for (const statement of statements) await db.query(statement);
+  await ensureFlutterwaveRecipientColumn();
   await addMissingPostColumns();
   await addMissingBoostColumns();
   await addMissingBotTestColumns();
@@ -605,6 +606,26 @@ async function ensureIndexes() {
       await db.query(`CREATE ${unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${name} ON ${target}`);
     }
   }
+}
+
+
+async function ensureFlutterwaveRecipientColumn() {
+  let exists = false;
+  if (db.type === 'sqlite') {
+    const rows = await db.query('PRAGMA table_info(flutterwave_creator_accounts)');
+    exists = rows.some((row) => String(row.name).toLowerCase() === 'flw_recipient_id');
+  } else if (db.type === 'postgres') {
+    const row = await db.getOne(
+      "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'flutterwave_creator_accounts' AND column_name = 'flw_recipient_id'",
+    );
+    exists = Boolean(row);
+  } else {
+    const row = await db.getOne(
+      "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'flutterwave_creator_accounts' AND column_name = 'flw_recipient_id'",
+    );
+    exists = Boolean(row);
+  }
+  if (!exists) await db.query('ALTER TABLE flutterwave_creator_accounts ADD COLUMN flw_recipient_id VARCHAR(100)');
 }
 
 module.exports = { initializePageTables };
