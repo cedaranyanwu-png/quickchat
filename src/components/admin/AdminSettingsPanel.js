@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { adminRequest } from '../../api';
 
 export default function AdminSettingsPanel() {
-  const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_public_key: '', flw_secret_key: '', flw_secret_hash: '', flw_webhook_url: '', public_app_url: '', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash', email_provider_mode: 'gmail', smtp_user: '', smtp_password: '', smtp_from: '', smtp_host: '', smtp_port: '587', smtp_secure: false });
+  const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_public_key: '', flw_secret_key: '', flw_secret_hash: '', flw_webhook_url: '', public_app_url: '', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash', email_provider_mode: 'resend', resend_api_key: '', smtp_user: '', smtp_password: '', smtp_from: '', smtp_host: '', smtp_port: '587', smtp_secure: false });
   const [testingGemini, setTestingGemini] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [emailTestTo, setEmailTestTo] = useState('');
@@ -10,7 +10,7 @@ export default function AdminSettingsPanel() {
   const [geminiMessage, setGeminiMessage] = useState('');
   const [bots, setBots] = useState([]); const [botTotal, setBotTotal] = useState(0); const [botCount, setBotCount] = useState(100); const [generatingBots, setGeneratingBots] = useState(false); const [botMessage, setBotMessage] = useState('');
   const [saving, setSaving] = useState(false); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const load = async () => { try { const data = await adminRequest('/admin/settings'); const settings = { ...data.settings }; if (!settings.email_provider_mode) settings.email_provider_mode = 'gmail'; settings.smtp_port = settings.smtp_port || '587'; settings.smtp_secure = String(settings.smtp_secure || 'false').toLowerCase() === 'true'; if (!settings.gemini_model || ['gemini-2.5-flash', 'gemini-2.5-pro', 'models/gemini-2.5-flash', 'models/gemini-2.5-pro'].includes(settings.gemini_model)) settings.gemini_model = 'gemini-3.8-flash'; setForm(v => ({ ...v, ...settings })); } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
+  const load = async () => { try { const data = await adminRequest('/admin/settings'); const settings = { ...data.settings }; if (!settings.email_provider_mode) settings.email_provider_mode = 'resend'; settings.smtp_port = settings.smtp_port || '587'; settings.smtp_secure = String(settings.smtp_secure || 'false').toLowerCase() === 'true'; if (!settings.gemini_model || ['gemini-2.5-flash', 'gemini-2.5-pro', 'models/gemini-2.5-flash', 'models/gemini-2.5-pro'].includes(settings.gemini_model)) settings.gemini_model = 'gemini-3.8-flash'; setForm(v => ({ ...v, ...settings })); } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
   const loadBots = async () => { try { const data = await adminRequest('/admin/bots'); setBots(data.bots || []); setBotTotal(Number(data.total || 0)); } catch (e) { setBotMessage(e.message || 'Unable to load bot accounts.'); } };
   useEffect(() => { load(); loadBots(); }, []);
   const generateBots = async () => { const count = Math.max(1, Math.min(10000, Number(botCount) || 1)); setGeneratingBots(true); setBotMessage(''); try { const result = await adminRequest('/admin/bots/generate', { method: 'POST', body: { count } }); setBotMessage(result.message || 'Bot accounts generated.'); await loadBots(); } catch (e) { setBotMessage(e.message || 'Bot generation failed.'); } finally { setGeneratingBots(false); } };
@@ -66,13 +66,37 @@ export default function AdminSettingsPanel() {
     </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-5"><div className="flex items-start gap-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700"><i className="fa-solid fa-certificate" /></span><div><h3 className="font-extrabold text-slate-900">Paid user verification</h3><p className="mt-1 text-xs leading-5 text-slate-500">Normal user verification remains paid through the existing QuickChat points wallet. This setting controls the required points. Admin-granted verification is a separate special-consideration action.</p></div></div><label className="mt-4 block max-w-sm text-xs font-bold text-slate-700">Verification price (points)<input type="number" min="1" value={form.verification_points} onChange={e => update('verification_points', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm" /></label><label className="mt-4 block max-w-sm text-xs font-bold text-slate-700">Reward points for a newly verified account<input type="number" min="0" max="1000000" value={form.verification_reward_points} onChange={e => update('verification_reward_points', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm" /></label><p className="mt-2 text-[11px] text-slate-500">Awarded once whether verification is granted by an administrator or purchased by the user. 100 reward points convert to ₦1.</p></section>
       <section className="rounded-2xl border border-sky-200 bg-sky-50/50 p-5 space-y-4">
-        <div><h3 className="font-extrabold text-slate-900">QuickChat email delivery · SMTP</h3><p className="mt-1 text-xs leading-5 text-slate-600">Choose Gmail with an App Password or your own mail-server SMTP credentials. Passwords are encrypted in server settings and never returned to this page. Use a Google App Password, not your normal Google account password.</p></div>
+        <div><h3 className="font-extrabold text-slate-900">QuickChat email delivery</h3><p className="mt-1 text-xs leading-5 text-slate-600">Resend API is recommended for Railway because it sends over HTTPS and does not require SMTP ports. Gmail App Password and custom SMTP remain available on hosting platforms that permit outbound SMTP. API keys and passwords are encrypted on the server.</p></div>
         <label className="block max-w-sm text-xs font-bold text-slate-700">Email provider
-          <select value={form.email_provider_mode || 'gmail'} onChange={e => update('email_provider_mode', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm">
-            <option value="gmail">Google Gmail · App Password</option><option value="custom">My server · Custom SMTP</option><option value="env">Use server environment provider</option>
+          <select value={form.email_provider_mode || 'resend'} onChange={e => update('email_provider_mode', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm">
+            <option value="resend">Resend API · Recommended for Railway</option><option value="gmail">Google Gmail · App Password (SMTP)</option><option value="custom">My server · Custom SMTP</option><option value="env">Use server environment provider</option>
           </select>
         </label>
-        {form.email_provider_mode !== 'env' && <>
+        {form.email_provider_mode === 'resend' && <>
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-xs font-bold text-slate-700 md:col-span-2">Resend API key<input type="password" autoComplete="new-password" value={form.resend_api_key || ''} onChange={e => update('resend_api_key', e.target.value)} placeholder="re_… (leave blank to keep the saved key)" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+            <label className="text-xs font-bold text-slate-700 md:col-span-2">Verified sender address<input value={form.smtp_from || ''} onChange={e => update('smtp_from', e.target.value)} placeholder="QuickChat <noreply@your-verified-domain.com>" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+          </div>
+          <div className="flex flex-wrap items-end gap-3 border-t border-sky-100 pt-4">
+            <label className="min-w-[220px] flex-1 text-xs font-bold text-slate-700">Send test email to<input type="email" value={emailTestTo} onChange={e => setEmailTestTo(e.target.value)} placeholder="your-inbox@example.com" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+            <button type="button" disabled={testingEmail || !emailTestTo.trim()} onClick={async () => {
+              setTestingEmail(true); setEmailTestMessage('');
+              try {
+                await adminRequest('/admin/settings', { method: 'PUT', body: {
+                  email_provider_mode: 'resend', smtp_from: form.smtp_from,
+                  ...(form.resend_api_key && !String(form.resend_api_key).startsWith('••') ? { resend_api_key: form.resend_api_key } : {}),
+                }});
+                const result = await adminRequest('/admin/email/test', { method: 'POST', body: { to: emailTestTo } });
+                setEmailTestMessage(result.message || 'Test email sent.');
+                update('resend_api_key', '');
+              } catch (e) { setEmailTestMessage(e.message || 'Resend test failed.'); }
+              finally { setTestingEmail(false); }
+            }} className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-xs font-extrabold text-sky-800 disabled:opacity-50">{testingEmail ? 'Sending test…' : 'Save & test Resend'}</button>
+          </div>
+          {emailTestMessage && <p className="text-xs font-semibold text-slate-700">{emailTestMessage}</p>}
+          <p className="text-[11px] leading-5 text-slate-500">Create an API key in Resend, verify your sending domain, then enter the key and sender address here. Resend's onboarding sender is restricted to testing with your own account email; use a verified domain for user verification and password-reset emails.</p>
+        </>}
+        {(form.email_provider_mode === 'gmail' || form.email_provider_mode === 'custom') && <>
           <div className="grid gap-4 md:grid-cols-2">
             <label className="text-xs font-bold text-slate-700">SMTP username / Gmail address<input type="email" autoComplete="off" value={form.smtp_user || ''} onChange={e => update('smtp_user', e.target.value)} placeholder="you@gmail.com" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
             <label className="text-xs font-bold text-slate-700">SMTP password / Google App Password<input type="password" autoComplete="new-password" value={form.smtp_password || ''} onChange={e => update('smtp_password', e.target.value)} placeholder="Leave blank to keep the saved password" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
@@ -101,8 +125,9 @@ export default function AdminSettingsPanel() {
             }} className="rounded-xl border border-sky-300 bg-white px-4 py-3 text-xs font-extrabold text-sky-800 disabled:opacity-50">{testingEmail ? 'Sending test…' : 'Save & test email'}</button>
           </div>
           {emailTestMessage && <p className="text-xs font-semibold text-slate-700">{emailTestMessage}</p>}
-          <p className="text-[11px] leading-5 text-slate-500">Gmail uses smtp.gmail.com on port 465 with TLS automatically. For custom SMTP, use the exact host, port and encryption mode supplied by your hosting provider.</p>
+          <p className="text-[11px] leading-5 text-slate-500">Gmail uses smtp.gmail.com on port 465 with TLS automatically. Custom SMTP uses the host, port and encryption mode supplied by your mail host.</p>
         </>}
+        {form.email_provider_mode === 'env' && <p className="text-xs text-slate-500">The server will use its configured environment email provider, if one is available.</p>}
       </section>
       <section className="rounded-2xl border border-slate-200 bg-white p-5"><h3 className="font-extrabold text-slate-900">Flutterwave · project-wide</h3><p className="mt-1 text-xs text-slate-500">These credentials are stored encrypted on the server and are used by the project payment layer.</p><div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="text-xs font-bold text-slate-700">Public key<input value={form.flw_public_key || ''} onChange={e => update('flw_public_key', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm" /></label>
