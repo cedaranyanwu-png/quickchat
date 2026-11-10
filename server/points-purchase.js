@@ -7,7 +7,7 @@ const {
 const { packFor } = require('./gifts');
 
 // Points are sold by the platform itself (no creator payout recipient), so they use
-// their own checkout table and a `qcpts_` transaction reference that the shared
+// their own checkout table and a `QCPTS-` transaction reference that the shared
 // Flutterwave callback/webhook recognises.
 function topUpAvailable() {
   return isFlutterwaveSecretConfigured() && isFlutterwaveEncryptionKeyConfigured() && isFlutterwaveWebhookSecretConfigured() && isPublicAppUrlConfigured();
