@@ -48,7 +48,7 @@ When a creator connects a Nigerian bank account, QuickChat:
 3. Creates a v4 transfer recipient.
 4. Stores the returned recipient ID and only a masked account number.
 
-Creator earnings are transferred using Flutterwave's v4 transfer API using the v4 transfer API. citeturn737014search0turn811053search2
+Creator earnings are transferred using Flutterwave's v4 transfer API. citeturn737014search0turn811053search2
 
 ## Webhooks
 
