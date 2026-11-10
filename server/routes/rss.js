@@ -17,6 +17,16 @@ function requireRssAdmin(req, res, next) {
   return next();
 }
 
+function parseMedia(value) {
+  try {
+    const parsed = Array.isArray(value) ? value : JSON.parse(value || '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter((entry) => entry && entry.url && ['image', 'video'].includes(String(entry.type).toLowerCase()))
+          .map((entry) => ({ type: String(entry.type).toLowerCase(), url: String(entry.url) }))
+      : [];
+  } catch { return []; }
+}
+
 function parseArray(value) {
   try { const parsed = JSON.parse(value || '[]'); return Array.isArray(parsed) ? parsed : []; }
   catch { return []; }
@@ -36,6 +46,7 @@ function mapArticle(row) {
     publisherName: row.source_name || row.publisher || 'Publisher',
     articleUrl: row.article_url,
     imageUrl: row.image_url || null,
+    media: parseMedia(row.media),
     category: row.category || 'News',
     keywords: parseArray(row.keywords),
     publishedAt: row.published_at || row.imported_at,
