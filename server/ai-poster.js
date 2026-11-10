@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const axios = require('axios');
+const { generateGeminiText, getGeminiConfig } = require('./gemini');
 const cheerio = require('cheerio');
 const Parser = require('rss-parser');
 const schedule = require('node-schedule');
@@ -24,6 +25,17 @@ const model = process.env.AI_POSTER_MODEL || 'llama3.2';
 const feedTimeoutMs = positiveInteger(process.env.AI_POSTER_FEED_TIMEOUT_MS, 30000);
 const articleMediaTimeoutMs = positiveInteger(process.env.AI_POSTER_ARTICLE_MEDIA_TIMEOUT_MS, 10000);
 const inferenceTimeoutMs = positiveInteger(process.env.AI_POSTER_TIMEOUT_MS, 90000);
+const originalAxiosPost = axios.post.bind(axios);
+// Keep existing character prompts while routing inference through Gemini.
+axios.post = async (url, payload, config) => {
+  if (url !== modelUrl) return originalAxiosPost(url, payload, config);
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const system = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
+  const prompt = messages.filter((message) => message.role !== 'system').map((message) => message.content).join('\n');
+  const content = await generateGeminiText({ system, prompt, temperature: payload?.options?.temperature ?? 0.7, maxOutputTokens: payload?.options?.num_predict ?? 256 });
+  return { data: { message: { content } } };
+};
+
 const maxItemsPerFeed = positiveInteger(process.env.AI_POSTER_MAX_ITEMS_PER_FEED, 8);
 const scheduleExpression = process.env.AI_POSTER_SCHEDULE || '*/30 * * * *';
 const messageScheduleExpression = process.env.AI_POSTER_MESSAGE_SCHEDULE || '*/10 * * * * *';
@@ -845,6 +857,7 @@ async function runOnce() {
   try {
     const database = await getApplicationDatabase();
     const feeds = rssPublishingDisabled ? [] : configuredFeeds();
+  const geminiConfig = await getGeminiConfig();
     if (!rssPublishingDisabled) {
       if (!stageDatabase) {
         stageDatabase = createStageDatabase();
