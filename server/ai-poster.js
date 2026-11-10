@@ -852,6 +852,8 @@ async function processFeed(feedConfig, stage, database) {
 }
 
 async function publishOriginalCharacterPosts(database) {
+  const config = await getGeminiConfig();
+  if (!config.enabled || !config.apiKey) return;
   const limit = positiveInteger(process.env.AI_POSTER_CHARACTER_POSTS_PER_RUN, 3);
   const characters = characterData.characters || [];
   let published = 0;
@@ -896,6 +898,7 @@ async function runOnce() {
     await publishOriginalCharacterPosts(database);
     const feeds = rssPublishingDisabled ? [] : configuredFeeds();
   const geminiConfig = await getGeminiConfig();
+  log(`Gemini character engine: ${geminiConfig.enabled && geminiConfig.apiKey ? 'enabled' : 'disabled'}.`);
     if (!rssPublishingDisabled) {
       if (!stageDatabase) {
         stageDatabase = createStageDatabase();
@@ -1466,30 +1469,7 @@ async function writeCharacterComment(post, character, matchingInterests) {
 }
 
 async function runSocialPass() {
-  if (socialInProgress || shuttingDown) return;
-  socialInProgress = true;
-  try {
-    const database = await getApplicationDatabase();
-    if (Date.now() - lastFollowSweepAt >= 60_000) {
-      lastFollowSweepAt = Date.now();
-      await followHumanUsers(database);
-    }
-    await followBackHumans(database);
-    // The fast pass gives new human posts a natural burst of likes and a few
-    // replies within seconds instead of waiting for the next feed run.
-    await engageWithHumanPosts(database, {
-      likeLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_LIKES_PER_RUN, 40),
-      likesPerPost: positiveInteger(process.env.AI_POSTER_SOCIAL_LIKES_PER_POST, 16),
-      commentLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_COMMENTS_PER_RUN, 3),
-      commentsPerPost: positiveInteger(process.env.AI_POSTER_SOCIAL_COMMENTS_PER_POST, 3),
-      scanLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_SCAN_LIMIT, 20),
-      activeHours: positiveInteger(process.env.AI_POSTER_SOCIAL_ACTIVE_HOURS, 72),
-    });
-  } catch (error) {
-    log('Scheduled social pass failed', error);
-  } finally {
-    socialInProgress = false;
-  }
+  // Automated likes and follows are intentionally disabled; public engagement must be genuine.
 }
 
 async function closeConnections() {
