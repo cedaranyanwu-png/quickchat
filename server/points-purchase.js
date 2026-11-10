@@ -6,17 +6,18 @@ const {
 } = require('./flutterwave');
 const { packFor } = require('./gifts');
 
-// Points are sold by the platform itself (no creator subaccount), so they use
+// Points are sold by the platform itself (no creator payout recipient), so they use
 // their own checkout table and a `qcpts_` transaction reference that the shared
 // Flutterwave callback/webhook recognises.
 function topUpAvailable() {
-  return isFlutterwaveSecretConfigured() && isFlutterwaveWebhookSecretConfigured() && isPublicAppUrlConfigured();
+  return isFlutterwaveSecretConfigured() && isFlutterwaveEncryptionKeyConfigured() && isFlutterwaveWebhookSecretConfigured() && isPublicAppUrlConfigured();
 }
 
 function topUpMissingConfig() {
   return [
-    ...(!isFlutterwaveSecretConfigured() ? ['FLW_SECRET_KEY'] : []),
-    ...(!isFlutterwaveWebhookSecretConfigured() ? ['FLW_SECRET_HASH'] : []),
+    ...(!isFlutterwaveSecretConfigured() ? ['FLW_CLIENT_ID/FLW_CLIENT_SECRET'] : []),
+    ...(!isFlutterwaveEncryptionKeyConfigured() ? ['FLW_ENCRYPTION_KEY'] : []),
+    ...(!isFlutterwaveWebhookSecretConfigured() ? ['FLW_WEBHOOK_SECRET'] : []),
     ...(!isPublicAppUrlConfigured() ? ['PUBLIC_APP_URL'] : []),
   ];
 }
