@@ -402,7 +402,8 @@ async function addMissingColumns() {
     // already supplied a verified email claim; their next Google sign-in also
     // refreshes the local verification flag.
     await db.query("UPDATE users SET email_verified = 0, email_verification_notice = 1 WHERE COALESCE(googleid, '') = '' AND COALESCE(is_synthetic, 0) = 0");
-    console.log('[Database] Legacy password accounts were queued for email verification.');
+    await db.query("UPDATE users SET email_verified = 1, email_verification_notice = 0 WHERE COALESCE(googleid, '') <> ''");
+    console.log('[Database] Legacy password accounts were queued for email verification; Google-linked accounts remain verified.');
   }
 }
 
