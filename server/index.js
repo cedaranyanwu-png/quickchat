@@ -92,7 +92,7 @@ app.get('/api/config', async (_req, res, next) => {
     });
   } catch (error) { next(error); }
 });
-app.get('/api/health', (_req, res) => res.json({ status: 'ok', environment: appEnvironment, database: db.type, email: emailProvider(), push: isPushReady() }));
+app.get('/api/health', async (_req, res) => res.json({ status: 'ok', environment: appEnvironment, database: db.type, email: await emailProvider(), push: isPushReady() }));
 app.use('/api/auth', authRoutes);
 app.use('/api', publicRoutes);
 app.get('/api/ads/click/:campaignId', adsRoutes);
