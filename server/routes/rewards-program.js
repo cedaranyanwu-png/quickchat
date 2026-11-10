@@ -52,7 +52,7 @@ async function initializeRewardProgram() {
       id ${idColumn}, user_id INTEGER NOT NULL, asset VARCHAR(12) NOT NULL, amount BIGINT NOT NULL,
       kind VARCHAR(40) NOT NULL, reference VARCHAR(180) NOT NULL UNIQUE, note TEXT,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP)`,
-    `CREATE TABLE IF NOT EXISTS qc_reward_daily_claims (
+    `CREATE TABLE IF NOT EXISTS qc_reward_withdrawals (\n      id ${idColumn}, user_id INTEGER NOT NULL, amount_kobo BIGINT NOT NULL,\n      bank_name VARCHAR(120) NOT NULL, account_name VARCHAR(120) NOT NULL, account_masked VARCHAR(32) NOT NULL,\n      reference VARCHAR(180) NOT NULL UNIQUE, status VARCHAR(20) NOT NULL DEFAULT 'pending', admin_note TEXT,\n      reviewed_by INTEGER, reviewed_at ${dateType}, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP)\`,\n    `CREATE TABLE IF NOT EXISTS qc_reward_daily_claims (
       id ${idColumn}, user_id INTEGER NOT NULL, claim_day VARCHAR(10) NOT NULL,
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP, UNIQUE(user_id, claim_day))`,
     `CREATE TABLE IF NOT EXISTS qc_reward_referrals (
