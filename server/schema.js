@@ -175,6 +175,7 @@ async function initializePageTables() {
       seller_id INTEGER NOT NULL, gross_amount VARCHAR(32) NOT NULL, platform_fee VARCHAR(32) NOT NULL,
       transfer_amount VARCHAR(32) NOT NULL, currency VARCHAR(3) NOT NULL,
       flutterwave_transaction_id VARCHAR(100) UNIQUE,
+      flutterwave_transfer_id VARCHAR(100) UNIQUE,
       status VARCHAR(20) NOT NULL DEFAULT 'pending',
       created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
     )`,
@@ -354,6 +355,7 @@ async function initializePageTables() {
 
   for (const statement of statements) await db.query(statement);
   await ensureFlutterwaveRecipientColumn();
+  await ensurePaymentTransferColumn();
   await addMissingPostColumns();
   await addMissingBoostColumns();
   await addMissingBotTestColumns();
@@ -626,6 +628,26 @@ async function ensureFlutterwaveRecipientColumn() {
     exists = Boolean(row);
   }
   if (!exists) await db.query('ALTER TABLE flutterwave_creator_accounts ADD COLUMN flw_recipient_id VARCHAR(100)');
+}
+
+
+async function ensurePaymentTransferColumn() {
+  let exists = false;
+  if (db.type === 'sqlite') {
+    const rows = await db.query('PRAGMA table_info(payment_transactions)');
+    exists = rows.some((row) => String(row.name).toLowerCase() === 'flutterwave_transfer_id');
+  } else if (db.type === 'postgres') {
+    const row = await db.getOne(
+      "SELECT 1 FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'payment_transactions' AND column_name = 'flutterwave_transfer_id'",
+    );
+    exists = Boolean(row);
+  } else {
+    const row = await db.getOne(
+      "SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'payment_transactions' AND column_name = 'flutterwave_transfer_id'",
+    );
+    exists = Boolean(row);
+  }
+  if (!exists) await db.query('ALTER TABLE payment_transactions ADD COLUMN flutterwave_transfer_id VARCHAR(100)');
 }
 
 module.exports = { initializePageTables };
