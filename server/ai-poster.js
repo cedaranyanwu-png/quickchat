@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const axios = require('axios');
+const { generateGeminiText, getGeminiConfig } = require('./gemini');
 const cheerio = require('cheerio');
 const Parser = require('rss-parser');
 const schedule = require('node-schedule');
@@ -24,6 +25,17 @@ const model = process.env.AI_POSTER_MODEL || 'llama3.2';
 const feedTimeoutMs = positiveInteger(process.env.AI_POSTER_FEED_TIMEOUT_MS, 30000);
 const articleMediaTimeoutMs = positiveInteger(process.env.AI_POSTER_ARTICLE_MEDIA_TIMEOUT_MS, 10000);
 const inferenceTimeoutMs = positiveInteger(process.env.AI_POSTER_TIMEOUT_MS, 90000);
+const originalAxiosPost = axios.post.bind(axios);
+// Keep existing character prompts while routing inference through Gemini.
+axios.post = async (url, payload, config) => {
+  if (url !== modelUrl) return originalAxiosPost(url, payload, config);
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const system = messages.filter((message) => message.role === 'system').map((message) => message.content).join('\n');
+  const prompt = messages.filter((message) => message.role !== 'system').map((message) => message.content).join('\n');
+  const content = await generateGeminiText({ system, prompt, temperature: payload?.options?.temperature ?? 0.7, maxOutputTokens: payload?.options?.num_predict ?? 256 });
+  return { data: { message: { content } } };
+};
+
 const maxItemsPerFeed = positiveInteger(process.env.AI_POSTER_MAX_ITEMS_PER_FEED, 8);
 const scheduleExpression = process.env.AI_POSTER_SCHEDULE || '*/30 * * * *';
 const messageScheduleExpression = process.env.AI_POSTER_MESSAGE_SCHEDULE || '*/10 * * * * *';
@@ -839,11 +851,51 @@ async function processFeed(feedConfig, stage, database) {
   log(`${feedConfig.name}: checked ${visited}, published ${publishedThisFeed}, already staged ${alreadyStaged}, outside character interests ${outsideInterests}, no description ${missingDescription}.`);
 }
 
+async function publishOriginalCharacterPosts(database) {
+  const config = await getGeminiConfig();
+  if (!config.enabled || !config.apiKey) return;
+  const limit = positiveInteger(process.env.AI_POSTER_CHARACTER_POSTS_PER_RUN, 3);
+  const characters = characterData.characters || [];
+  let published = 0;
+  for (const account of characterAccounts) {
+    if (published >= limit || shuttingDown) break;
+    const character = characters.find((entry) => entry.id === account.character_id);
+    if (!character) continue;
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const sourceLink = `quickchat://ai-character/${encodeURIComponent(character.id)}/${dayKey}`;
+    const exists = await database.getOne('SELECT id FROM posts WHERE source_link = ? LIMIT 1', [sourceLink]);
+    if (exists) continue;
+    try {
+      const body = await generateGeminiText({
+        system: [
+          'Create one original, engaging social post for this clearly disclosed fictional AI character on QuickChat.',
+          `Character personality: ${character.behavior}`,
+          `Interests: ${(character.interests || []).join(', ')}.`,
+          'Write in a distinct, natural voice. Do not claim to be human or invent real-world personal experiences, memories, work, travel, or offline activities.',
+          'Make the post useful, entertaining, or conversational. Avoid engagement bait and do not ask for likes or follows. Return only the post text.',
+        ].join('\\n'),
+        prompt: 'Write a fresh standalone post for today. Keep it between 40 and 100 words.',
+        temperature: 0.85,
+        maxOutputTokens: 180,
+      });
+      const text = String(body || '').trim().slice(0, 5000);
+      if (!text) continue;
+      await database.insert(
+        'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, video_id, visibility, price_amount, price_currency, topics, keywords, audience_signals, source_link) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [Number(account.id), text, 'text', (character.interests || [])[0] || 'community', '[]', JSON.stringify(character.interests || []), null, '[]', null, 'public', null, null, '[]', '[]', '[]', sourceLink],
+      );
+      published += 1;
+      await sleep(1200);
+    } catch (error) { log(`Could not publish original post for AI character ${character.id}`, error); }
+  }
+  if (published) log(`Published ${published} original Gemini character post(s).`);
+}
 async function runOnce() {
   if (runInProgress || shuttingDown) return;
   runInProgress = true;
   try {
     const database = await getApplicationDatabase();
+    await publishOriginalCharacterPosts(database);
     const feeds = rssPublishingDisabled ? [] : configuredFeeds();
     if (!rssPublishingDisabled) {
       if (!stageDatabase) {
@@ -858,15 +910,9 @@ async function runOnce() {
       log('Staged-story publishing pass complete; feed polling was skipped.');
       return;
     }
-    await followHumanUsers(database);
-    await followBackHumans(database);
-    await engageWithHumanPosts(database);
-    await startHumanConversations(database);
+    // Only reply to humans who have already messaged an AI character. Do not cold-DM users or fabricate likes/follows.
     await respondToHumanMessages(database);
-    if (rssPublishingDisabled) {
-      if (!shuttingDown) await engageWithRecentPosts(database);
-      return;
-    }
+    if (rssPublishingDisabled) return;
     if (!feeds.length) {
       log('No valid URLs are configured in AI_POSTER_FEEDS.');
       return;
@@ -875,7 +921,7 @@ async function runOnce() {
       if (shuttingDown) break;
       await processFeed(feed, stageDatabase, database);
     }
-    if (!shuttingDown) await engageWithRecentPosts(database);
+
   } catch (error) {
     log('Scheduled run failed', error);
   } finally {
@@ -1074,6 +1120,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
     const matches = botCandidatesForHuman(user, context, characterAccounts.length);
     if (!matches.length) continue;
 
+    if (options.includeLikes !== false) {
     const existingLikes = await database.query(
       `SELECT l.user_id FROM post_likes l JOIN users bot ON bot.id = l.user_id
         WHERE l.post_id = ? AND bot.is_synthetic = 1`,
@@ -1096,6 +1143,7 @@ async function engageWithHumanPostsNow(database, options = {}) {
       } catch (error) {
         if (!isUniqueViolation(error)) throw error;
       }
+    }
     }
 
     if (comments >= commentLimit) continue;
@@ -1210,6 +1258,8 @@ async function ensureConversation(database, firstUserId, secondUserId) {
 
 async function respondToHumanMessages(database) {
   if (messageReplyInProgress || shuttingDown) return;
+  const geminiConfig = await getGeminiConfig();
+  if (!geminiConfig.enabled || !geminiConfig.apiKey) return;
   messageReplyInProgress = true;
   try {
     const responseLimit = positiveInteger(process.env.AI_POSTER_MAX_MESSAGE_REPLIES_PER_RUN, 5);
@@ -1424,29 +1474,21 @@ async function runSocialPass() {
   if (socialInProgress || shuttingDown) return;
   socialInProgress = true;
   try {
+    const config = await getGeminiConfig();
+    if (!config.enabled || !config.apiKey) return;
+    if (Date.now() - lastFollowSweepAt < 15 * 60 * 1000) return;
+    lastFollowSweepAt = Date.now();
     const database = await getApplicationDatabase();
-    if (Date.now() - lastFollowSweepAt >= 60_000) {
-      lastFollowSweepAt = Date.now();
-      await followHumanUsers(database);
-    }
-    await followBackHumans(database);
-    // The fast pass gives new human posts a natural burst of likes and a few
-    // replies within seconds instead of waiting for the next feed run.
     await engageWithHumanPosts(database, {
-      likeLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_LIKES_PER_RUN, 40),
-      likesPerPost: positiveInteger(process.env.AI_POSTER_SOCIAL_LIKES_PER_POST, 16),
-      commentLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_COMMENTS_PER_RUN, 3),
-      commentsPerPost: positiveInteger(process.env.AI_POSTER_SOCIAL_COMMENTS_PER_POST, 3),
-      scanLimit: positiveInteger(process.env.AI_POSTER_SOCIAL_SCAN_LIMIT, 20),
-      activeHours: positiveInteger(process.env.AI_POSTER_SOCIAL_ACTIVE_HOURS, 72),
+      includeLikes: false,
+      commentLimit: 2,
+      commentsPerPost: 1,
+      scanLimit: 20,
+      activeHours: 72,
     });
-  } catch (error) {
-    log('Scheduled social pass failed', error);
-  } finally {
-    socialInProgress = false;
-  }
+  } catch (error) { log('Scheduled AI character comment pass failed', error); }
+  finally { socialInProgress = false; }
 }
-
 async function closeConnections() {
   const closers = [];
   if (scheduledJob) scheduledJob.cancel();
@@ -1467,9 +1509,11 @@ async function shutdown(signal) {
 
 async function start() {
   const feeds = rssPublishingDisabled ? [] : configuredFeeds();
+  const geminiConfig = await getGeminiConfig();
+  log(`Gemini character engine: ${geminiConfig.enabled && geminiConfig.apiKey ? 'enabled' : 'disabled'}.`);
   if (rssPublishingDisabled) log('RSS publishing disabled; the dedicated RSS worker owns all feed posts.');
   else if (!feeds.length) log('No valid URLs are configured in AI_POSTER_FEEDS.');
-  log(`Starting with ${feeds.length} feed(s), model ${model}, schedule "${scheduleExpression}".`);
+  log(`Starting with ${feeds.length} feed(s), Gemini ${geminiConfig.enabled ? geminiConfig.model : 'disabled'}, schedule "${scheduleExpression}".`);
   if (process.env.AI_POSTER_RUN_ONCE === '1') {
     await runOnce();
     await closeConnections();

@@ -52,6 +52,7 @@ function toPost(row) {
   return {
     id: fields.id,
     authorId: fields.author_id,
+    aiCharacter: Boolean(fields.author_character_id) || String(fields.source_link || '').startsWith('quickchat://ai-character/'),
     text: isPaywalled ? '' : fields.body || '',
     type: fields.kind || 'text',
     category: fields.category || null,
@@ -111,6 +112,7 @@ function toProfile(row) {
   const storedInterests = parseJSON(fields.interests, []);
   return {
     id: fields.id,
+    aiCharacter: Boolean(fields.character_id),
     fullName: fields.fullname || fields.name || '',
     username: fields.username || '',
     handle: formatHandle(fields.username || ''),

@@ -14,7 +14,7 @@ async function verificationPoints() { return Math.max(1, Number.parseInt(await g
 const router = express.Router();
 
 const PROFILE_SELECT = `
-  SELECT u.id, u.fullname, u.username, u.email, u.bio, u.interests, u.location, u.website, u.avatar_url, u.is_synthetic,
+  SELECT u.id, u.fullname, u.username, u.email, u.bio, u.interests, u.location, u.website, u.avatar_url, u.is_synthetic, u.character_id,
          u.payout_country, u.creator_membership_price, u.creator_membership_currency,
          u.business_enabled, u.recommendation_preferences,
          u.picture, u.cover_url, u.verified, u.verified_at, u.verification_method, u.createdat, u.created_at,
@@ -28,7 +28,7 @@ const POST_SELECT = `
   SELECT p.id, p.author_id, p.body, p.kind, p.category, p.hashtags, p.target_interests, p.source_link,
          p.visibility, p.price_amount, p.price_currency,
          p.community_id, c.name AS community_name, p.rss_article_id, ra.title AS rss_article_title, ra.publisher AS rss_article_publisher, ra.article_url AS rss_article_url, ra.image_url AS rss_article_image_url, p.media, p.video_id, p.created_at,
-         u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified,
+         u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified, u.character_id AS author_character_id,
          u.creator_membership_price AS author_fan_price, u.creator_membership_currency AS author_fan_currency,
          u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
          (SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id) AS reply_count,

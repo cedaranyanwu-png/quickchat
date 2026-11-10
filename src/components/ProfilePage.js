@@ -135,6 +135,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
         )}
       </div>
       <h3 className="text-base font-extrabold text-slate-900">{profile?.fullName} <VerifiedBadge verified={profile?.verified} className="text-sm" /></h3>
+      {profile?.aiCharacter && <span className="mt-1 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-violet-700">AI character · fictional profile</span>}
       <p className="text-xs text-slate-500">@{String(profile?.username || '').replace(/^@/, '')}</p>
       {profile?.bio && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">{profile.bio}</p>}
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">

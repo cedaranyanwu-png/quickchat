@@ -948,10 +948,10 @@ router.patch('/admin/bots/:id', requirePermission('settings.manage'), asyncRoute
 }));
 
 router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
-  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id'];
+  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_secret_key', 'flw_secret_hash', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id', 'gemini_enabled', 'gemini_api_key', 'gemini_model'];
   const values = await Promise.all(keys.map((key) => getSetting(key, null)));
   const settings = Object.fromEntries(keys.map((key, index) => [key, values[index]]));
-  for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token']) {
+  for (const key of ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key']) {
     if (settings[key]) settings[key] = '••••••••••••••••';
   }
   settings.boost_synthetic_test_mode = String(settings.boost_synthetic_test_mode ?? (process.env.NODE_ENV === 'production' ? 'false' : 'true')).toLowerCase() === 'true';
@@ -959,12 +959,14 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   settings.verification_points = Number(settings.verification_points || 2000);
   settings.verification_reward_points = Number(settings.verification_reward_points || 2000);
   settings.google_drive_enabled = String(settings.google_drive_enabled || 'false').toLowerCase() === 'true';
+  settings.gemini_enabled = String(settings.gemini_enabled || 'false').toLowerCase() === 'true';
+  settings.gemini_model = String(settings.gemini_model || 'gemini-2.5-flash');
   res.json({ settings });
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id'];
-  const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token'];
+  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_public_key', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model'];
+  const secrets = ['flw_secret_key', 'flw_secret_hash', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key'];
   for (const key of normal) {
     if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
   }
@@ -974,6 +976,17 @@ router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   }
   await audit(req, 'platform.settings_updated', 'settings', null, 'Platform configuration updated', null, { keys: [...normal, ...secrets] });
   res.json({ message: 'Platform configuration saved.' });
+}));
+router.post('/admin/gemini/test', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  const { testGeminiConnection } = require('../gemini');
+  try {
+    const result = await testGeminiConnection();
+    res.json({ message: result.ok ? 'Gemini connection successful.' : 'Gemini responded, but the confirmation did not match.', ...result });
+  } catch (error) {
+    const status = error.response?.status;
+    const detail = error.response?.data?.error?.message;
+    res.status(400).json({ message: detail || (status === 401 || status === 403 ? 'Gemini rejected the API key. Check the key and API access.' : error.message || 'Gemini connection failed.') });
+  }
 }));
 router.put('/admin/roles/:id', requirePermission('roles.edit'), asyncRoute(async (req, res) => {
   const roleId = Number(req.params.id);

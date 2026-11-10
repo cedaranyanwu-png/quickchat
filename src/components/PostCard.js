@@ -360,6 +360,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
           <div className="flex items-center gap-1 flex-wrap">
             <button onClick={() => !readOnly && username && navigate(`/profile/${username}`)} className="font-bold text-sm text-slate-900 border-0 bg-transparent p-0 hover:underline">{item.name || 'User'}</button>
             <VerifiedBadge verified={item.verified} className="text-xs" />
+            {item.aiCharacter && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-violet-700" title="This account is an AI character">AI character</span>}
             <span className="text-slate-500 text-xs">{item.handle || (username ? `@${username}` : '')} · {item.time}</span>
             {item.linkedArticle && (
               <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-sky-700" title="Published from an RSS feed">
