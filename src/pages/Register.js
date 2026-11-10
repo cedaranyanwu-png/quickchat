@@ -77,7 +77,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-xl">
         <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-700"><i className="fa-solid fa-envelope-circle-check text-2xl" /></div>
         <h1 className="text-2xl font-extrabold text-slate-900">Verify your email</h1>
-        <p className="mt-2 text-sm leading-6 text-slate-600">We sent a verification link to <strong>{verificationEmail}</strong>. Open that message and confirm the address before signing in.</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">We sent a verification link to <strong>{verificationEmail}</strong>. Check your email inbox first. If you do not see it, check your Spam or Junk folder too. Open the message and confirm your email address before signing in.</p>
         {resendMessage && <p className="mt-4 rounded-xl bg-slate-50 p-3 text-xs font-semibold text-slate-600">{resendMessage}</p>}
         <button type="button" onClick={async () => {
           setResendMessage('Sending a new verification link…');
