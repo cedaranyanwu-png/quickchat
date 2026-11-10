@@ -52,6 +52,7 @@ async function createPointsCheckout({ user, packKey }) {
       [purchaseId, txRef, user.id, user.id, pack.amount],
     );
     const checkoutUrl = `${origin}/api/payments/flutterwave/v4-checkout/${encodeURIComponent(purchaseId)}`;
+    await db.update('UPDATE point_purchases SET checkout_url = ?, status = ? WHERE id = ?', [checkoutUrl, 'open', purchaseId]);
     return { checkoutUrl, purchaseId, points: pack.points, amount: pack.amount };
   } catch (error) {
     await db.update('UPDATE point_purchases SET status = ? WHERE id = ?', ['failed', purchaseId]).catch(() => {});
