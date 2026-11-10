@@ -2,18 +2,25 @@ const crypto = require('node:crypto');
 const db = require('./database');
 
 const PLATFORM_FEE_PERCENT = 10;
-const FLUTTERWAVE_ENV = String(process.env.FLW_ENV || (process.env.NODE_ENV === 'production' ? 'live' : 'test')).toLowerCase();
-const FLUTTERWAVE_API = String(
-  process.env.FLW_API_BASE_URL ||
-  (FLUTTERWAVE_ENV === 'live'
-    ? 'https://f4bexperience.flutterwave.com'
-    : 'https://developersandbox-api.flutterwave.com')
-).replace(/\/$/, '');
+function flutterwaveEnvironment() {
+  return String(process.env.FLW_ENV || (process.env.NODE_ENV === 'production' ? 'live' : 'test')).trim().toLowerCase();
+}
+
+function flutterwaveApiBase() {
+  const environment = flutterwaveEnvironment();
+  return String(
+    process.env.FLW_API_BASE_URL ||
+    (environment === 'live'
+      ? 'https://f4bexperience.flutterwave.com'
+      : 'https://developersandbox-api.flutterwave.com')
+  ).replace(/\/$/, '');
+}
 const FLUTTERWAVE_IDP = 'https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token';
 const WEBHOOK_PATH = '/api/webhooks/flutterwave';
 
 let accessToken = null;
 let accessTokenExpiresAt = 0;
+let accessTokenConfigFingerprint = '';
 
 function parseMoney(value) {
   const input = String(value ?? '').trim();
@@ -96,7 +103,7 @@ function isFlutterwavePaymentsConfigured() {
 }
 
 function isV4Production() {
-  return FLUTTERWAVE_ENV === 'live';
+  return flutterwaveEnvironment() === 'live';
 }
 
 function randomHeaderValue(prefix) {
@@ -105,9 +112,17 @@ function randomHeaderValue(prefix) {
 
 async function getAccessToken() {
   if (!isFlutterwaveSecretConfigured()) {
-    const error = new Error('Set FLW_CLIENT_ID and FLW_CLIENT_SECRET in server/.env to enable Flutterwave v4 payments.');
+    const error = new Error('Add the Flutterwave v4 Client ID and Client Secret in Admin Settings to enable payments.');
     error.status = 503;
     throw error;
+  }
+  const configFingerprint = crypto.createHash('sha256').update([
+    flutterwaveEnvironment(), String(process.env.FLW_CLIENT_ID || ''), String(process.env.FLW_CLIENT_SECRET || ''),
+  ].join('|')).digest('hex');
+  if (configFingerprint !== accessTokenConfigFingerprint) {
+    accessToken = null;
+    accessTokenExpiresAt = 0;
+    accessTokenConfigFingerprint = configFingerprint;
   }
   if (accessToken && Date.now() < accessTokenExpiresAt - 60_000) return accessToken;
 
@@ -154,7 +169,7 @@ async function flutterwaveRequest(method, resource, body, options = {}) {
 
   let response;
   try {
-    response = await fetch(`${FLUTTERWAVE_API}/${String(resource).replace(/^\/+/, '')}`, {
+    response = await fetch(`${flutterwaveApiBase()}/${String(resource).replace(/^\/+/, '')}`, {
       method,
       headers,
       ...(body ? { body: JSON.stringify(body) } : {}),
