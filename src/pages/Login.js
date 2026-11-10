@@ -10,6 +10,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [resendMessage, setResendMessage] = useState('');
+  const [correctedEmail, setCorrectedEmail] = useState('');
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -74,6 +75,23 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
             } catch (e) { setResendMessage(e.message || 'Could not resend verification email.'); }
             finally { setIsLoading(false); }
           }} className="mt-3 rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Resend verification link</button>
+          <div className="mt-4 border-t border-amber-200 pt-3">
+            <label className="block text-xs font-bold text-amber-900">Used a fake or incorrect email? Enter the correct one
+              <input type="email" value={correctedEmail} onChange={e => setCorrectedEmail(e.target.value)} placeholder="your-real-email@example.com" className="mt-1.5 w-full rounded-lg border border-amber-200 bg-white px-3 py-2.5 text-sm text-slate-800" />
+            </label>
+            <button type="button" disabled={isLoading || !correctedEmail.trim() || !formData.password} onClick={async () => {
+              setIsLoading(true);
+              try {
+                const response = await fetch(`${API_BASE_URL}/auth/change-unverified-email`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: unverifiedEmail, newEmail: correctedEmail, password: formData.password }) });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Could not update email.');
+                setUnverifiedEmail(result.email || correctedEmail);
+                setCorrectedEmail('');
+                setResendMessage(result.message || 'Email updated. Check your new inbox.');
+              } catch (e) { setResendMessage(e.message || 'Could not update email.'); }
+              finally { setIsLoading(false); }
+            }} className="mt-2 rounded-lg border border-amber-800 px-3 py-2 text-xs font-bold text-amber-900 disabled:opacity-50">Update email and send verification</button>
+          </div>
         </div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
