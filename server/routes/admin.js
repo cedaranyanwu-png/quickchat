@@ -979,7 +979,7 @@ router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
 }));
 router.post('/admin/email/test', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const recipient = String(req.body?.to || '').trim().toLowerCase();
-  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(recipient)) {
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
     return res.status(400).json({ message: 'Enter a valid destination email address for the test.' });
   }
   try {
