@@ -198,22 +198,6 @@ async function itemImage(item) {
   return (await itemMedia(item)).imageUrl;
 }
 
-  const candidates = [
-    item.enclosure && item.enclosure.url, item.image && item.image.url,
-    item.mediaThumbnail && item.mediaThumbnail.$ && item.mediaThumbnail.$.url,
-    item.mediaContent && item.mediaContent.$ && item.mediaContent.$.url,
-    item['media:thumbnail'] && item['media:thumbnail'].$ && item['media:thumbnail'].$.url,
-    item['media:content'] && item['media:content'].$ && item['media:content'].$.url,
-  ];
-  const html = String(item.contentEncoded || item.content || item.description || '');
-  const match = html.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);
-  if (match) candidates.push(match[1]);
-  for (const candidate of candidates) {
-    const safeUrl = validExternalUrl(candidate, false);
-    if (safeUrl && await isPublicExternalUrl(safeUrl)) return safeUrl;
-  }
-  return null;
-}
 
 function normalizedUrlForHash(value) {
   const url = new URL(value);
