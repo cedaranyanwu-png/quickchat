@@ -2,8 +2,8 @@ const express = require('express');
 const { db, asyncRoute, notFound } = require('./utils');
 const {
   PLATFORM_FEE_PERCENT, createHostedCheckout, flutterwaveRequest, getAccountForUser,
-  isFlutterwavePaymentsConfigured, isFlutterwaveSecretConfigured, isFlutterwaveWebhookSecretConfigured,
-  isFlutterwaveWebhookUrlConfigured, isPublicAppUrlConfigured, parseMoney,
+  isFlutterwavePaymentsConfigured, isFlutterwaveSecretConfigured, isFlutterwaveEncryptionKeyConfigured,
+  isFlutterwaveWebhookSecretConfigured, isFlutterwaveWebhookUrlConfigured, isPublicAppUrlConfigured, parseMoney,
 } = require('../flutterwave');
 
 const router = express.Router();
@@ -36,8 +36,9 @@ router.get('/payments/me', asyncRoute(async (req, res) => {
     webhookUrlConfigured: isFlutterwaveWebhookUrlConfigured(),
     webhookUrl: isFlutterwaveWebhookUrlConfigured() ? String(process.env.FLW_WEBHOOK_URL).trim() : null,
     missingConfig: [
-      ...(!isFlutterwaveSecretConfigured() ? ['FLW_SECRET_KEY'] : []),
-      ...(!isFlutterwaveWebhookSecretConfigured() ? ['FLW_SECRET_HASH'] : []),
+        ...(!isFlutterwaveSecretConfigured() ? ['FLW_CLIENT_ID/FLW_CLIENT_SECRET'] : []),
+      ...(!isFlutterwaveEncryptionKeyConfigured() ? ['FLW_ENCRYPTION_KEY'] : []),
+      ...(!isFlutterwaveWebhookSecretConfigured() ? ['FLW_WEBHOOK_SECRET'] : []),
       ...(!isFlutterwaveWebhookUrlConfigured() ? ['FLW_WEBHOOK_URL'] : []),
       ...(!isPublicAppUrlConfigured() ? ['PUBLIC_APP_URL'] : []),
     ],
@@ -87,21 +88,13 @@ router.post('/payments/payout-account', asyncRoute(async (req, res) => {
   if (normalizeAccountName(resolved.accountName) !== confirmedName) {
     return res.status(409).json({ message: 'The bank account name changed. Resolve the account again before saving it.' });
   }
-  const created = await flutterwaveRequest('POST', 'subaccounts', {
-    account_bank: bankCode,
-    account_number: accountNumber,
-    business_name: resolved.accountName.slice(0, 100),
-    business_mobile: mobile,
-    business_email: user.email,
-    business_contact: String(user.fullname || user.username || 'QuickChat creator').slice(0, 100),
-    business_contact_mobile: mobile,
-    country: 'NG',
-    split_type: 'percentage',
-    split_value: 0.9,
+  const created = await flutterwaveRequest('POST', 'transfers/recipients', {
+    type: 'bank_ngn',
+    bank: { code: bankCode, account_number: accountNumber },
   });
-  const subaccount = created?.data || {};
-  if (!subaccount.id || !subaccount.subaccount_id) {
-    const error = new Error('Flutterwave did not return a complete creator subaccount. Please contact support before retrying.');
+  const recipient = created?.data || {};
+  if (!recipient.id) {
+    const error = new Error('Flutterwave did not return a creator payout recipient. Please contact support before retrying.');
     error.status = 502;
     error.outcomeUnknown = true;
     throw error;
@@ -110,17 +103,17 @@ router.post('/payments/payout-account', asyncRoute(async (req, res) => {
   const maskedAccount = `${accountNumber.slice(0, 2)}••••••${accountNumber.slice(-2)}`;
   await db.query(
     `INSERT INTO flutterwave_creator_accounts
-     (user_id, flw_id, flw_subaccount_id, payout_country, bank_code, bank_name, account_name, account_masked, status)
-     VALUES (?, ?, ?, 'NG', ?, ?, ?, ?, 'active')`,
-    [user.id, String(subaccount.id), String(subaccount.subaccount_id), bankCode,
-      String(subaccount.bank_name || bank?.name || 'Nigerian bank').slice(0, 120),
+     (user_id, flw_id, flw_subaccount_id, flw_recipient_id, payout_country, bank_code, bank_name, account_name, account_masked, status)
+     VALUES (?, ?, ?, ?, 'NG', ?, ?, ?, ?, 'active')`,
+    [user.id, String(recipient.id), String(recipient.id), String(recipient.id), bankCode,
+      String(recipient.bank_name || bank?.name || 'Nigerian bank').slice(0, 120),
       resolved.accountName.slice(0, 120), maskedAccount],
   );
   await db.update('UPDATE users SET payout_country = ? WHERE id = ?', ['NG', user.id]);
   res.json({
     payoutAccount: {
       country: 'NG', status: 'active', ready: true,
-      bankName: String(subaccount.bank_name || bank?.name || 'Nigerian bank'),
+      bankName: String(recipient.bank_name || bank?.name || 'Nigerian bank'),
       accountName: resolved.accountName, accountMasked: maskedAccount,
     },
   });
@@ -140,7 +133,7 @@ router.patch('/payments/creator-membership', asyncRoute(async (req, res) => {
   const cents = parseMoney(req.body?.price ?? DEFAULT_FAN_PASS_NGN);
   if (!cents || cents < 300000) return res.status(400).json({ message: 'Set a 30-day fan pass price from ₦3,000 to ₦1,000,000.' });
   const account = await getAccountForUser(user.id);
-  if (!account?.ready) return res.status(409).json({ message: 'Add your Flutterwave payout bank account in Settings before enabling paid fans.' });
+  if (!account?.ready) return res.status(409).json({ message: 'Add your Flutterwave v4 payout bank account in Settings before enabling paid fans.' });
 
   const amount = centsToAmount(cents);
   await db.update(
@@ -245,7 +238,7 @@ async function startCheckout({ buyer, sellerId, itemType, itemId, amount, curren
 
 async function getNigerianBanks() {
   if (cachedBanks.length && Date.now() - banksFetchedAt < 60 * 60 * 1000) return cachedBanks;
-  const result = await flutterwaveRequest('GET', 'banks/NG?include_provider_type=1');
+  const result = await flutterwaveRequest('GET', 'banks?country=NG');
   cachedBanks = (Array.isArray(result?.data) ? result.data : [])
     .map((bank) => ({
       code: String(bank.code ?? bank.id ?? '').trim(),
@@ -278,9 +271,9 @@ async function ensureBankExists(bankCode) {
 }
 
 async function resolveNigerianAccount(bankCode, accountNumber) {
-  const result = await flutterwaveRequest('POST', 'accounts/resolve', {
-    account_bank: bankCode,
-    account_number: accountNumber,
+  const result = await flutterwaveRequest('POST', 'banks/account-resolve', {
+    account: { code: bankCode, number: accountNumber },
+    currency: 'NGN',
   });
   const accountName = String(result?.data?.account_name || '').trim();
   if (!accountName) {
