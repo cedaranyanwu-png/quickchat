@@ -40,6 +40,7 @@ async function generateGeminiText({ system, prompt, temperature = 0.7, maxOutput
 async function testGeminiConnection() {
   const config = await getGeminiConfig();
   const response = await generateGeminiText({
+    apiKey: config.apiKey,
     system: 'You are a connection test. Respond briefly.',
     prompt: 'Reply with exactly: QuickChat Gemini connection successful.',
     temperature: 0,
