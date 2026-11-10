@@ -74,7 +74,7 @@ async function initializeRewardProgram() {
       reference VARCHAR(180) NOT NULL UNIQUE, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS qc_notification_campaigns (
       id ${idColumn}, admin_user_id INTEGER NOT NULL, title VARCHAR(160) NOT NULL, message TEXT NOT NULL,
-      channels VARCHAR(40) NOT NULL, audience VARCHAR(40) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'queued',
+      channels VARCHAR(40) NOT NULL, audience VARCHAR(40) NOT NULL, status VARCHAR(32) NOT NULL DEFAULT 'queued',
       recipient_count INTEGER NOT NULL DEFAULT 0, sent_count INTEGER NOT NULL DEFAULT 0,
       failed_count INTEGER NOT NULL DEFAULT 0, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE TABLE IF NOT EXISTS qc_notification_popups (
@@ -114,10 +114,6 @@ async function qualifyNewUser(userId) {
     }
   }
 }
-router.post('/rewards-program/qualify', asyncRoute(async (req, res) => {
-  // Called only by trusted auth handlers; this endpoint is not exposed to member clients.
-  res.status(404).json({ message: 'Not found.' });
-}));
 router.get('/rewards-program/me', asyncRoute(async (req, res) => {
   await ensureWallet(req.user.id);
   const wallet = await db.getOne('SELECT stars, points, cash_kobo FROM qc_reward_wallets WHERE user_id = ?', [req.user.id]);
@@ -135,13 +131,13 @@ router.get('/rewards-program/me', asyncRoute(async (req, res) => {
 }));
 router.post('/rewards-program/daily-claim', asyncRoute(async (req, res) => {
   const day = localDay();
+  await ensureWallet(req.user.id);
   try {
     await db.insert('INSERT INTO qc_reward_daily_claims (user_id, claim_day) VALUES (?, ?)', [req.user.id, day]);
   } catch (error) {
     if (uniqueError(error)) return res.status(409).json({ message: 'Your daily Star has already been claimed today.' });
     throw error;
   }
-  await ensureWallet(req.user.id);
   await db.update('UPDATE qc_reward_wallets SET stars = stars + 1, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?', [req.user.id]);
   const referral = await db.getOne("SELECT * FROM qc_reward_referrals WHERE referred_user_id = ? AND status = 'pending'", [req.user.id]);
   if (referral) {
