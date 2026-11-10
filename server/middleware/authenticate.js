@@ -21,9 +21,9 @@ async function authenticate(req, res, next, options = {}) {
     if (!Number.isSafeInteger(userId) || userId < 1) {
       return res.status(401).json({ message: 'Your session is invalid. Sign in again.' });
     }
-    const account = await db.getOne('SELECT id, email, email_verified FROM users WHERE id = ?', [userId]);
+    const account = await db.getOne('SELECT id, email, email_verified, is_synthetic FROM users WHERE id = ?', [userId]);
     if (!account) return res.status(401).json({ message: 'This account is no longer available. Sign in again.' });
-    if (!options.allowUnverified && Number(account.email_verified || 0) !== 1) {
+    if (!options.allowUnverified && Number(account.is_synthetic || 0) !== 1 && Number(account.email_verified || 0) !== 1) {
       return res.status(403).json({
         code: 'EMAIL_NOT_VERIFIED',
         requiresEmailVerification: true,
