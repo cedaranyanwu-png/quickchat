@@ -13,16 +13,16 @@ function createToken(user) {
 async function authenticate(req, res, next, options = {}) {
   const authorization = req.get('authorization') || '';
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
-  if (!token) return res.status(401).json({ message: 'Sign in to use this feature.' });
+  if (!token) return res.status(401).json({ code: 'AUTH_SESSION_INVALID', message: 'Sign in to use this feature.' });
 
   try {
     const session = jwt.verify(token, JWT_SECRET);
     const userId = Number(session.id);
     if (!Number.isSafeInteger(userId) || userId < 1) {
-      return res.status(401).json({ message: 'Your session is invalid. Sign in again.' });
+      return res.status(401).json({ code: 'AUTH_SESSION_INVALID', message: 'Your session is invalid. Sign in again.' });
     }
     const account = await db.getOne('SELECT id, email, email_verified, is_synthetic FROM users WHERE id = ?', [userId]);
-    if (!account) return res.status(401).json({ message: 'This account is no longer available. Sign in again.' });
+    if (!account) return res.status(401).json({ code: 'AUTH_SESSION_INVALID', message: 'This account is no longer available. Sign in again.' });
     if (!options.allowUnverified && Number(account.is_synthetic || 0) !== 1 && Number(account.email_verified || 0) !== 1) {
       return res.status(403).json({
         code: 'EMAIL_NOT_VERIFIED',
@@ -40,7 +40,7 @@ async function authenticate(req, res, next, options = {}) {
     return next();
   } catch (error) {
     if (error?.name === 'JsonWebTokenError' || error?.name === 'TokenExpiredError' || error?.name === 'NotBeforeError') {
-      return res.status(401).json({ message: 'Your session has expired. Sign in again.' });
+      return res.status(401).json({ code: 'AUTH_SESSION_INVALID', message: 'Your session has expired. Sign in again.' });
     }
     return next(error);
   }
