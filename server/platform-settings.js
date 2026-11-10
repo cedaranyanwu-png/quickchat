@@ -3,6 +3,7 @@ const db = require('./database');
 
 let initialized = false;
 const ENV_MAP = {
+  flw_env: 'FLW_ENV',
   flw_client_id: 'FLW_CLIENT_ID',
   flw_client_secret: 'FLW_CLIENT_SECRET',
   flw_encryption_key: 'FLW_ENCRYPTION_KEY',
