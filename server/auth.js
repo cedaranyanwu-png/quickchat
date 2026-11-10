@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const { OAuth2Client } = require('google-auth-library');
 const db = require('./database');
 const { sendEmail } = require('./email');
-const { createToken } = require('./middleware/authenticate');
+const { createToken, authenticate } = require('./middleware/authenticate');
 const { recordRegistration } = require('./traffic-security');
 const { awardReferral } = require('./rewards');
 
@@ -144,7 +144,14 @@ router.post('/register', async (req, res) => {
     const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
     const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
     if (referrerMatch) await awardReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral reward could not be issued:', error.message));
-    return sendSession(res, user, 201, 'Account created successfully');
+    const delivery = await sendVerificationEmail(user);
+    return res.status(201).json({
+      emailVerificationRequired: true,
+      email: user.email,
+      message: delivery.delivered
+        ? 'Account created. Check your inbox and verify your email before signing in.'
+        : 'Account created, but the verification email could not be sent. Request another link after email delivery is configured.',
+    });
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return res.status(409).json({ message: 'That email or username is already registered.' });
@@ -168,6 +175,18 @@ router.post('/login', async (req, res) => {
     );
     if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Email or password is incorrect.' });
+    }
+    if (Number(user.email_verified || 0) !== 1) {
+      let delivery = null;
+      if (!recentlySent(`verify-login:${user.id}`)) delivery = await sendVerificationEmail(user);
+      return res.status(403).json({
+        code: 'EMAIL_NOT_VERIFIED',
+        requiresEmailVerification: true,
+        email: user.email,
+        message: delivery?.delivered
+          ? 'Verify your email address before signing in. A fresh verification link has been sent.'
+          : 'Your email address is not verified. Request a new verification link or correct the email address.',
+      });
     }
     return sendSession(res, user, 200, 'Login successful');
   } catch (error) {
@@ -216,7 +235,7 @@ router.post('/google', async (req, res) => {
       createdAccount = true;
     } else if (!user.googleId) {
       await db.update(
-        `UPDATE users SET googleid = ?, picture = ?, email_verified = 1,
+        `UPDATE users SET googleid = ?, picture = ?, email_verified = 1, email_verification_notice = 0,
            email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?`,
         [googleId, picture, user.id],
       );
@@ -258,6 +277,53 @@ router.post('/google', async (req, res) => {
   }
 });
 
+router.get('/email-status', authenticate, async (req, res) => {
+  try {
+    const user = await db.getOne('SELECT id, email, email_verified, email_verification_notice FROM users WHERE id = ?', [req.user.id]);
+    if (!user) return res.status(404).json({ message: 'Account not found.' });
+    return res.json({
+      email: user.email,
+      emailVerified: Number(user.email_verified || 0) === 1,
+      showVerificationNotice: Number(user.email_verification_notice || 0) === 1 && Number(user.email_verified || 0) !== 1,
+    });
+  } catch (error) {
+    console.error('[Auth] Email status lookup failed:', error.message);
+    return res.status(500).json({ message: 'Could not check email verification status.' });
+  }
+});
+
+router.post('/change-email', authenticate, async (req, res) => {
+  const email = normalizeEmail(req.body?.email);
+  const password = String(req.body?.password || '');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ message: 'Enter a valid email address.' });
+  if (!password) return res.status(400).json({ message: 'Enter your current password to change your email address.' });
+  try {
+    const user = await db.getOne('SELECT id, fullname, email, password FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: 'Your current password is incorrect.' });
+    }
+    const duplicate = await db.getOne('SELECT id FROM users WHERE LOWER(email) = LOWER(?) AND id <> ?', [email, req.user.id]);
+    if (duplicate) return res.status(409).json({ message: 'That email address is already in use.' });
+    await db.update(
+      `UPDATE users SET email = ?, email_verified = 0, email_verification_notice = 1,
+         email_verification_token = NULL, email_verification_expires = NULL WHERE id = ?`,
+      [email, req.user.id],
+    );
+    const delivery = await sendVerificationEmail({ id: user.id, fullname: user.fullname, email });
+    return res.json({
+      message: delivery.delivered
+        ? 'Email address updated. Check the new inbox for your verification link.'
+        : 'Email address updated, but the verification message could not be sent. Configure SMTP and request another link.',
+      email,
+      delivered: Boolean(delivery.delivered),
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) return res.status(409).json({ message: 'That email address is already in use.' });
+    console.error('[Auth] Email change failed:', error.message);
+    return res.status(500).json({ message: 'Could not update your email address.' });
+  }
+});
+
 router.post('/verify-email', async (req, res) => {
   const token = String(req.body?.token || '').trim();
   if (!token) return res.status(400).json({ message: 'A verification token is required.' });
@@ -271,7 +337,7 @@ router.post('/verify-email', async (req, res) => {
       return res.status(400).json({ message: 'This verification link has expired. Request a new one.' });
     }
     await db.update(
-      `UPDATE users SET email_verified = 1, email_verification_token = NULL,
+      `UPDATE users SET email_verified = 1, email_verification_notice = 0, email_verification_token = NULL,
          email_verification_expires = NULL WHERE id = ?`,
       [user.id],
     );
@@ -359,7 +425,7 @@ router.post('/reset-password', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     await db.update(
-      `UPDATE users SET password = ?, email_verified = 1, password_reset_token = NULL,
+      `UPDATE users SET password = ?, email_verified = 1, email_verification_notice = 0, password_reset_token = NULL,
          password_reset_expires = NULL WHERE id = ?`,
       [passwordHash, user.id],
     );
