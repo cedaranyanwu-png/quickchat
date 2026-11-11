@@ -94,11 +94,13 @@ export default function CreatorContentLibrary() {
   };
 
   const schedule = async (event) => {
-    event.preventDefault();\n    if (!form.scheduledAt) return setError('Choose a future date to schedule this post, or use Publish now after analysis.');\n    setBusy(true); setNotice(''); setError('');
+    event.preventDefault();
+    if (!form.scheduledAt) return setError('Choose a future date to schedule this post, or use Publish now after analysis.');
+    setBusy(true); setNotice(''); setError('');
     try {
       const result = await apiRequest('/creator/content-library/schedule', {
         method: 'POST',
-        body: { ...form, hashtags: form.hashtags.split(/[,\\s]+/).filter(Boolean), scheduledAt: toIso(form.scheduledAt) }
+        body: { ...form, hashtags: form.hashtags.split(/[,\s]+/).filter(Boolean), scheduledAt: toIso(form.scheduledAt) }
       });
       setItems((prev) => [...prev, result.item]);
       setForm((current) => ({ ...EMPTY, destination: current.destination, communityId: current.communityId })); setPreviews([]); setMediaKind('image'); setAnalysis(null); setNotice(result.message);
