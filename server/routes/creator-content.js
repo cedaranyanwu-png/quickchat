@@ -3,6 +3,8 @@ const express = require('express');
 const db = require('../database');
 const { asyncRoute } = require('./utils');
 const { analyzeContent } = require('../services/content-classifier');
+const { initializeCreatorContentTables } = require('../creator-content-schema');
+const schemaReady = initializeCreatorContentTables().catch((error) => { console.error('[Creator Content] Schema initialization failed:', error.message); throw error; });
 
 const router = express.Router();
 const clean = (v, max = 5000) => String(v || '').trim().slice(0, max);
@@ -12,6 +14,7 @@ const future = (v) => { const d = new Date(v); return Number.isFinite(d.getTime(
 const json = (v) => { try { return JSON.parse(v || '[]'); } catch (_) { return []; } };
 
 async function creator(req, res) {
+  await schemaReady;
   const row = await db.getOne('SELECT creator_account FROM users WHERE id = ?', [req.user.id]);
   if (!row || Number(row.creator_account || 0) !== 1) {
     res.status(403).json({ message: 'Creator account access is required.' });
@@ -144,3 +147,4 @@ function startCreatorContentScheduler() {
 }
 
 module.exports = { router, startCreatorContentScheduler };
+\nstartCreatorContentScheduler();\n
