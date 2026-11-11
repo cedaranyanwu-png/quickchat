@@ -13,6 +13,7 @@ const { initializePageTables } = require('./schema');
 const rewardService = require('./rewards');
 const rewardRoutes = require('./routes/rewards');
 const rewardProgramRoutes = require('./routes/rewards-program');
+const first100Routes = require('./routes/first100');
 const { initializeSecurityTables, botDetector, trafficRouter } = require('./traffic-security');
 const contentRoutes = require('./routes/content');
 const statusRoutes = require('./routes/statuses');
@@ -346,6 +347,7 @@ app.use('/api', (req, res, next) => {
   // endpoints. They must be reachable by guests so sponsored content can load.
   if (req.method === 'GET' && (
     req.path === '/ads/placements' ||
+    req.path === '/growth/first-100' ||
     /^\/ads\/render\/[^/]+$/.test(req.path)
   )) return next();
 
@@ -374,6 +376,7 @@ app.use('/api', adminRoutes.router);
 app.use('/api', adminBackupRoutes);
 app.use('/api', rewardRoutes);
 app.use('/api', rewardProgramRoutes.router);
+app.use('/api', first100Routes.router);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
@@ -442,6 +445,7 @@ async function initializeDB() {
   await initializePageTables();
   await rewardService.initializeRewardTables();
   await rewardProgramRoutes.initializeRewardProgram();
+  await first100Routes.initializeFirst100Tables();
   // Backfill the one-time 1,000-point bonus for every previously verified human account.
   const previouslyVerified = await db.query('SELECT id FROM users WHERE verified = 1 AND COALESCE(is_synthetic, 0) = 0 ORDER BY id');
   for (const account of previouslyVerified) {
