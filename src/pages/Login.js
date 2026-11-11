@@ -5,6 +5,7 @@ import { API_BASE_URL, normalizeNetworkError } from '../api';
 
 const Login = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
+  const nextPath = new URLSearchParams(window.location.search).get('next') || '/home';
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +37,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       onAuthenticated?.();
-      navigate('/home');
+      navigate(nextPath);
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(err.email || formData.email);
@@ -156,7 +157,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 onAuthenticated?.();
-                navigate('/home');
+                navigate(nextPath);
               } catch (err) {
                 setError(normalizeNetworkError(err));
               } finally {
@@ -175,7 +176,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         </>}
 
         <div className="mt-6 text-center text-sm text-slate-600">
-          Don't have an account? <Link to="/register" className="text-blue-700 font-bold hover:underline">Create one</Link>
+          Don't have an account? <Link to={`/register?next=${encodeURIComponent(nextPath)}`} className="text-blue-700 font-bold hover:underline">Create one</Link>
         </div>
       </div>
     </div>
