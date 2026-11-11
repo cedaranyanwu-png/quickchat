@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import PostCard from '../components/PostCard';
 
-export default function CommunityFeed({ openModal, openVideo }) {
+export default function CommunityFeed({ openModal, openVideo, creatorMode = false }) {
   const { communityId } = useParams();
   const [community, setCommunity] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -112,12 +112,12 @@ export default function CommunityFeed({ openModal, openVideo }) {
 
   return <div className="max-w-4xl mx-auto pb-20 lg:pb-0">
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md">
-      <Link to="/communities" aria-label="Back to communities" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><i className="fa-solid fa-arrow-left" /></Link>
+      <Link to={creatorMode ? "/creator" : "/communities"} aria-label={creatorMode ? "Back to Creator Studio" : "Back to communities"} className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><i className="fa-solid fa-arrow-left" /></Link>
       <div className="min-w-0 flex-1"><h1 className="truncate text-lg font-extrabold text-slate-900">{community?.name || 'Space feed'}</h1><p className="truncate text-xs text-slate-500">{community?.description || `Posts shared with this ${community?.spaceType || 'community'}`}</p></div>
       {community?.isOwner && <span className="rounded-full bg-amber-50 px-2.5 py-1.5 text-[10px] font-bold text-amber-800">Owner</span>}
       {community?.isModerator && !community?.isOwner && <span className="rounded-full bg-blue-50 px-2.5 py-1.5 text-[10px] font-bold text-blue-700">Moderator</span>}
       {community?.canModerate && <button type="button" onClick={() => setModerationOpen((open) => !open)} className="rounded-full border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"><i className="fa-solid fa-shield-halved mr-1" />Moderation</button>}
-      {!community?.isPaid || community?.canAccess ? <Link to={community?.isOwner ? `/creator/content-library?destination=${encodeURIComponent(community?.spaceType || 'community')}&communityId=${encodeURIComponent(communityId)}` : `/compose/advanced?destination=community&communityId=${encodeURIComponent(communityId)}`} className="rounded-full bg-blue-700 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800"><i className="fa-solid fa-pen-to-square mr-1.5" />{community?.isOwner ? 'Create in Content Library' : 'Create post'}</Link> : <span className="rounded-full bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-600"><i className="fa-solid fa-lock mr-1" />Members only</span>}
+      {!community?.isPaid || community?.canAccess ? <Link to={community?.isOwner ? `/creator/content-library?destination=${encodeURIComponent(community?.spaceType || 'community')}&communityId=${encodeURIComponent(communityId)}` : creatorMode ? `/creator/content-library?destination=${encodeURIComponent(community?.spaceType || "community")}&communityId=${encodeURIComponent(communityId)}` : `/compose/advanced?destination=community&communityId=${encodeURIComponent(communityId)}`} className="rounded-full bg-blue-700 px-4 py-2 text-xs font-bold text-white hover:bg-blue-800"><i className="fa-solid fa-pen-to-square mr-1.5" />{community?.isOwner || creatorMode ? 'Open Content Library' : 'Create post'}</Link> : <span className="rounded-full bg-slate-100 px-3 py-2 text-[11px] font-bold text-slate-600"><i className="fa-solid fa-lock mr-1" />Members only</span>}
     </header>
 
     {error && <p className="p-4 text-sm text-red-600">{error}</p>}
