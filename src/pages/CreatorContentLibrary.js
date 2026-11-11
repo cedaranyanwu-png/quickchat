@@ -61,7 +61,7 @@ export default function CreatorContentLibrary() {
       }
       setForm((current) => ({ ...current, media: [...current.media, ...uploaded] }));
       setPreviews((current) => [...current, ...localPreviews]);
-      setNotice('Media uploaded and ready to schedule.');
+      setNotice('Media uploaded and ready to analyze or publish.');
     } catch (e) { setError(e.message || 'Media upload failed.'); }
     finally { setMediaBusy(false); }
   };
@@ -70,6 +70,18 @@ export default function CreatorContentLibrary() {
     const target = index + direction; if (target < 0 || target >= form.media.length) return;
     setForm((current) => { const media = [...current.media]; [media[index], media[target]] = [media[target], media[index]]; return { ...current, media }; });
     setPreviews((current) => { const list = [...current]; [list[index], list[target]] = [list[target], list[index]]; return list; });
+  };
+
+  const publishAnalyzedNow = async () => {
+    if (!analysis) return setError('Analyze this post before publishing it immediately.');
+    setBusy(true); setNotice(''); setError('');
+    try {
+      const result = await apiRequest('/creator/content-library/publish-now', { method: 'POST', body: { ...form, hashtags: form.hashtags.split(/[,\\s]+/).filter(Boolean) } });
+      setNotice(result.message);
+      setForm((current) => ({ ...EMPTY, destination: current.destination, communityId: current.communityId }));
+      setPreviews([]); setMediaKind('image'); setAnalysis(null);
+      await load();
+    } catch (e) { setError(e.message || 'Could not publish post.'); } finally { setBusy(false); }
   };
 
   const analyze = async () => {
@@ -116,7 +128,7 @@ export default function CreatorContentLibrary() {
       {error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
       <div className="grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
         <form onSubmit={schedule} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div><h1 className="text-xl font-black text-slate-950">Schedule content</h1><p className="mt-1 text-xs leading-5 text-slate-500">QuickChat analyzes the post now, stores the signals, and publishes it automatically later.</p>{form.destination !== 'profile' && <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800"><i className={`fa-solid ${form.destination === 'page' ? 'fa-flag' : form.destination === 'channel' ? 'fa-tower-broadcast' : 'fa-users'}`} />Publishing to {destinationSpaces.find((space) => String(space.platformId) === String(form.communityId))?.name || `selected ${form.destination}`}</p>}</div>
+          <div><h1 className="text-xl font-black text-slate-950">Create content</h1><p className="mt-1 text-xs leading-5 text-slate-500">Analyze your post, then publish immediately or choose an optional schedule.</p>{form.destination !== 'profile' && <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800"><i className={`fa-solid ${form.destination === 'page' ? 'fa-flag' : form.destination === 'channel' ? 'fa-tower-broadcast' : 'fa-users'}`} />Publishing to {destinationSpaces.find((space) => String(space.platformId) === String(form.communityId))?.name || `selected ${form.destination}`}</p>}</div>
 
           <div>
             <p className="mb-2 text-xs font-bold text-slate-600">Post format</p>
@@ -143,7 +155,7 @@ export default function CreatorContentLibrary() {
           <textarea required={!form.media.length} value={form.text} onChange={(e)=>setForm({...form,text:e.target.value})} rows="8" maxLength="5000" className="w-full rounded-xl border border-slate-200 p-3 text-sm outline-none focus:border-blue-600" placeholder="Write your caption or post…"/>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-xs font-bold text-slate-600">Topic/category<select value={form.category} onChange={(e)=>setForm({...form,category:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="">Auto-detect</option>{['Technology','Programming','Artificial Intelligence','Business','Entrepreneurship','Education','Comedy','Music','Gaming','Sports','Fashion','Science','Digital Marketing','Design','Photography','Entertainment','Health and Fitness','Finance'].map(x=><option key={x}>{x}</option>)}</select></label>
-            <label className="text-xs font-bold text-slate-600">Publish at<input required type="datetime-local" value={form.scheduledAt} onChange={(e)=>setForm({...form,scheduledAt:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"/></label>
+            <label className="text-xs font-bold text-slate-600">Schedule for later (optional)<input type="datetime-local" min={new Date(Date.now() + 60000).toISOString().slice(0,16)} value={form.scheduledAt} onChange={(e)=>setForm({...form,scheduledAt:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"/><span className="mt-1 block text-[10px] font-normal text-slate-400">Leave empty to publish now after analysis.</span></label>
           </div>
           <label className="block text-xs font-bold text-slate-600">Hashtags<input value={form.hashtags} onChange={(e)=>setForm({...form,hashtags:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal" placeholder="ai, programming, quickchat"/></label>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -152,12 +164,12 @@ export default function CreatorContentLibrary() {
           {form.destination !== 'profile' && <label className="block text-xs font-bold text-slate-600">{form.destination === 'page' ? 'Choose page' : form.destination === 'channel' ? 'Choose channel' : 'Choose community'}<select required value={form.communityId} onChange={(e)=>setForm({...form,communityId:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="">Select a destination</option>{destinationSpaces.map((space)=><option key={space.platformId} value={space.platformId}>{space.name}</option>)}</select>{destinationSpaces.length === 0 && <span className="mt-1 block text-[10px] font-normal text-amber-700">Create a {form.destination} in Creator Studio first.</span>}</label>}
 
           </div>
-          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900"><strong>Recommendation preparation:</strong> topics, interests, keywords and audience signals are generated before publication and saved with the scheduled content.</div>
-          <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || mediaBusy} onClick={analyze} className="rounded-xl border border-blue-200 px-4 py-2.5 text-xs font-bold text-blue-700 disabled:opacity-50"><i className="fa-solid fa-wand-magic-sparkles mr-2"/>Analyze now</button><button disabled={busy || mediaBusy} className="rounded-xl bg-blue-700 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Working…' : 'Schedule post'}</button></div>
+          <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900"><strong>Recommendation preparation:</strong> analyze first so topics, interests, keywords and audience signals are ready before immediate or scheduled publication.</div>
+          <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || mediaBusy || (!form.text.trim() && !form.media.length)} onClick={analyze} className="rounded-xl border border-blue-200 px-4 py-2.5 text-xs font-bold text-blue-700 disabled:opacity-50"><i className="fa-solid fa-wand-magic-sparkles mr-2"/>Analyze post</button><button type="button" disabled={busy || mediaBusy || !analysis} onClick={publishAnalyzedNow} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50"><i className="fa-solid fa-paper-plane mr-2"/>{busy ? 'Publishing…' : 'Publish now'}</button><button type="submit" disabled={busy || mediaBusy || !form.scheduledAt} className="rounded-xl bg-blue-700 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Working…' : 'Schedule for later'}</button></div>
         </form>
         <aside className="space-y-4">
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="text-sm font-black text-slate-950">Pre-publication intelligence</h2>{analysis ? <div className="mt-3 space-y-3"><div><p className="text-[10px] font-black uppercase text-slate-400">Topics</p><div className="mt-1 flex flex-wrap gap-1.5">{analysis.topics.map(x=><span key={x} className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{x}</span>)}</div></div><div><p className="text-[10px] font-black uppercase text-slate-400">Keywords</p><p className="mt-1 text-xs text-slate-600">{analysis.keywords.join(', ') || 'None detected'}</p></div><div><p className="text-[10px] font-black uppercase text-slate-400">Likely audience</p><p className="mt-1 text-xs text-slate-600">{analysis.audiences.join(', ') || 'General audience'}</p></div><div><p className="text-[10px] font-black uppercase text-slate-400">Interests</p><p className="mt-1 text-xs text-slate-600">{analysis.interests.join(', ') || 'None detected'}</p></div></div> : <p className="mt-3 text-xs leading-5 text-slate-500">Scheduling also analyzes automatically, so the creator cannot accidentally skip recommendation preparation.</p>}</section>
-          <section className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Pipeline</p><ol className="mt-3 space-y-3 text-xs leading-5 text-slate-300"><li><strong className="text-white">1.</strong> Schedule.</li><li><strong className="text-white">2.</strong> Classify immediately.</li><li><strong className="text-white">3.</strong> Store recommendation signals.</li><li><strong className="text-white">4.</strong> Publish automatically.</li><li><strong className="text-white">5.</strong> Normal feed ranking reads the prepared signals.</li></ol></section>
+          <section className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-[10px] font-black uppercase tracking-widest text-blue-300">Pipeline</p><ol className="mt-3 space-y-3 text-xs leading-5 text-slate-300"><li><strong className="text-white">1.</strong> Write or upload content.</li><li><strong className="text-white">2.</strong> Analyze the post.</li><li><strong className="text-white">3.</strong> Store recommendation signals.</li><li><strong className="text-white">4.</strong> Publish now or schedule it.</li><li><strong className="text-white">5.</strong> Feed ranking reads the prepared signals.</li></ol></section>
         </aside>
       </div>
       <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-sm font-black text-slate-950">Scheduled queue</h2><p className="mt-1 text-xs text-slate-500">Stored on the server. Closing the browser will not stop publication.</p></div><span className="rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold text-slate-600">{items.filter(i=>i.status==='scheduled').length} scheduled</span></div>
