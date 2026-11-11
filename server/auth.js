@@ -145,6 +145,7 @@ router.post('/register', async (req, res) => {
     const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
     const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
     if (referrerMatch) await createReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral tracking could not be created:', error.message));
+    await recordAttribution(user.id, { ...req.body, source: req.body?.source || req.body?.utm_source || (referrerMatch ? 'referral' : 'direct') }).catch((error) => console.warn('[Growth] Signup attribution could not be recorded:', error.message));
     const delivery = await sendVerificationEmail(user);
     return res.status(201).json({
       emailVerificationRequired: true,
@@ -268,6 +269,7 @@ router.post('/google', async (req, res) => {
       const referralCode = String(req.body?.referralCode || req.body?.ref || '').trim().toUpperCase();
       const referrerMatch = referralCode.match(/^QC(\d{1,12})$/);
       if (referrerMatch) await createReferral(Number(referrerMatch[1]), user.id).catch((error) => console.warn('[Rewards] Referral tracking could not be created:', error.message));
+    await recordAttribution(user.id, { ...req.body, source: req.body?.source || req.body?.utm_source || (referrerMatch ? 'referral' : 'direct') }).catch((error) => console.warn('[Growth] Signup attribution could not be recorded:', error.message));
     }
     return sendSession(res, user, 200, 'Google login successful', { picture });
   } catch (error) {
