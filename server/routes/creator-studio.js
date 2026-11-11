@@ -158,11 +158,9 @@ async function syncCreatorEntities(type, ownerId) {
 
 router.get('/creator-studio/entities', asyncRoute(async (req, res) => {
   if (!await requireCreator(req, res)) return;
-  const [communities, pages, channels] = await Promise.all([
-    syncCreatorEntities('community', req.user.id),
-    syncCreatorEntities('page', req.user.id),
-    syncCreatorEntities('channel', req.user.id),
-  ]);
+  const communities = await syncCreatorEntities('community', req.user.id);
+  const pages = await syncCreatorEntities('page', req.user.id);
+  const channels = await syncCreatorEntities('channel', req.user.id);
   res.json({ communities, pages, channels });
 }));
 
