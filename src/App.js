@@ -91,7 +91,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     navigate('/compose/advanced', { state: handoff ? { handoff } : undefined });
   };
 
-  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email'].includes(location.pathname);
+  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/creator-program'].includes(location.pathname);
   const isSharePage = location.pathname.startsWith('/share/');
   const isLiveWatchPage = /^\/live\/[^/]+\/?$/.test(location.pathname);
   const isVideosPage = location.pathname === '/videos';
@@ -140,6 +140,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/creator-program" element={<CreatorProgram />} />
     </Routes>;
   }
 
@@ -228,7 +229,7 @@ export default function App() {
 
   useEffect(() => {
     const path = window.location.pathname.replace(/\/$/, '') || '/';
-    if (!['/', '/login', '/register'].includes(path)) return undefined;
+    if (!['/', '/login', '/register', '/creator-program'].includes(path)) return undefined;
     const controller = new AbortController();
     fetch(`${API_BASE_URL}/traffic/landing`, {
       method: 'POST',
