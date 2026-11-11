@@ -35,7 +35,7 @@ async function recordAttribution(userId, payload = {}) {
   const campaign = clean(payload.campaign || payload.utm_campaign, 100) || null;
   const medium = clean(payload.medium || payload.utm_medium, 60) || null;
   const landingPath = clean(payload.landingPath || payload.landing_path, 255) || null;
-  await db.query('INSERT INTO qc_growth_attribution (user_id, referrer_id, source, campaign, medium, landing_path) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO NOTHING', [userId, referrerId && referrerId !== Number(userId) ? referrerId : null, source, campaign, medium, landingPath]);
+  await db.query('INSERT INTO qc_growth_attribution (user_id, referrer_id, source, campaign, medium, landing_path) VALUES (?, ?, ?, ?, ?, ?) ' + (db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)' : 'ON CONFLICT(user_id) DO NOTHING'), [userId, referrerId && referrerId !== Number(userId) ? referrerId : null, source, campaign, medium, landingPath]);
 }
 
 function clean(value, max) {
