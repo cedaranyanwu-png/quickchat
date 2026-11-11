@@ -5,6 +5,7 @@ import { API_BASE_URL, normalizeNetworkError } from '../api';
 
 const Login = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
+  const nextPath = new URLSearchParams(window.location.search).get('next') || '/home';
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -36,7 +37,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
       onAuthenticated?.();
-      navigate('/home');
+      navigate(nextPath);
     } catch (err) {
       if (err.code === 'EMAIL_NOT_VERIFIED') {
         setUnverifiedEmail(err.email || formData.email);
@@ -97,11 +98,11 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         </div>}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Email or Username</label>
             <div className="relative">
               <i className="fa-solid fa-envelope absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-              <input type="email" name="email" value={formData.email} onChange={handleChange} required
-                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all" placeholder="you@example.com" />
+              <input type="text" name="email" value={formData.email} onChange={handleChange} required
+                className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-700 transition-all" placeholder="you@example.com or username" />
             </div>
           </div>
 
@@ -156,7 +157,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('user', JSON.stringify(data.user));
                 onAuthenticated?.();
-                navigate('/home');
+                navigate(nextPath);
               } catch (err) {
                 setError(normalizeNetworkError(err));
               } finally {
@@ -175,7 +176,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
         </>}
 
         <div className="mt-6 text-center text-sm text-slate-600">
-          Don't have an account? <Link to="/register" className="text-blue-700 font-bold hover:underline">Create one</Link>
+          Don't have an account? <Link to={`/register?next=${encodeURIComponent(nextPath)}`} className="text-blue-700 font-bold hover:underline">Create one</Link>
         </div>
       </div>
     </div>

@@ -48,6 +48,8 @@ import AccountBooster from './pages/AccountBooster';
 import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
+import CreatorPortal from './pages/CreatorPortal';
+import BusinessPortal from './pages/BusinessPortal';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import EmailVerificationPrompt from './components/EmailVerificationPrompt';
@@ -131,6 +133,22 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
   }
 
+  // Dedicated portal hostnames render their portal at the domain root.
+  // Other paths continue into the shared QuickChat application for publishing and account tools.
+  const portalHost = window.location.hostname.toLowerCase();
+  if (location.pathname === '/' && portalHost.startsWith('creator.')) return <CreatorPortal />;
+  if (location.pathname === '/' && portalHost.startsWith('business.')) return <BusinessPortal />;
+
+  // Dedicated Creator and Business portals share the core identity and database.
+  // They render independently from the normal member navigation.
+  if (['/creator', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
+    return <Routes>
+      <Route path="/creator" element={<CreatorPortal />} />
+      <Route path="/business" element={<BusinessPortal />} />
+      <Route path="*" element={<Navigate to="/creator" replace />} />
+    </Routes>;
+  }
+
   if (isAuthPage) {
     if (isAuthenticated && (location.pathname === '/' || location.pathname === '/login')) return <Navigate to="/home" replace />;
     return <Routes>
@@ -198,7 +216,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/ads" element={<AdsDashboard />} />
             <Route path="/account-booster" element={<AccountBooster />} />
             <Route path="/first-100" element={<First100 />} />
-            <Route path="/creator-studio" element={<CreatorStudio />} />
+            <Route path="/creator-studio" element={<Navigate to="/creator" replace />} />
             <Route path="/creator-program" element={<CreatorProgram />} />
             <Route path="/profile/:username" element={<ViewProfile openModal={openModal} openVideo={setActiveVideoId} />} />
           </Routes>
