@@ -76,7 +76,7 @@ export default function CreatorContentLibrary() {
     if (!analysis) return setError('Analyze this post before publishing it immediately.');
     setBusy(true); setNotice(''); setError('');
     try {
-      const result = await apiRequest('/creator/content-library/publish-now', { method: 'POST', body: { ...form, hashtags: form.hashtags.split(/[,\\s]+/).filter(Boolean) } });
+      const result = await apiRequest('/creator/content-library/publish-now', { method: 'POST', body: { ...form, hashtags: form.hashtags.split(/[,\s]+/).filter(Boolean) } });
       setNotice(result.message);
       setForm((current) => ({ ...EMPTY, destination: current.destination, communityId: current.communityId }));
       setPreviews([]); setMediaKind('image'); setAnalysis(null);
@@ -87,7 +87,7 @@ export default function CreatorContentLibrary() {
   const analyze = async () => {
     setBusy(true); setNotice(''); setError('');
     try {
-      const result = await apiRequest('/creator/content-library/analyze', { method: 'POST', body: { text: form.text, hashtags: form.hashtags.split(/[,s]+/).filter(Boolean) } });
+      const result = await apiRequest('/creator/content-library/analyze', { method: 'POST', body: { text: form.text, hashtags: form.hashtags.split(/[,\s]+/).filter(Boolean) } });
       setAnalysis(result);
       setNotice('Content analyzed. Recommendation intelligence is ready.');
     } catch (e) { setError(e.message || 'Analysis failed.'); } finally { setBusy(false); }
