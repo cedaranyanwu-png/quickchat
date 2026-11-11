@@ -71,7 +71,7 @@ export default function Communities() {
   return <div className="mx-auto max-w-4xl pb-20 lg:pb-0">
     <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <div><h1 className="text-lg font-extrabold text-slate-900">Communities</h1><p className="mt-0.5 text-xs text-slate-500">Find your people, or start a space for them.</p></div>
+        <div><h1 className="text-lg font-extrabold text-slate-900">QuickChat Spaces</h1><p className="mt-0.5 text-xs text-slate-500">Discover communities, creator pages and channels.</p></div>
         <button type="button" onClick={() => { setFormOpen((open) => !open); setError(''); }} className="inline-flex items-center gap-2 rounded-full bg-blue-700 px-4 py-2 text-sm font-bold text-white hover:bg-blue-800" aria-expanded={formOpen}><i className={`fa-solid ${formOpen ? 'fa-xmark' : 'fa-plus'}`} />{formOpen ? 'Cancel' : 'Create community'}</button>
       </div>
       <label className="mt-4 block"><span className="sr-only">Search communities</span><div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3"><i className="fa-solid fa-magnifying-glass text-xs text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search communities or topics" className="w-full bg-transparent py-2.5 text-sm outline-none" /></div></label>
@@ -101,15 +101,15 @@ export default function Communities() {
     {loading && <p className="p-8 text-center text-sm text-slate-500">Finding communities…</p>}
     {!loading && !error && communities.map((community) => <article key={community.id} className="border-b border-slate-200 p-4 transition-colors hover:bg-slate-50 sm:px-5">
       <div className="flex gap-3">
-        <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700"><i className="fa-solid fa-users" /></div>
+        <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700"><i className={`fa-solid ${community.spaceType === 'page' ? 'fa-flag' : community.spaceType === 'channel' ? 'fa-tower-broadcast' : 'fa-users'}`} /></div>
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1"><h2 className="text-sm font-extrabold text-slate-900">{community.name}</h2>{community.category && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{community.category}</span>}</div>
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1"><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-extrabold text-slate-900">{community.name}</h2><span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold capitalize text-blue-700">{community.spaceType || 'community'}</span>{community.category && <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-600">{community.category}</span>}</div></div>
           <p className="mt-1 text-xs text-slate-500">{community.members} {community.members === 1 ? 'member' : 'members'}</p>
           {community.isPaid && <p className="mt-1 text-xs font-bold text-emerald-700">₦{Number(community.monthlyPrice).toLocaleString('en-NG')} per 30 days</p>}
           {community.description && <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-slate-700">{community.description}</p>}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button type="button" disabled={joiningId === community.id || (community.isPaid && community.joined)} onClick={() => toggleJoin(community)} className={`rounded-full px-4 py-1.5 text-xs font-bold disabled:opacity-50 ${community.joined ? 'border border-slate-300 bg-white text-slate-700' : 'bg-blue-700 text-white hover:bg-blue-800'}`}>{joiningId === community.id ? 'Opening checkout…' : community.isPaid ? community.joined ? 'Pass active' : 'Get 30-day pass' : community.joined ? 'Joined' : 'Join community'}</button>
-            <Link to={`/communities/${community.id}`} className="rounded-full px-3 py-1.5 text-xs font-bold text-blue-700 no-underline hover:bg-blue-50">Open feed <i className="fa-solid fa-arrow-right ml-1 text-[10px]" /></Link>
+            <button type="button" disabled={joiningId === community.id || (community.isPaid && community.joined)} onClick={() => toggleJoin(community)} className={`rounded-full px-4 py-1.5 text-xs font-bold disabled:opacity-50 ${community.joined ? 'border border-slate-300 bg-white text-slate-700' : 'bg-blue-700 text-white hover:bg-blue-800'}`}>{joiningId === community.id ? 'Opening checkout…' : community.isPaid ? community.joined ? 'Pass active' : 'Get 30-day pass' : community.spaceType === 'page' ? community.joined ? 'Following' : 'Follow page' : community.spaceType === 'channel' ? community.joined ? 'Following' : 'Follow channel' : community.joined ? 'Joined' : 'Join community'}</button>
+            <Link to={`/communities/${community.id}`} className="rounded-full px-3 py-1.5 text-xs font-bold text-blue-700 no-underline hover:bg-blue-50">Open space <i className="fa-solid fa-arrow-right ml-1 text-[10px]" /></Link>
           </div>
         </div>
       </div>
