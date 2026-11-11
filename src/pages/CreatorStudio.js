@@ -6,7 +6,6 @@ const Metric = ({ label, value, icon }) => <div className="rounded-2xl border bo
 
 export default function CreatorStudio() {
   const [data, setData] = useState(null);
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(async () => {
@@ -22,7 +21,7 @@ export default function CreatorStudio() {
   const isCreator = data.isCreator;
   return <div className="mx-auto max-w-5xl px-4 pb-28 pt-5 lg:pb-10">
     <header className="mb-6 overflow-hidden rounded-3xl bg-slate-950 p-6 text-white sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-300">QuickChat · Creator tools</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{isCreator ? 'Creator Studio' : 'Build your creator presence'}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">{isCreator ? 'Manage your creator identity, publish content and understand how your audience finds you.' : 'Switch your existing QuickChat account to Creator mode. Keep your followers, posts and profile while unlocking creator tools.'}</p></div><span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold">{isCreator ? 'Creator account active' : 'Normal account'}</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-300">QuickChat · Creator tools</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{isCreator ? 'Creator Studio' : 'Build your creator presence'}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">{isCreator ? 'Manage your creator identity, publish content and understand how your audience finds you.' : 'Activate Creator mode from Account Verification. Keep your existing followers, posts and profile while unlocking creator tools.'}</p></div><span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold">{isCreator ? 'Creator account active' : 'Normal account'}</span></div>
       {isCreator && <div className="mt-6 flex flex-wrap gap-2"><Link to="/compose/advanced" className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-blue-500"><i className="fa-solid fa-plus mr-2"/>Create content</Link><Link to="/profile/edit" className="rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-white/10">Edit public profile</Link></div>}
     </header>
     {notice && <p role="status" className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
