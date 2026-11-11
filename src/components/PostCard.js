@@ -45,6 +45,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
   const [reportBusy, setReportBusy] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
   const mediaTouchStartRef = useRef(null);
+  const postViewRef = useRef(null);
   const { confirmed: adultContentConfirmed } = useAdultContentConsent();
 
   const currentUser = (() => {
@@ -56,6 +57,21 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
     setMediaIndex(0);
   }, [post]);
   useEffect(() => { setItem(post); setMediaIndex(0); }, [post]);
+
+  useEffect(() => {
+    if (!item.id || readOnly || item.itemType === 'ad' || item.isSponsored || Number(item.authorId) === Number(currentUser?.id)) return undefined;
+    const node = postViewRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return undefined;
+    let sent = false;
+    const observer = new IntersectionObserver((entries) => {
+      if (sent || !entries.some((entry) => entry.isIntersecting && entry.intersectionRatio >= 0.6)) return;
+      sent = true;
+      window.setTimeout(() => apiRequest(`/posts/${item.id}/view`, { method: 'POST', body: {} }).catch(() => {}), 900);
+      observer.disconnect();
+    }, { threshold: [0.6] });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [item.id, item.authorId, item.itemType, item.isSponsored, readOnly, currentUser?.id]);
 
   useEffect(() => {
     const timestamp = postTimestamp(item.createdAt);
@@ -349,6 +365,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
 
   return (
     <article
+      ref={postViewRef}
       onClick={handlePostCardClick}
       className={`flex gap-2 p-3 border-b border-slate-200 hover:bg-slate-50 transition-colors relative ${item.isPromoted ? 'bg-amber-50/15' : ''} lg:cursor-pointer`}
     >

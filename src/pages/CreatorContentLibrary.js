@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiRequest } from '../api';
+import CreatorSidebar from '../components/CreatorSidebar';
 
 const EMPTY = { text: '', category: '', hashtags: '', scheduledAt: '', visibility: 'public', destination: 'profile', media: [], targetInterests: [] };
 const toIso = (v) => { if (!v) return ''; const d = new Date(v); return Number.isFinite(d.getTime()) ? d.toISOString() : ''; };
@@ -48,7 +49,7 @@ export default function CreatorContentLibrary() {
     catch (e) { setError(e.message); }
   };
 
-  return <main className="min-h-screen bg-slate-50">
+  return <div className="min-h-screen bg-slate-50"><CreatorSidebar/><main className="min-h-screen bg-slate-50 lg:ml-64">
     <header className="border-b border-slate-200 bg-white"><div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
       <div><Link to="/creator" className="text-sm font-black text-slate-950 no-underline">QUICKCHAT CREATOR</Link><p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-blue-700">Content Library</p></div>
       <Link to="/creator" className="rounded-full border border-slate-200 px-4 py-2 text-xs font-bold text-slate-700 no-underline">Creator dashboard</Link>
@@ -81,5 +82,5 @@ export default function CreatorContentLibrary() {
         <div className="mt-4 space-y-3">{items.length ? items.map(item=><article key={item.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="flex flex-wrap gap-1.5">{(item.topics||[]).map(x=><span key={x} className="rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">{x}</span>)}<span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600">{item.status}</span></div><p className="mt-2 line-clamp-3 whitespace-pre-wrap text-sm text-slate-700">{item.text || 'Media post'}</p><p className="mt-2 text-[11px] text-slate-500">{item.status==='scheduled' ? 'Publishes '+formatDate(item.scheduledAt) : item.publishedPostId ? 'Published post #'+item.publishedPostId : 'Updated '+formatDate(item.updatedAt)}</p><p className="mt-1 text-[10px] text-emerald-700">{item.analysisStatus==='ready' ? '✓ Recommendation intelligence ready' : 'Analysis pending'}</p></div>{item.status==='scheduled' && <div className="flex shrink-0 gap-2"><button onClick={()=>publishNow(item.id)} className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700">Publish now</button><button onClick={()=>cancel(item.id)} className="rounded-lg border border-rose-200 px-3 py-2 text-[11px] font-bold text-rose-700">Cancel</button></div>}</div></article>) : <div className="rounded-xl bg-slate-50 p-6 text-center text-xs text-slate-500">No scheduled content yet.</div>}</div>
       </section>
     </div>
-  </main>;
+  </main></div>;
 }
