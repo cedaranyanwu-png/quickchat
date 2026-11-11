@@ -135,7 +135,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   // Dedicated Creator and Business portals share the core identity and database.
   // They render independently from the normal member navigation.
-  if (['/creator', '/business'].includes(location.pathname.replace(/\\/+$/, '') || '/')) {
+  if (['/creator', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
     return <Routes>
       <Route path="/creator" element={<CreatorPortal />} />
       <Route path="/business" element={<BusinessPortal />} />
