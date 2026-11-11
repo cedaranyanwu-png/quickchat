@@ -15,8 +15,8 @@ const json = (v) => { try { return JSON.parse(v || '[]'); } catch (_) { return [
 
 async function creator(req, res) {
   await schemaReady;
-  const row = await db.getOne('SELECT creator_account FROM users WHERE id = ?', [req.user.id]);
-  if (!row || Number(row.creator_account || 0) !== 1) {
+  const row = await db.getOne("SELECT user_id FROM qc_creator_applications WHERE user_id = ? AND status = 'active'", [req.user.id]);
+  if (!row) {
     res.status(403).json({ message: 'Creator account access is required.' });
     return false;
   }

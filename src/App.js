@@ -137,15 +137,15 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   // Dedicated portal hostnames render their portal at the domain root.
   // Other paths continue into the shared QuickChat application for publishing and account tools.
   const portalHost = window.location.hostname.toLowerCase();
-  if (location.pathname === '/' && portalHost.startsWith('creator.')) return <CreatorPortal />;
+  if (location.pathname === '/' && portalHost.startsWith('creator.')) return <CreatorPortal onAuthenticated={onAuthenticated} />;
   if (location.pathname === '/' && portalHost.startsWith('business.')) return <BusinessPortal />;
 
   // Dedicated Creator and Business portals share the core identity and database.
   // They render independently from the normal member navigation.
   if (['/creator', '/creator/content-library', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
     return <Routes>
-      <Route path="/creator" element={<CreatorPortal />} />
-        <Route path="/creator/content-library" element={<CreatorContentLibrary />} />
+      <Route path="/creator" element={<CreatorPortal onAuthenticated={onAuthenticated} />} />
+        <Route path="/creator/content-library" element={isAuthenticated ? <CreatorContentLibrary /> : <CreatorPortal onAuthenticated={onAuthenticated} />} />
       <Route path="/business" element={<BusinessPortal />} />
       <Route path="*" element={<Navigate to="/creator" replace />} />
     </Routes>;
