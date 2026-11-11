@@ -72,6 +72,48 @@ router.post('/growth/first-100/join', asyncRoute(async (req, res) => {
   });
 }));
 
+router.get('/admin/growth/first-100/users', requirePermission('analytics.view'), asyncRoute(async (req, res) => {
+  const term = String(req.query.search || '').trim().slice(0, 100);
+  if (term.length < 2) return res.json({ users: [] });
+  const pattern = `%${term}%`;
+  const users = await db.query(`SELECT u.id, u.fullname, u.username, u.email
+    FROM users u
+    WHERE COALESCE(u.is_synthetic, 0) = 0
+      AND (u.username LIKE ? OR u.email LIKE ? OR u.fullname LIKE ?)
+      AND NOT EXISTS (SELECT 1 FROM qc_first100_members m WHERE m.user_id = u.id)
+    ORDER BY u.id DESC LIMIT 12`, [pattern, pattern, pattern]);
+  res.json({ users });
+}));
+
+router.post('/admin/growth/first-100/members', requirePermission('analytics.view'), asyncRoute(async (req, res) => {
+  const userId = Number(req.body?.userId);
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    return res.status(400).json({ message: 'Select a valid existing QuickChat user.' });
+  }
+  const user = await db.getOne('SELECT id, fullname, username, email FROM users WHERE id = ? AND COALESCE(is_synthetic, 0) = 0', [userId]);
+  if (!user) return res.status(404).json({ message: 'That QuickChat user could not be found.' });
+
+  const existing = await db.getOne('SELECT id FROM qc_first100_members WHERE user_id = ?', [userId]);
+  if (existing) return res.status(409).json({ message: 'This user is already in the First 100.' });
+
+  const count = Number(await db.getCount('SELECT COUNT(*) AS count FROM qc_first100_members') || 0);
+  if (count >= GOAL) return res.status(409).json({ message: 'The First 100 campaign is full.' });
+
+  const row = await db.insert(
+    "INSERT INTO qc_first100_members (user_id, source) VALUES (?, 'admin_added')",
+    [userId]
+  );
+  await audit(req, 'growth.first100_admin_added', 'first100_member', row.id,
+    'Administrator added an existing user to QuickChat First 100', null,
+    { userId, username: user.username || null, source: 'admin_added' });
+
+  res.status(201).json({
+    message: `${user.fullname || user.username || 'User'} was added to the First 100.`,
+    position: count + 1,
+    remaining: Math.max(0, GOAL - count - 1),
+  });
+}));
+
 router.get('/admin/growth/first-100', requirePermission('analytics.view'), asyncRoute(async (_req, res) => {
   const total = await db.getCount('SELECT COUNT(*) AS count FROM qc_first100_members');
   const rows = await db.query(`SELECT m.id, m.user_id, m.source, m.joined_at,
