@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { apiRequest, uploadMedia } from '../api';
 import CreatorSidebar from '../components/CreatorSidebar';
 
-const EMPTY = { text: '', category: '', hashtags: '', scheduledAt: '', visibility: 'public', destination: 'profile', media: [], targetInterests: [] };
+const EMPTY = { text: '', category: '', hashtags: '', scheduledAt: '', visibility: 'public', destination: 'profile', communityId: '', media: [], targetInterests: [] };
 const toIso = (v) => { if (!v) return ''; const d = new Date(v); return Number.isFinite(d.getTime()) ? d.toISOString() : ''; };
 const formatDate = (v) => { try { return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)); } catch (_) { return v; } };
 
 export default function CreatorContentLibrary() {
   const [form, setForm] = useState(EMPTY);
   const [items, setItems] = useState([]);
+  const [spaces, setSpaces] = useState({ communities: [], pages: [], channels: [] });
   const [analysis, setAnalysis] = useState(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
@@ -18,7 +19,14 @@ export default function CreatorContentLibrary() {
   const [mediaKind, setMediaKind] = useState('image');
   const [previews, setPreviews] = useState([]);
 
-  const load = useCallback(async () => { const data = await apiRequest('/creator/content-library'); setItems(data.items || []); }, []);
+  const load = useCallback(async () => {
+    const [data, entityData] = await Promise.all([
+      apiRequest('/creator/content-library'),
+      apiRequest('/creator-studio/entities')
+    ]);
+    setItems(data.items || []);
+    setSpaces({ communities: entityData.communities || [], pages: entityData.pages || [], channels: entityData.channels || [] });
+  }, []);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
 
   const chooseMediaKind = (kind) => { setMediaKind(kind); setForm((current) => ({ ...current, media: [] })); setPreviews([]); };
@@ -77,6 +85,9 @@ export default function CreatorContentLibrary() {
     catch (e) { setError(e.message); }
   };
 
+  const destinationKey = form.destination === 'page' ? 'pages' : form.destination === 'channel' ? 'channels' : 'communities';
+  const destinationSpaces = spaces[destinationKey] || [];
+
   const publishNow = async (id) => {
     try { const result = await apiRequest('/creator/content-library/'+id+'/publish-now', { method: 'POST', body: {} }); setNotice(result.message); await load(); }
     catch (e) { setError(e.message); }
@@ -123,8 +134,10 @@ export default function CreatorContentLibrary() {
           </div>
           <label className="block text-xs font-bold text-slate-600">Hashtags<input value={form.hashtags} onChange={(e)=>setForm({...form,hashtags:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal" placeholder="ai, programming, quickchat"/></label>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-bold text-slate-600">Destination<select value={form.destination} onChange={(e)=>setForm({...form,destination:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="profile">My profile</option><option value="page">Creator page</option><option value="community">Community</option><option value="channel">Channel</option></select></label>
+            <label className="text-xs font-bold text-slate-600">Destination<select value={form.destination} onChange={(e)=>setForm({...form,destination:e.target.value,communityId:''})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="profile">My profile</option><option value="page">Creator page</option><option value="community">Community</option><option value="channel">Channel</option></select></label>
             <label className="text-xs font-bold text-slate-600">Visibility<select value={form.visibility} onChange={(e)=>setForm({...form,visibility:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="public">Public</option><option value="fans">Fans only</option><option value="premium">Premium</option></select></label>
+          {form.destination !== 'profile' && <label className="block text-xs font-bold text-slate-600">{form.destination === 'page' ? 'Choose page' : form.destination === 'channel' ? 'Choose channel' : 'Choose community'}<select required value={form.communityId} onChange={(e)=>setForm({...form,communityId:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-normal"><option value="">Select a destination</option>{destinationSpaces.map((space)=><option key={space.platformId} value={space.platformId}>{space.name}</option>)}</select>{destinationSpaces.length === 0 && <span className="mt-1 block text-[10px] font-normal text-amber-700">Create a {form.destination} in Creator Studio first.</span>}</label>}
+
           </div>
           <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-900"><strong>Recommendation preparation:</strong> topics, interests, keywords and audience signals are generated before publication and saved with the scheduled content.</div>
           <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || mediaBusy} onClick={analyze} className="rounded-xl border border-blue-200 px-4 py-2.5 text-xs font-bold text-blue-700 disabled:opacity-50"><i className="fa-solid fa-wand-magic-sparkles mr-2"/>Analyze now</button><button disabled={busy || mediaBusy} className="rounded-xl bg-blue-700 px-5 py-2.5 text-xs font-bold text-white disabled:opacity-50">{busy ? 'Working…' : 'Schedule post'}</button></div>
