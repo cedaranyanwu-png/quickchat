@@ -75,13 +75,20 @@ router.post('/growth/first-100/join', asyncRoute(async (req, res) => {
 router.get('/admin/growth/first-100/users', requirePermission('analytics.view'), asyncRoute(async (req, res) => {
   const term = String(req.query.search || '').trim().slice(0, 100);
   if (term.length < 2) return res.json({ users: [] });
-  const pattern = `%${term}%`;
+  const pattern = `%${term.toLowerCase()}%`;
+  // Match the main Admin > User Management search: case-insensitive and
+  // against the same live PostgreSQL users table, not a separate data source.
   const users = await db.query(`SELECT u.id, u.fullname, u.username, u.email
     FROM users u
-    WHERE COALESCE(u.is_synthetic, 0) = 0
-      AND (u.username LIKE ? OR u.email LIKE ? OR u.fullname LIKE ?)
+    WHERE u.username NOT LIKE 'qc-admin-actor-%'
+      AND (
+        LOWER(COALESCE(u.username, '')) LIKE ?
+        OR LOWER(COALESCE(u.email, '')) LIKE ?
+        OR LOWER(COALESCE(u.fullname, '')) LIKE ?
+        OR LOWER(COALESCE(u.name, '')) LIKE ?
+      )
       AND NOT EXISTS (SELECT 1 FROM qc_first100_members m WHERE m.user_id = u.id)
-    ORDER BY u.id DESC LIMIT 12`, [pattern, pattern, pattern]);
+    ORDER BY u.id DESC LIMIT 20`, [pattern, pattern, pattern, pattern]);
   res.json({ users });
 }));
 
@@ -90,7 +97,7 @@ router.post('/admin/growth/first-100/members', requirePermission('analytics.view
   if (!Number.isSafeInteger(userId) || userId <= 0) {
     return res.status(400).json({ message: 'Select a valid existing QuickChat user.' });
   }
-  const user = await db.getOne('SELECT id, fullname, username, email FROM users WHERE id = ? AND COALESCE(is_synthetic, 0) = 0', [userId]);
+  const user = await db.getOne("SELECT id, fullname, username, email FROM users WHERE id = ? AND username NOT LIKE 'qc-admin-actor-%'", [userId]);
   if (!user) return res.status(404).json({ message: 'That QuickChat user could not be found.' });
 
   const existing = await db.getOne('SELECT id FROM qc_first100_members WHERE user_id = ?', [userId]);
