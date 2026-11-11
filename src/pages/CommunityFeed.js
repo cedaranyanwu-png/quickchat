@@ -113,7 +113,7 @@ export default function CommunityFeed({ openModal, openVideo }) {
   return <div className="max-w-4xl mx-auto pb-20 lg:pb-0">
     <header className="sticky top-0 z-10 flex items-center gap-3 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-md">
       <Link to="/communities" aria-label="Back to communities" className="flex h-9 w-9 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100"><i className="fa-solid fa-arrow-left" /></Link>
-      <div className="min-w-0 flex-1"><h1 className="truncate text-lg font-extrabold text-slate-900">{community?.name || 'Community feed'}</h1><p className="truncate text-xs text-slate-500">{community?.description || 'Posts shared with this community'}</p></div>
+      <div className="min-w-0 flex-1"><h1 className="truncate text-lg font-extrabold text-slate-900">{community?.name || 'Space feed'}</h1><p className="truncate text-xs text-slate-500">{community?.description || `Posts shared with this ${community?.spaceType || 'community'}`}</p></div>
       {community?.isOwner && <span className="rounded-full bg-amber-50 px-2.5 py-1.5 text-[10px] font-bold text-amber-800">Owner</span>}
       {community?.isModerator && !community?.isOwner && <span className="rounded-full bg-blue-50 px-2.5 py-1.5 text-[10px] font-bold text-blue-700">Moderator</span>}
       {community?.canModerate && <button type="button" onClick={() => setModerationOpen((open) => !open)} className="rounded-full border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50"><i className="fa-solid fa-shield-halved mr-1" />Moderation</button>}

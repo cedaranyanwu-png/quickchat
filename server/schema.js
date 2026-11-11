@@ -39,7 +39,7 @@ async function initializePageTables() {
     )`,
     `CREATE TABLE IF NOT EXISTS communities (
       id ${idColumn}, slug VARCHAR(80) NOT NULL UNIQUE, name VARCHAR(100) NOT NULL,
-      description TEXT, category VARCHAR(80), created_by INTEGER, created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
+      description TEXT, category VARCHAR(80), created_by INTEGER, space_type VARCHAR(20) NOT NULL DEFAULT 'community', created_at ${dateType} DEFAULT CURRENT_TIMESTAMP,
       monthly_price VARCHAR(32), price_currency VARCHAR(3) DEFAULT 'NGN'
     )`,
     `CREATE TABLE IF NOT EXISTS community_members (
