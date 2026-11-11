@@ -295,7 +295,11 @@ function listRelationships(relationship) {
 router.post('/users/:userId/follow', asyncRoute(async (req, res) => {
   const targetId = positiveId(req.params.userId);
   if (!targetId) return res.status(400).json({ message: 'Invalid user ID.' });
-  if (targetId === req.user.id) return res.status(400).json({ message: 'You cannot follow your own account.' });
+  // Auth middleware may provide the ID as either a number or a numeric string.
+  // Normalize both sides so strict type differences cannot bypass the self-follow guard.
+  const currentUserId = positiveId(req.user.id);
+  if (!currentUserId) return res.status(401).json({ message: 'A valid signed-in user is required.' });
+  if (targetId === currentUserId) return res.status(400).json({ message: 'You cannot follow your own account.' });
   if (!await db.getOne('SELECT id FROM users WHERE id = ?', [targetId])) return notFound(res, 'User not found.');
 
   let created = false;
