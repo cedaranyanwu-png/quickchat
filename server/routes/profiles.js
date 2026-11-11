@@ -16,7 +16,7 @@ const router = express.Router();
 const PROFILE_SELECT = `
   SELECT u.id, u.fullname, u.username, u.email, u.bio, u.interests, u.location, u.website, u.avatar_url, u.is_synthetic, u.character_id,
          u.payout_country, u.creator_membership_price, u.creator_membership_currency,
-         u.business_enabled, u.recommendation_preferences,
+         u.business_enabled, u.creator_account, u.recommendation_preferences,
          u.picture, u.cover_url, u.verified, u.verified_at, u.verification_method, u.createdat, u.created_at,
          (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count,
          (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following_count,

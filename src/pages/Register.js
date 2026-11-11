@@ -25,7 +25,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, referralCode: new URLSearchParams(window.location.search).get('ref') || '' }),
+        body: JSON.stringify({ ...formData, referralCode: new URLSearchParams(window.location.search).get('ref') || '', source: new URLSearchParams(window.location.search).get('utm_source') || (new URLSearchParams(window.location.search).get('ref') ? 'referral' : 'direct'), campaign: new URLSearchParams(window.location.search).get('utm_campaign') || '', medium: new URLSearchParams(window.location.search).get('utm_medium') || '', landingPath: window.location.pathname }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -246,7 +246,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
                 const response = await fetch(`${API_BASE_URL}/auth/google`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ token: credentialResponse.credential, referralCode: new URLSearchParams(window.location.search).get('ref') || '' }),
+                  body: JSON.stringify({ token: credentialResponse.credential, referralCode: new URLSearchParams(window.location.search).get('ref') || '', source: new URLSearchParams(window.location.search).get('utm_source') || (new URLSearchParams(window.location.search).get('ref') ? 'referral' : 'direct'), campaign: new URLSearchParams(window.location.search).get('utm_campaign') || '', medium: new URLSearchParams(window.location.search).get('utm_medium') || '', landingPath: window.location.pathname }),
                 });
                 const data = await response.json();
                 if (!response.ok) {
