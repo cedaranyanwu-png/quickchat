@@ -6,6 +6,7 @@ const categories = ['Bakery & Food Production','Restaurant & Catering','Retail &
 
 export default function BusinessPortal() {
   const signedIn = Boolean(localStorage.getItem('token'));
+  const portalPath = window.location.hostname.toLowerCase().startsWith('business.') ? '/' : '/business';
   const [profile,setProfile] = useState({businessName:'',businessCategory:'',productsServices:'',businessStage:'startup',businessGoals:[],targetCustomers:'',assistanceNeeded:[]});
   const [opportunities,setOpportunities] = useState(null);
   const [busy,setBusy] = useState(false);
