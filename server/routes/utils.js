@@ -126,6 +126,7 @@ function toProfile(row) {
     picture: fields.avatar_url || fields.picture || null,
     coverImage: fields.cover_url || null,
     verified: Boolean(Number(fields.verified || 0)),
+    foundingMember: Boolean(Number(fields.is_founding_member || 0)),
     verifiedAt: fields.verified_at || null,
     verificationMethod: fields.verification_method || null,
     businessEnabled: Boolean(Number(fields.business_enabled || 0)),
