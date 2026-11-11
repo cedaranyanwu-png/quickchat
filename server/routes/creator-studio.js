@@ -30,7 +30,11 @@ async function initializeCreatorStudioTables() {
 async function recordAttribution(userId, payload = {}) {
   const code = clean(payload.referralCode || payload.ref, 40).toUpperCase();
   const match = code.match(/^QC(\\d{1,12})$/);
-  const referrerId = match ? Number(match[1]) : null;
+  let referrerId = match ? Number(match[1]) : null;
+  if (referrerId) {
+    const validReferrer = await db.getOne('SELECT id FROM users WHERE id = ?', [referrerId]);
+    if (!validReferrer || Number(referrerId) === Number(userId)) referrerId = null;
+  }
   const source = clean(payload.source || payload.utm_source || (referrerId ? 'referral' : 'direct'), 60) || 'direct';
   const campaign = clean(payload.campaign || payload.utm_campaign, 100) || null;
   const medium = clean(payload.medium || payload.utm_medium, 60) || null;
