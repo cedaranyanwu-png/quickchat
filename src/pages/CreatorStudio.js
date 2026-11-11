@@ -66,9 +66,9 @@ export default function CreatorStudio() {
     } catch (e) { setError(e.message || 'Could not delete this space.'); }
   };
 
-  if (!data) return <div className="mx-auto max-w-6xl p-8 text-sm text-slate-500">Loading Creator workspace…</div>;
+  if (!data) return <><CreatorSidebar/><div className="min-h-screen p-8 text-sm text-slate-500 lg:ml-64">Loading Creator workspace…</div></>;
 
-  if (!data.isCreator) return <div className="mx-auto max-w-6xl px-4 pb-20 pt-8">
+  if (!data.isCreator) return <><CreatorSidebar/><div className="mx-auto min-h-screen max-w-6xl px-4 pb-20 pt-8 lg:ml-64">
     <section className="grid gap-6 lg:grid-cols-[1fr_.8fr]">
       <form onSubmit={activate} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
         <p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-700">Creator Portal registration</p>
@@ -90,7 +90,7 @@ export default function CreatorStudio() {
     </section>
     {notice && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
     {error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
-  </div>;
+  </div></>;
 
   const activeSpace = SPACE_TYPES.find((item) => item.key === activeType);
   const listKey = activeType === 'community' ? 'communities' : activeType === 'page' ? 'pages' : 'channels';
@@ -128,5 +128,5 @@ export default function CreatorStudio() {
       </div>
     </section>
     <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-extrabold text-slate-950">Creator profile</h2><p className="mt-1 text-xs text-slate-500">{data.creator?.creator_name || data.profile?.fullName} · {data.creator?.niche || 'Creator'}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">Saved to Creator Portal</span></div><p className="mt-3 text-sm leading-6 text-slate-600">{data.creator?.bio || 'Add a short description to your creator profile.'}</p></section>
-  </div>;
+  </div></>;
 }
