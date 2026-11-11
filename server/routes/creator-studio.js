@@ -27,6 +27,17 @@ async function initializeCreatorStudioTables() {
   )`);
 }
 
+async function recordAttribution(userId, payload = {}) {
+  const code = clean(payload.referralCode || payload.ref, 40).toUpperCase();
+  const match = code.match(/^QC(\\d{1,12})$/);
+  const referrerId = match ? Number(match[1]) : null;
+  const source = clean(payload.source || payload.utm_source || (referrerId ? 'referral' : 'direct'), 60) || 'direct';
+  const campaign = clean(payload.campaign || payload.utm_campaign, 100) || null;
+  const medium = clean(payload.medium || payload.utm_medium, 60) || null;
+  const landingPath = clean(payload.landingPath || payload.landing_path, 255) || null;
+  await db.query('INSERT INTO qc_growth_attribution (user_id, referrer_id, source, campaign, medium, landing_path) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id) DO NOTHING', [userId, referrerId && referrerId !== Number(userId) ? referrerId : null, source, campaign, medium, landingPath]);
+}
+
 function clean(value, max) {
   return String(value || '').trim().slice(0, max);
 }
@@ -70,4 +81,4 @@ router.post('/creator-studio/activate', asyncRoute(async (req, res) => {
   res.json({ message: 'Creator account activated. Your existing profile and posts are unchanged.', isCreator: true });
 }));
 
-module.exports = { router, initializeCreatorStudioTables };
+module.exports = { router, initializeCreatorStudioTables, recordAttribution };
