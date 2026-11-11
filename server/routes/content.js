@@ -394,7 +394,7 @@ router.get('/creator/analytics', asyncRoute(async (req, res) => {
       UNION ALL SELECT post_id,created_at AS event_at,'like' AS event_type FROM post_likes WHERE post_id IN (${marks}) AND created_at>=? AND COALESCE(is_synthetic,0)=0
       UNION ALL SELECT post_id,created_at AS event_at,'comment' AS event_type FROM post_replies WHERE post_id IN (${marks}) AND created_at>=?
       UNION ALL SELECT post_id,created_at AS event_at,'share' AS event_type FROM post_reposts WHERE post_id IN (${marks}) AND created_at>=?
-    ) activity GROUP BY post_id,DATE(event_at) ORDER BY DATE(event_at) ASC`,
+    ) activity GROUP BY post_id,DATE(event_at),event_type ORDER BY DATE(event_at) ASC`,
     [...ids,since,...ids,since,...ids,since,...ids,since]);
   }
   const parseList = (value) => { try { const data=JSON.parse(value||'[]'); return Array.isArray(data)?data:[]; } catch (_) { return []; } };
