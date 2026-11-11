@@ -87,8 +87,8 @@ async function uniqueSlug(table, name) {
 }
 
 async function requireCreator(req, res) {
-  const user = await db.getOne('SELECT creator_account FROM users WHERE id = ?', [req.user.id]);
-  if (!user || Number(user.creator_account || 0) !== 1) {
+  const creatorProfile = await db.getOne("SELECT user_id FROM qc_creator_applications WHERE user_id = ? AND status = 'active'", [req.user.id]);
+  if (!creatorProfile) {
     res.status(403).json({ message: 'Complete your Creator Portal profile before managing spaces.' });
     return false;
   }
@@ -145,7 +145,7 @@ router.delete('/creator-studio/entities/:type/:id', asyncRoute(async (req, res) 
 }));
 
 router.get('/creator-studio/me', asyncRoute(async (req, res) => {
-  const user = await db.getOne('SELECT id, fullname, username, creator_account FROM users WHERE id = ?', [req.user.id]);
+  const user = await db.getOne('SELECT id, fullname, username FROM users WHERE id = ?', [req.user.id]);
   if (!user) return res.status(404).json({ message: 'Account not found.' });
   const [application, posts, followers, following, referrals, qualified, attributed] = await Promise.all([
     db.getOne('SELECT creator_name, niche, bio, status, created_at FROM qc_creator_applications WHERE user_id = ?', [req.user.id]),
@@ -159,7 +159,7 @@ router.get('/creator-studio/me', asyncRoute(async (req, res) => {
   const sources = await db.query(`SELECT source, campaign, COUNT(*) AS users
     FROM qc_growth_attribution WHERE referrer_id = ? GROUP BY source, campaign ORDER BY users DESC LIMIT 12`, [req.user.id]);
   res.json({
-    isCreator: Number(user.creator_account || 0) === 1,
+    isCreator: Boolean(application && application.status === 'active'),
     profile: { fullName: user.fullname || '', username: user.username || '' },
     creator: application || null,
     metrics: { posts: Number(posts || 0), followers: Number(followers || 0), following: Number(following || 0),
@@ -184,8 +184,7 @@ router.post('/creator-studio/activate', asyncRoute(async (req, res) => {
     VALUES (?, ?, ?, ?, 'active')
     ${db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE creator_name = VALUES(creator_name), niche = VALUES(niche), bio = VALUES(bio), status = \'active\', updated_at = CURRENT_TIMESTAMP' : 'ON CONFLICT(user_id) DO UPDATE SET creator_name = excluded.creator_name, niche = excluded.niche, bio = excluded.bio, status = \'active\', updated_at = CURRENT_TIMESTAMP'}`,
   [req.user.id, creatorName, niche, bio]);
-  await db.update('UPDATE users SET creator_account = 1 WHERE id = ?', [req.user.id]);
-  res.json({ message: 'Creator account activated. Your existing profile and posts are unchanged.', isCreator: true });
+    res.json({ message: 'Creator account activated. Your existing profile and posts are unchanged.', isCreator: true });
 }));
 
 
