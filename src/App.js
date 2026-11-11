@@ -133,6 +133,12 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     return <Routes><Route path="/admin" element={<Admin />} /><Route path="*" element={<Navigate to="/admin" replace />} /></Routes>;
   }
 
+  // Dedicated portal hostnames render their portal at the domain root.
+  // Other paths continue into the shared QuickChat application for publishing and account tools.
+  const portalHost = window.location.hostname.toLowerCase();
+  if (location.pathname === '/' && portalHost.startsWith('creator.')) return <CreatorPortal />;
+  if (location.pathname === '/' && portalHost.startsWith('business.')) return <BusinessPortal />;
+
   // Dedicated Creator and Business portals share the core identity and database.
   // They render independently from the normal member navigation.
   if (['/creator', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
