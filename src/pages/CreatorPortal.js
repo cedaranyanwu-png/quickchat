@@ -6,6 +6,7 @@ import CreatorStudio from './CreatorStudio';
 export default function CreatorPortal() {
   const navigate = useNavigate();
   const signedIn = Boolean(localStorage.getItem('token'));
+  const portalPath = window.location.hostname.toLowerCase().startsWith('creator.') ? '/' : '/creator';
   const [status, setStatus] = useState(null);
   const [form, setForm] = useState({ creatorName: '', niche: '', bio: '' });
   const [busy, setBusy] = useState(false);
