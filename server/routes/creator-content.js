@@ -74,6 +74,17 @@ router.post('/creator/content-library/schedule', asyncRoute(async (req, res) => 
   const when = future(req.body?.scheduledAt);
   const media = Array.isArray(req.body?.media) ? req.body.media : [];
   if (!text && !media.length) return res.status(400).json({ message: 'Write a caption or attach media before scheduling.' });
+  if (media.length > 10) return res.status(400).json({ message: 'A post can contain up to 10 media items.' });
+  const mediaTypes = [...new Set(media.map((item) => String(item?.type || '').toLowerCase()))];
+  if (media.some((item) => !item || !['image', 'video'].includes(String(item.type || '').toLowerCase()) || typeof item.url !== 'string' || !/^https?:\\/\\//i.test(item.url))) {
+    return res.status(400).json({ message: 'One or more media attachments are invalid. Upload them again.' });
+  }
+  if (mediaTypes.includes('video') && (media.length !== 1 || mediaTypes.length !== 1)) {
+    return res.status(400).json({ message: 'A video post must contain exactly one video. Use a carousel for multiple images.' });
+  }
+  if (media.length > 1 && mediaTypes.some((type) => type !== 'image')) {
+    return res.status(400).json({ message: 'A carousel can contain images only.' });
+  }
   if (!when) return res.status(400).json({ message: 'Choose a future publication date and time.' });
 
   const analysis = await classify(req.body || {});
