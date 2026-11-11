@@ -2,8 +2,10 @@ const express = require('express');
 const db = require('../database');
 const { asyncRoute } = require('./utils');
 const { requirePermission } = require('./admin');
+const creatorContentRoutes = require('./creator-content');
 
 const router = express.Router();
+router.use(creatorContentRoutes.router);
 const dateType = db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP';
 
 async function initializeCreatorStudioTables() {
