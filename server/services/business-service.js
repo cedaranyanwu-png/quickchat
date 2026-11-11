@@ -103,6 +103,7 @@ async function upsertBusinessProfile(userId, data) {
     await db.update('UPDATE users SET business_enabled = 1 WHERE id = ?', [userId]);
   }
 
+  await db.update('UPDATE users SET business_enabled = 1 WHERE id = ?', [userId]);
   return getBusinessProfile(userId);
 }
 
