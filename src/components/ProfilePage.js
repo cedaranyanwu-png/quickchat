@@ -127,7 +127,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
           <>
             <button onClick={() => navigate('/creator-studio')} className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-700 to-indigo-700 px-4 py-2 text-xs font-extrabold text-white shadow-sm hover:from-blue-800 hover:to-indigo-800">
               <i className="fa-solid fa-clapperboard" />
-              {profile?.isCreator ? 'Open Creator Studio' : 'Switch to Creator'}
+              Creator Studio
             </button>
             <button onClick={() => navigate('/profile/edit')} className="rounded-full border border-slate-300 px-4 py-2 text-xs font-bold hover:bg-slate-50">Edit profile</button>
             <button onClick={() => navigate('/verification')} className="rounded-full border border-blue-200 px-4 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50">{profile?.verified ? 'Verification' : 'Verify account'}</button>
