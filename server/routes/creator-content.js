@@ -114,6 +114,39 @@ router.post('/creator/content-library/schedule', asyncRoute(async (req, res) => 
   res.status(201).json({ message: 'Post scheduled. Recommendation intelligence is ready before publication.', item: output(row) });
 }));
 
+
+router.post('/creator/content-library/publish-now', asyncRoute(async (req, res) => {
+  if (!await creator(req, res)) return;
+  const payload = req.body || {};
+  const text = clean(payload.text, 5000);
+  const media = Array.isArray(payload.media) ? payload.media : [];
+  if (!text && !media.length) return res.status(400).json({ message: 'Write a caption or attach media before publishing.' });
+  if (media.length > 10 || media.some((item) => !item || !['image', 'video'].includes(String(item.type || '').toLowerCase()) || typeof item.url !== 'string' || !(item.url.startsWith('https://') || item.url.startsWith('http://')))) {
+    return res.status(400).json({ message: 'One or more media attachments are invalid. Upload them again.' });
+  }
+  const mediaTypes = [...new Set(media.map((item) => String(item?.type || '').toLowerCase()))];
+  if (mediaTypes.includes('video') && (media.length !== 1 || mediaTypes.length !== 1)) return res.status(400).json({ message: 'A video post must contain exactly one video.' });
+  if (media.length > 1 && mediaTypes.some((type) => type !== 'image')) return res.status(400).json({ message: 'A carousel can contain images only.' });
+  const destination = ['profile', 'page', 'community', 'channel'].includes(String(payload.destination)) ? String(payload.destination) : 'profile';
+  const communityId = payload.communityId ? id(payload.communityId) : null;
+  if (destination !== 'profile') {
+    if (!communityId) return res.status(400).json({ message: 'Choose a destination before publishing.' });
+    const target = await db.getOne('SELECT id FROM communities WHERE id = ? AND created_by = ? AND space_type = ?', [communityId, req.user.id, destination]);
+    if (!target) return res.status(404).json({ message: 'That destination was not found in your Creator Portal. Refresh your spaces and try again.' });
+  } else if (communityId) {
+    return res.status(400).json({ message: 'Choose a creator space destination or publish to your profile.' });
+  }
+  const analysis = await classify(payload);
+  const kind = mediaTypes.includes('video') ? 'video' : media.length ? 'image' : 'text';
+  const inserted = await db.insert(
+    'INSERT INTO posts (author_id, body, kind, category, hashtags, target_interests, community_id, media, visibility, topics, keywords, audience_signals) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [req.user.id, text, kind, clean(payload.category, 80) || null, JSON.stringify(list(payload.hashtags, 10)), JSON.stringify(list(payload.targetInterests, 8)), communityId, JSON.stringify(media), ['public', 'fans', 'premium'].includes(payload.visibility) ? payload.visibility : 'public', JSON.stringify(analysis.topics), JSON.stringify(analysis.keywords), JSON.stringify(analysis.audiences)]
+  );
+  const postId = Number(inserted?.id);
+  if (!postId) throw new Error('The post could not be published.');
+  res.status(201).json({ message: 'Post published immediately. Recommendation intelligence is attached and ready for feed ranking.', postId, analysis });
+}));
+
 router.post('/creator/content-library/:id/cancel', asyncRoute(async (req, res) => {
   if (!await creator(req, res)) return;
   const changed = await db.update('UPDATE qc_scheduled_creator_posts SET status = \'cancelled\', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND creator_id = ? AND status = \'scheduled\'', [id(req.params.id), req.user.id]);
