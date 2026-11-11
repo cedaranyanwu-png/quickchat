@@ -164,19 +164,19 @@ router.post('/register', async (req, res) => {
 });
 
 router.post('/login', async (req, res) => {
-  const email = normalizeEmail(req.body?.email);
+  const identifier = String(req.body?.email || req.body?.username || '').trim();
   const password = String(req.body?.password || '');
 
-  if (!email || !password) {
-    return res.status(400).json({ message: 'Enter your email and password.' });
+  if (!identifier || !password) {
+    return res.status(400).json({ message: 'Enter your email address or username and password.' });
   }
 
   try {
     const user = normalizeUser(
-      await db.getOne('SELECT * FROM users WHERE LOWER(email) = LOWER(?)', [email]),
+      await db.getOne('SELECT * FROM users WHERE LOWER(email) = LOWER(?) OR LOWER(username) = LOWER(?)', [identifier, identifier]),
     );
     if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ message: 'Email or password is incorrect.' });
+      return res.status(401).json({ message: 'Username/email or password is incorrect.' });
     }
     if (Number(user.email_verified || 0) !== 1) {
       let delivery = null;
