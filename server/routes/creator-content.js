@@ -76,7 +76,7 @@ router.post('/creator/content-library/schedule', asyncRoute(async (req, res) => 
   if (!text && !media.length) return res.status(400).json({ message: 'Write a caption or attach media before scheduling.' });
   if (media.length > 10) return res.status(400).json({ message: 'A post can contain up to 10 media items.' });
   const mediaTypes = [...new Set(media.map((item) => String(item?.type || '').toLowerCase()))];
-  if (media.some((item) => !item || !['image', 'video'].includes(String(item.type || '').toLowerCase()) || typeof item.url !== 'string' || !/^https?:\\/\\//i.test(item.url))) {
+  if (media.some((item) => !item || !['image', 'video'].includes(String(item.type || '').toLowerCase()) || typeof item.url !== 'string' || !(item.url.startsWith('https://') || item.url.startsWith('http://')))) {
     return res.status(400).json({ message: 'One or more media attachments are invalid. Upload them again.' });
   }
   if (mediaTypes.includes('video') && (media.length !== 1 || mediaTypes.length !== 1)) {
