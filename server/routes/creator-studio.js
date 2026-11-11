@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../database');
 const { asyncRoute } = require('./utils');
+const { requirePermission } = require('./admin');
 
 const router = express.Router();
 const dateType = db.type === 'sqlite' ? 'DATETIME' : 'TIMESTAMP';
@@ -83,6 +84,20 @@ router.post('/creator-studio/activate', asyncRoute(async (req, res) => {
   [req.user.id, creatorName, niche, bio]);
   await db.update('UPDATE users SET creator_account = 1 WHERE id = ?', [req.user.id]);
   res.json({ message: 'Creator account activated. Your existing profile and posts are unchanged.', isCreator: true });
+}));
+
+
+router.get('/admin/growth/attribution', requirePermission('analytics.view'), asyncRoute(async (_req, res) => {
+  const [total, sources, campaigns, recent] = await Promise.all([
+    db.getCount('SELECT COUNT(*) AS count FROM qc_growth_attribution'),
+    db.query('SELECT source, COUNT(*) AS users FROM qc_growth_attribution GROUP BY source ORDER BY users DESC'),
+    db.query("SELECT COALESCE(campaign, '(no campaign tag)') AS campaign, COALESCE(source, 'direct') AS source, COUNT(*) AS users FROM qc_growth_attribution GROUP BY campaign, source ORDER BY users DESC LIMIT 30"),
+    db.query(`SELECT a.user_id, a.referrer_id, a.source, a.campaign, a.medium, a.landing_path, a.created_at,
+      u.fullname, u.username, u.email
+      FROM qc_growth_attribution a LEFT JOIN users u ON u.id = a.user_id
+      ORDER BY a.id DESC LIMIT 100`),
+  ]);
+  res.json({ total: Number(total || 0), sources, campaigns, recent });
 }));
 
 module.exports = { router, initializeCreatorStudioTables, recordAttribution };
