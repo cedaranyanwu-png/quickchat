@@ -6,6 +6,7 @@ import { INTEREST_OPTIONS } from '../interest-options';
 
 const Register = ({ googleEnabled, onAuthenticated }) => {
   const navigate = useNavigate();
+  const nextPath = new URLSearchParams(window.location.search).get('next') || '/home';
   const [formData, setFormData] = useState({ fullName: '', username: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -64,9 +65,9 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
           localStorage.setItem('user', JSON.stringify({ ...JSON.parse(localStorage.getItem('user') || '{}'), ...res.profile }));
         }
       }
-      navigate('/home');
+      navigate(nextPath);
     } catch {
-      navigate('/home');
+      navigate(nextPath);
     } finally {
       setIsLoading(false);
     }
@@ -88,7 +89,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
             setResendMessage(result.message || 'If the account needs verification, a new link is on its way.');
           } catch (e) { setResendMessage(e.message || 'Could not resend the link.'); }
         }} className="mt-5 w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white">Resend verification email</button>
-        <Link to="/login" className="mt-4 inline-block text-sm font-bold text-blue-700 hover:underline">Return to sign in</Link>
+        <Link to={`/login?next=${encodeURIComponent(nextPath)}`} className="mt-4 inline-block text-sm font-bold text-blue-700 hover:underline">Return to sign in</Link>
       </div>
     </div>;
   }
@@ -138,7 +139,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
           <div className="flex items-center justify-between pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => navigate('/home')}
+              onClick={() => navigate(nextPath)}
               className="text-xs font-semibold text-slate-500 hover:text-slate-800"
             >
               Skip for now
