@@ -2,7 +2,6 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const items = [
-  { label: 'Creator Studio', description: 'Switch to creator mode, publish and track your audience.', icon: 'fa-solid fa-clapperboard', path: '/creator-studio' },
   { label: 'Creator Programme', description: 'Discover creator opportunities and join the recruitment programme.', icon: 'fa-solid fa-star', path: '/creator-program' },
   { label: 'Live', description: 'Start or discover live sessions.', icon: 'fa-solid fa-tower-broadcast', path: '/live' },
   { label: 'Communities', description: 'Create, discover, and join communities.', icon: 'fa-solid fa-users', path: '/communities' },
