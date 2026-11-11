@@ -7,11 +7,13 @@ import RewardsPanel from '../components/admin/RewardsPanel';
 import AdminNotificationsPanel from '../components/admin/AdminNotificationsPanel';
 import AdminRewardsProgramPanel from '../components/admin/AdminRewardsProgramPanel';
 import AdminAdsPanel from '../components/admin/AdminAdsPanel';
+import First100Panel from '../components/admin/First100Panel';
 import RSSAdmin from './RSSAdmin';
 
 const NAV = [
   { key: 'overview', label: 'Overview', icon: 'fa-chart-pie', permission: 'dashboard.view' },
   { key: 'traffic', label: 'Traffic & bot security', icon: 'fa-chart-line', permission: 'analytics.view' },
+  { key: 'first100', label: 'First 100 campaign', icon: 'fa-rocket', permission: 'analytics.view' },
   { key: 'users', label: 'User management', icon: 'fa-users', permission: 'users.view' },
   { key: 'whatsapp', label: 'WhatsApp notifications', icon: 'fa-bell', permission: 'notifications.send' },
   { key: 'notifications', label: 'Notifications centre', icon: 'fa-paper-plane', permission: 'notifications.send' },
@@ -116,6 +118,9 @@ export default function Admin() {
       } else if (key === 'traffic') {
         const data = await adminRequest('/admin/traffic');
         setTraffic(data);
+      } else if (key === 'first100') {
+        // The panel owns its data loading so the main admin state stays small.
+        setLoading(false);
       } else if (key === 'users') {
         const data = await adminRequest(`/admin/users?page=${page}&limit=25&search=${encodeURIComponent(query)}`);
         setUsers(data.users || []);
@@ -417,6 +422,7 @@ export default function Admin() {
             <button disabled={credentialBusy} className="rounded-xl bg-blue-700 px-5 py-3 text-sm font-extrabold text-white hover:bg-blue-800 disabled:opacity-60">{credentialBusy ? 'Saving…' : 'Save administrator credentials'}</button>
           </form>
         </section>}
+        {section === 'first100' && <First100Panel />}
         {section === 'traffic' && <section>
           <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
             <div><h2 className="text-lg font-black text-slate-900">Traffic &amp; bot security</h2><p className="mt-1 text-sm text-slate-500">Registration traffic, landing-page activity and automated-request detections for the last 30 days.</p></div>
