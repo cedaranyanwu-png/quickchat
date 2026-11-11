@@ -147,4 +147,4 @@ function startCreatorContentScheduler() {
 }
 
 module.exports = { router, startCreatorContentScheduler };
-\nstartCreatorContentScheduler();\n
+startCreatorContentScheduler();
