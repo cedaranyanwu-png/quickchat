@@ -69,6 +69,11 @@ router.get('/creator-studio/me', asyncRoute(async (req, res) => {
       referrals: Number(referrals || 0), qualifiedReferrals: Number(qualified || 0), trackedSignups: Number(attributed || 0) },
     referralCode: `QC${req.user.id}`,
     referralLink: `${String(process.env.PUBLIC_APP_URL || '').replace(/\/$/, '')}/register?ref=QC${req.user.id}`,
+    trackingLinks: {
+      tiktok: `${String(process.env.PUBLIC_APP_URL || '').replace(/\/$/, '')}/register?ref=QC${req.user.id}&utm_source=tiktok&utm_medium=short_video&utm_campaign=creator_recruitment`,
+      whatsapp: `${String(process.env.PUBLIC_APP_URL || '').replace(/\/$/, '')}/register?ref=QC${req.user.id}&utm_source=whatsapp&utm_medium=messaging&utm_campaign=creator_recruitment`,
+      dm: `${String(process.env.PUBLIC_APP_URL || '').replace(/\/$/, '')}/register?ref=QC${req.user.id}&utm_source=creator_dm&utm_medium=direct_message&utm_campaign=creator_recruitment`,
+    },
     referralSources: sources,
   });
 }));
