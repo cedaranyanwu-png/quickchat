@@ -49,6 +49,7 @@ import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
 import CreatorPortal from './pages/CreatorPortal';
+import CreatorContentLibrary from './pages/CreatorContentLibrary';
 import BusinessPortal from './pages/BusinessPortal';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
@@ -144,6 +145,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (['/creator', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
     return <Routes>
       <Route path="/creator" element={<CreatorPortal />} />
+        <Route path="/creator/content-library" element={<CreatorContentLibrary />} />
       <Route path="/business" element={<BusinessPortal />} />
       <Route path="*" element={<Navigate to="/creator" replace />} />
     </Routes>;
