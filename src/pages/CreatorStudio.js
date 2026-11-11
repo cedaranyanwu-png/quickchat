@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { apiRequest } from '../api';
+import CreatorSidebar from '../components/CreatorSidebar';
 
 const Metric = ({ label, value, icon }) => <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex items-center justify-between text-slate-500"><span className="text-xs font-semibold">{label}</span><i className={`fa-solid ${icon} text-blue-600`} /></div><p className="mt-3 text-2xl font-black text-slate-950">{Number(value || 0).toLocaleString()}</p></div>;
 
@@ -95,7 +96,7 @@ export default function CreatorStudio() {
   const listKey = activeType === 'community' ? 'communities' : activeType === 'page' ? 'pages' : 'channels';
   const activeItems = spaces[listKey] || [];
 
-  return <div className="mx-auto max-w-6xl px-4 pb-28 pt-5 lg:pb-10">
+  return <><CreatorSidebar/><div className="mx-auto max-w-6xl px-4 pb-28 pt-5 lg:ml-64 lg:px-8 lg:pb-10">
     <header className="mb-6 overflow-hidden rounded-3xl bg-slate-950 p-6 text-white sm:p-8">
       <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-300">Independent creator workspace</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">Creator Studio</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">Manage your creator identity, publishing, communities, pages and channels from this portal.</p></div><span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold">Workspace active</span></div>
       <div className="mt-6 flex flex-wrap gap-2"><Link to="/creator/content-library" className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-blue-500"><i className="fa-solid fa-calendar-plus mr-2"/>Content Library</Link><a href="#creator-spaces" className="rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-white/10">Manage spaces</a></div>
