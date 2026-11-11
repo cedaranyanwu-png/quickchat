@@ -27,8 +27,23 @@ export default function Sidebar({ onOpenPost, onLogout }) {
   ];
 
   useEffect(() => {
-    apiRequest('/profile/me').then((result) => setProfile(result.profile)).catch(() => {});
-    apiRequest('/communities?mine=1&limit=100').then((result) => setMySpaces(result.communities || [])).catch(() => setMySpaces([]));
+    let active = true;
+    apiRequest('/profile/me').then((result) => {
+      if (active) setProfile(result.profile);
+    }).catch(() => {});
+    // Mirror Creator Portal spaces into the shared communities table before
+    // loading the sidebar list. Continue even when the user has no Creator
+    // Portal profile, so ordinary platform communities still appear.
+    apiRequest('/creator-studio/entities')
+      .catch(() => null)
+      .then(() => apiRequest('/communities?mine=1&limit=100'))
+      .then((result) => {
+        if (active) setMySpaces(result.communities || []);
+      })
+      .catch(() => {
+        if (active) setMySpaces([]);
+      });
+    return () => { active = false; };
   }, [location.pathname]);
 
   return <>
