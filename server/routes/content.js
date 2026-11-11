@@ -360,39 +360,102 @@ router.get('/composer/insights', asyncRoute(async (req, res) => {
 }));
 
 router.get('/creator/analytics', asyncRoute(async (req, res) => {
-  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
-  const [summary, rows] = await Promise.all([
-    db.getOne(
-      `SELECT COUNT(*) AS posts,
-              COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
-              COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
-              COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
-         FROM posts p WHERE p.author_id = ? AND p.created_at >= ?`,
-      [req.user.id, since],
-    ),
-    db.query(
-    `SELECT p.category,
-            COUNT(*) AS posts,
-            COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id AND COALESCE(l.is_synthetic, 0) = 0)), 0) AS likes,
-            COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id = p.id)), 0) AS replies,
-            COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id)), 0) AS reposts
-       FROM posts p WHERE p.author_id = ? AND p.created_at >= ?
-       GROUP BY p.category ORDER BY posts DESC LIMIT 10`,
-    [req.user.id, since],
-    ),
+  const creator = await db.getOne("SELECT user_id FROM qc_creator_applications WHERE user_id = ? AND status = 'active'", [req.user.id]);
+  if (!creator) return res.status(403).json({ message: 'Complete your Creator Portal profile to view analytics.' });
+  const now = Date.now();
+  const since = new Date(now - 30 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const previousSince = new Date(now - 60 * 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const [summary, previous, posts] = await Promise.all([
+    db.getOne(`SELECT COUNT(*) AS posts,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id AND COALESCE(l.is_synthetic,0)=0)),0) AS likes,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id=p.id)),0) AS replies,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id=p.id)),0) AS reposts,
+      COALESCE(SUM((SELECT COUNT(*) FROM qc_creator_post_views v WHERE v.post_id=p.id)),0) AS views
+      FROM posts p WHERE p.author_id=? AND p.created_at>=?`, [req.user.id, since]),
+    db.getOne(`SELECT COUNT(*) AS posts,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id AND COALESCE(l.is_synthetic,0)=0)),0) AS likes,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_replies r WHERE r.post_id=p.id)),0) AS replies,
+      COALESCE(SUM((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id=p.id)),0) AS reposts,
+      COALESCE(SUM((SELECT COUNT(*) FROM qc_creator_post_views v WHERE v.post_id=p.id)),0) AS views
+      FROM posts p WHERE p.author_id=? AND p.created_at>=? AND p.created_at<?`, [req.user.id, previousSince, since]),
+    db.query(`SELECT p.id,p.body,p.category,p.hashtags,p.topics,p.created_at,
+      COALESCE((SELECT COUNT(*) FROM qc_creator_post_views v WHERE v.post_id=p.id),0) AS views,
+      COALESCE((SELECT COUNT(*) FROM post_likes l WHERE l.post_id=p.id AND COALESCE(l.is_synthetic,0)=0),0) AS likes,
+      COALESCE((SELECT COUNT(*) FROM post_replies r WHERE r.post_id=p.id),0) AS replies,
+      COALESCE((SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id=p.id),0) AS reposts
+      FROM posts p WHERE p.author_id=? ORDER BY p.created_at DESC,p.id DESC LIMIT 50`, [req.user.id])
   ]);
-  res.json({ days: 30, recentPerformance: {
-    posts: Number(summary?.posts || 0),
-    likes: Number(summary?.likes || 0),
-    replies: Number(summary?.replies || 0),
-    reposts: Number(summary?.reposts || 0),
-  }, topics: rows.map((row) => ({
-    topic: row.category || 'No topic',
-    posts: Number(row.posts || 0),
-    likes: Number(row.likes || 0),
-    replies: Number(row.replies || 0),
-    reposts: Number(row.reposts || 0),
-  })) });
+  const ids = posts.map((post) => Number(post.id));
+  let events = [];
+  if (ids.length) {
+    const marks = ids.map(() => '?').join(',');
+    events = await db.query(`SELECT post_id,DATE(event_at) AS day,event_type,COUNT(*) AS total FROM (
+      SELECT post_id,created_at AS event_at,'view' AS event_type FROM qc_creator_post_views WHERE post_id IN (${marks}) AND created_at>=?
+      UNION ALL SELECT post_id,created_at AS event_at,'like' AS event_type FROM post_likes WHERE post_id IN (${marks}) AND created_at>=? AND COALESCE(is_synthetic,0)=0
+      UNION ALL SELECT post_id,created_at AS event_at,'comment' AS event_type FROM post_replies WHERE post_id IN (${marks}) AND created_at>=?
+      UNION ALL SELECT post_id,created_at AS event_at,'share' AS event_type FROM post_reposts WHERE post_id IN (${marks}) AND created_at>=?
+    ) activity GROUP BY post_id,DATE(event_at) ORDER BY DATE(event_at) ASC`,
+    [...ids,since,...ids,since,...ids,since,...ids,since]);
+  }
+  const parseList = (value) => { try { const data=JSON.parse(value||'[]'); return Array.isArray(data)?data:[]; } catch (_) { return []; } };
+  const byPost = new Map();
+  for (const event of events) {
+    const key=Number(event.post_id);
+    if (!byPost.has(key)) byPost.set(key,[]);
+    byPost.get(key).push({ day:String(event.day).slice(0,10), type:event.event_type, count:Number(event.total||0) });
+  }
+  const weekStart = new Date(now-7*86400000).toISOString().slice(0,10);
+  const priorStart = new Date(now-14*86400000).toISOString().slice(0,10);
+  const postMetrics = posts.map((post) => {
+    const likes=Number(post.likes||0), comments=Number(post.replies||0), shares=Number(post.reposts||0), views=Number(post.views||0);
+    const timeline=byPost.get(Number(post.id))||[];
+    const recent=timeline.filter(x=>x.day>=weekStart&&x.type!=='view').reduce((n,x)=>n+x.count,0);
+    const prior=timeline.filter(x=>x.day>=priorStart&&x.day<weekStart&&x.type!=='view').reduce((n,x)=>n+x.count,0);
+    const change=prior===0?(recent>0?100:0):Math.round((recent-prior)/prior*100);
+    return {id:Number(post.id),text:String(post.body||'').slice(0,220),category:post.category||'Uncategorised',
+      hashtags:parseList(post.hashtags),topics:parseList(post.topics),createdAt:post.created_at,views,likes,comments,shares,
+      engagement:likes+comments+shares,change,trend:change>5?'rising':change< -5?'falling':'steady',timeline};
+  });
+  const hashtagMap=new Map(), topicMap=new Map();
+  for (const post of postMetrics) {
+    for (const raw of post.hashtags) {
+      const tag=String(raw||'').replace(/^#/,'').trim().toLowerCase(); if(!tag) continue;
+      const row=hashtagMap.get(tag)||{tag,posts:0,likes:0,comments:0,shares:0};
+      row.posts++;row.likes+=post.likes;row.comments+=post.comments;row.shares+=post.shares;hashtagMap.set(tag,row);
+    }
+    for (const topic of [...new Set([post.category,...post.topics].map(x=>String(x||'').trim()).filter(Boolean))]) {
+      const row=topicMap.get(topic)||{topic,posts:0,likes:0,comments:0,shares:0};
+      row.posts++;row.likes+=post.likes;row.comments+=post.comments;row.shares+=post.shares;topicMap.set(topic,row);
+    }
+  }
+  const rank=(a,b)=>(b.likes+b.comments*2+b.shares*2)-(a.likes+a.comments*2+a.shares*2);
+  const days=Array.from({length:30},(_,i)=>new Date(now-(29-i)*86400000).toISOString().slice(0,10));
+  const daily=days.map(day=>{const list=events.filter(e=>String(e.day).slice(0,10)===day);return {
+    day,views:list.filter(e=>e.event_type==='view').reduce((n,e)=>n+Number(e.total||0),0),
+    likes:list.filter(e=>e.event_type==='like').reduce((n,e)=>n+Number(e.total||0),0),
+    comments:list.filter(e=>e.event_type==='comment').reduce((n,e)=>n+Number(e.total||0),0),
+    shares:list.filter(e=>e.event_type==='share').reduce((n,e)=>n+Number(e.total||0),0)};});
+  res.json({days:30,updatedAt:new Date().toISOString(),
+    recentPerformance:{posts:Number(summary?.posts||0),likes:Number(summary?.likes||0),replies:Number(summary?.replies||0),reposts:Number(summary?.reposts||0),views:Number(summary?.views||0)},
+    previousPerformance:{posts:Number(previous?.posts||0),likes:Number(previous?.likes||0),replies:Number(previous?.replies||0),reposts:Number(previous?.reposts||0),views:Number(previous?.views||0)},
+    daily,posts:postMetrics,hashtags:[...hashtagMap.values()].sort(rank).slice(0,12),topics:[...topicMap.values()].sort(rank).slice(0,12)});
+}));
+
+router.post('/posts/:postId/view', asyncRoute(async (req, res) => {
+  const postId = positiveId(req.params.postId);
+  if (!postId) return res.status(400).json({ message: 'Invalid post ID.' });
+  const post = await db.getOne('SELECT id, author_id FROM posts WHERE id = ?', [postId]);
+  if (!post) return notFound(res, 'Post not found.');
+  if (Number(post.author_id) === Number(req.user.id)) return res.json({ recorded: false, reason: 'owner' });
+  const viewer = await db.getOne('SELECT is_synthetic FROM users WHERE id = ?', [req.user.id]);
+  if (!viewer || Number(viewer.is_synthetic || 0) === 1) return res.json({ recorded: false, reason: 'non-human-viewer' });
+  try {
+    await db.insert('INSERT INTO qc_creator_post_views (post_id, viewer_id) VALUES (?, ?)', [postId, req.user.id]);
+    return res.status(201).json({ recorded: true });
+  } catch (error) {
+    if (uniqueConstraint(error)) return res.json({ recorded: false, reason: 'already-counted' });
+    throw error;
+  }
 }));
 
 router.get('/posts/:postId', asyncRoute(async (req, res) => {
