@@ -131,7 +131,6 @@ function toProfile(row) {
     verificationMethod: fields.verification_method || null,
     businessEnabled: Boolean(Number(fields.business_enabled || 0)),
     isCreator: Boolean(Number(fields.creator_account || 0)),
-    isCreator: Boolean(Number(fields.creator_account || 0)),
     recommendationPreferences: parseJSON(fields.recommendation_preferences, null),
     createdAt: fields.created_at || fields.createdat,
     followerCount: Number(fields.follower_count || 0),
