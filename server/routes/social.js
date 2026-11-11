@@ -71,9 +71,19 @@ router.patch('/notifications/read', asyncRoute(async (req, res) => {
 
 router.get('/communities', asyncRoute(async (req, res) => {
   const query = String(req.query.q || '').trim().slice(0, 100);
-  const filter = query ? 'WHERE LOWER(c.name) LIKE LOWER(?) OR LOWER(c.category) LIKE LOWER(?)' : '';
-  const params = query ? [req.user.id, req.user.id, req.user.id, req.user.id, `%${query}%`, `%${query}%`, clampLimit(req.query.limit, 50, 100)]
-    : [req.user.id, req.user.id, req.user.id, req.user.id, clampLimit(req.query.limit, 50, 100)];
+  const mine = ['1', 'true', 'yes'].includes(String(req.query.mine || '').toLowerCase());
+  const filters = [];
+  const params = [req.user.id, req.user.id, req.user.id, req.user.id];
+  if (query) {
+    filters.push('(LOWER(c.name) LIKE LOWER(?) OR LOWER(c.category) LIKE LOWER(?))');
+    params.push(`%${query}%`, `%${query}%`);
+  }
+  if (mine) {
+    filters.push('c.created_by = ?');
+    params.push(req.user.id);
+  }
+  const filter = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  params.push(clampLimit(req.query.limit, 50, 100));
   const rows = await db.query(
     `SELECT c.id, c.slug, c.name, c.description, c.category, c.space_type, c.created_by, c.created_at, c.monthly_price, c.price_currency,
             COALESCE((SELECT mine.role FROM community_members mine WHERE mine.community_id = c.id AND mine.user_id = ?), 'member') AS member_role,

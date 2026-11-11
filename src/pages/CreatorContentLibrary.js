@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { apiRequest, uploadMedia } from '../api';
 import CreatorSidebar from '../components/CreatorSidebar';
 
@@ -8,7 +8,10 @@ const toIso = (v) => { if (!v) return ''; const d = new Date(v); return Number.i
 const formatDate = (v) => { try { return new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)); } catch (_) { return v; } };
 
 export default function CreatorContentLibrary() {
-  const [form, setForm] = useState(EMPTY);
+  const [searchParams] = useSearchParams();
+  const requestedDestination = ['profile', 'community', 'page', 'channel'].includes(searchParams.get('destination')) ? searchParams.get('destination') : 'profile';
+  const requestedCommunityId = searchParams.get('communityId') || '';
+  const [form, setForm] = useState(() => ({ ...EMPTY, destination: requestedDestination, communityId: requestedCommunityId }));
   const [items, setItems] = useState([]);
   const [spaces, setSpaces] = useState({ communities: [], pages: [], channels: [] });
   const [analysis, setAnalysis] = useState(null);
@@ -28,6 +31,11 @@ export default function CreatorContentLibrary() {
     setSpaces({ communities: entityData.communities || [], pages: entityData.pages || [], channels: entityData.channels || [] });
   }, []);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
+  useEffect(() => {
+    if (!requestedCommunityId || requestedDestination === 'profile') return;
+    setForm((current) => ({ ...current, destination: requestedDestination, communityId: requestedCommunityId }));
+  }, [requestedDestination, requestedCommunityId]);
+
 
   const chooseMediaKind = (kind) => { setMediaKind(kind); setForm((current) => ({ ...current, media: [] })); setPreviews([]); };
   const addMedia = async (event) => {
@@ -76,7 +84,7 @@ export default function CreatorContentLibrary() {
         body: { ...form, hashtags: form.hashtags.split(/[,s]+/).filter(Boolean), scheduledAt: toIso(form.scheduledAt) }
       });
       setItems((prev) => [...prev, result.item]);
-      setForm(EMPTY); setPreviews([]); setMediaKind('image'); setAnalysis(null); setNotice(result.message);
+      setForm((current) => ({ ...EMPTY, destination: current.destination, communityId: current.communityId })); setPreviews([]); setMediaKind('image'); setAnalysis(null); setNotice(result.message);
     } catch (e) { setError(e.message || 'Could not schedule post.'); } finally { setBusy(false); }
   };
 
@@ -103,7 +111,7 @@ export default function CreatorContentLibrary() {
       {error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
       <div className="grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
         <form onSubmit={schedule} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div><h1 className="text-xl font-black text-slate-950">Schedule content</h1><p className="mt-1 text-xs leading-5 text-slate-500">QuickChat analyzes the post now, stores the signals, and publishes it automatically later.</p></div>
+          <div><h1 className="text-xl font-black text-slate-950">Schedule content</h1><p className="mt-1 text-xs leading-5 text-slate-500">QuickChat analyzes the post now, stores the signals, and publishes it automatically later.</p>{form.destination !== 'profile' && <p className="mt-2 inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-800"><i className={`fa-solid ${form.destination === 'page' ? 'fa-flag' : form.destination === 'channel' ? 'fa-tower-broadcast' : 'fa-users'}`} />Publishing to {destinationSpaces.find((space) => String(space.platformId) === String(form.communityId))?.name || `selected ${form.destination}`}</p>}</div>
 
           <div>
             <p className="mb-2 text-xs font-bold text-slate-600">Post format</p>
