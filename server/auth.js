@@ -7,6 +7,7 @@ const { sendEmail } = require('./email');
 const { createToken, authenticate } = require('./middleware/authenticate');
 const { recordRegistration } = require('./traffic-security');
 const { createReferral, qualifyNewUser } = require('./routes/rewards-program');
+const { recordAttribution } = require('./routes/creator-studio');
 
 const router = express.Router();
 const isProduction = process.env.NODE_ENV === 'production';
