@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiRequest, resolveMediaUrl } from '../api';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
+import FoundingBadge from './FoundingBadge';
 import PostCard from './PostCard';
 
 const tabs = ['Posts', 'Media', 'Likes'];
@@ -111,7 +112,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
   if (loading && !profile) return <p className="p-8 text-center text-sm text-slate-500">Loading profile…</p>;
   const coverImageUrl = resolveMediaUrl(profile?.coverImage);
   return <div className="max-w-4xl mx-auto pb-20 lg:pb-0">
-    <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-200 z-10 px-4 py-2 flex items-center gap-4"><button onClick={() => navigate(-1)} className="w-8 h-8 rounded-full hover:bg-slate-100"><i className="fa-solid fa-arrow-left"/></button><div><h2 className="text-base font-extrabold text-slate-900">{profile?.fullName || 'Profile'} <VerifiedBadge verified={profile?.verified} /></h2><p className="text-[10px] text-slate-500">{profile?.postCount || 0} posts</p></div></div>
+    <div className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-slate-200 z-10 px-4 py-2 flex items-center gap-4"><button onClick={() => navigate(-1)} className="w-8 h-8 rounded-full hover:bg-slate-100"><i className="fa-solid fa-arrow-left"/></button><div><h2 className="text-base font-extrabold text-slate-900">{profile?.fullName || 'Profile'} <VerifiedBadge verified={profile?.verified} /> <FoundingBadge foundingMember={profile?.foundingMember} /></h2><p className="text-[10px] text-slate-500">{profile?.postCount || 0} posts</p></div></div>
     <div className="relative">
       <button type="button" disabled={!profile?.coverImage} onClick={() => coverImageUrl && openModal?.(coverImageUrl)} className="group relative block h-36 w-full overflow-hidden border-0 bg-slate-200 bg-cover bg-center text-left disabled:cursor-default" style={{ backgroundImage: coverImageUrl ? `url("${coverImageUrl.replace(/"/g, '%22')}")` : undefined }} aria-label={profile?.coverImage ? 'View cover image' : undefined}>
         {profile?.coverImage && <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition group-hover:bg-black/20 group-hover:opacity-100"><span className="rounded-full bg-black/55 px-3 py-2 text-xs font-bold"><i className="fa-solid fa-expand mr-1.5" />View image</span></span>}
@@ -134,7 +135,7 @@ export default function ProfilePage({ username, openModal, openVideo }) {
           </>
         )}
       </div>
-      <h3 className="text-base font-extrabold text-slate-900">{profile?.fullName} <VerifiedBadge verified={profile?.verified} className="text-sm" /></h3>
+      <h3 className="text-base font-extrabold text-slate-900">{profile?.fullName} <VerifiedBadge verified={profile?.verified} className="text-sm" /> <FoundingBadge foundingMember={profile?.foundingMember} /></h3>
       {profile?.aiCharacter && <span className="mt-1 inline-flex rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide text-violet-700">AI character · fictional profile</span>}
       <p className="text-xs text-slate-500">@{String(profile?.username || '').replace(/^@/, '')}</p>
       {profile?.bio && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-900">{profile.bio}</p>}

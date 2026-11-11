@@ -21,6 +21,7 @@ const PROFILE_SELECT = `
          (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS follower_count,
          (SELECT COUNT(*) FROM follows f WHERE f.follower_id = u.id) AS following_count,
          (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id) AS post_count,
+         EXISTS(SELECT 1 FROM qc_first100_members fm WHERE fm.user_id = u.id) AS is_founding_member,
          EXISTS(SELECT 1 FROM follows mine WHERE mine.follower_id = ? AND mine.followed_id = u.id) AS is_following
     FROM users u`;
 
