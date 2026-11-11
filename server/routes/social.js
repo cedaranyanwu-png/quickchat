@@ -75,7 +75,7 @@ router.get('/communities', asyncRoute(async (req, res) => {
   const params = query ? [req.user.id, req.user.id, req.user.id, req.user.id, `%${query}%`, `%${query}%`, clampLimit(req.query.limit, 50, 100)]
     : [req.user.id, req.user.id, req.user.id, req.user.id, clampLimit(req.query.limit, 50, 100)];
   const rows = await db.query(
-    `SELECT c.id, c.slug, c.name, c.description, c.category, c.created_by, c.created_at, c.monthly_price, c.price_currency,
+    `SELECT c.id, c.slug, c.name, c.description, c.category, c.space_type, c.created_by, c.created_at, c.monthly_price, c.price_currency,
             COALESCE((SELECT mine.role FROM community_members mine WHERE mine.community_id = c.id AND mine.user_id = ?), 'member') AS member_role,
             (SELECT COUNT(*) FROM community_members cm WHERE cm.community_id = c.id) AS members,
             EXISTS(SELECT 1 FROM community_members mine WHERE mine.community_id = c.id AND mine.user_id = ?) AS joined,
@@ -91,6 +91,7 @@ router.get('/communities', asyncRoute(async (req, res) => {
     name: row.name,
     description: row.description || '',
     category: row.category || '',
+    spaceType: row.space_type || 'community',
     members: Number(row.members || 0),
     joined: Boolean(row.joined),
     isOwner: Number(row.created_by) === Number(req.user.id),
@@ -108,7 +109,7 @@ router.get('/communities', asyncRoute(async (req, res) => {
 router.get('/communities/:communityId/posts', asyncRoute(async (req, res) => {
   const communityId = positiveId(req.params.communityId);
   const community = communityId ? await db.getOne(
-    `SELECT c.id, c.name, c.slug, c.description, c.category, c.created_by, c.monthly_price, c.price_currency,
+    `SELECT c.id, c.name, c.slug, c.description, c.category, c.space_type, c.created_by, c.monthly_price, c.price_currency,
             COALESCE((SELECT cm.role FROM community_members cm WHERE cm.community_id = c.id AND cm.user_id = ?), 'member') AS member_role
        FROM communities c WHERE c.id = ?`,
     [req.user.id, communityId],
@@ -126,7 +127,7 @@ router.get('/communities/:communityId/posts', asyncRoute(async (req, res) => {
   const canAccess = !community.monthly_price || isOwner || isModerator || Boolean(entitlement);
   const communityInfo = {
     id: community.id, name: community.name, slug: community.slug,
-    description: community.description || '', category: community.category || '',
+    description: community.description || '', category: community.category || '', spaceType: community.space_type || 'community',
     isPaid: Boolean(community.monthly_price), monthlyPrice: community.monthly_price || null,
     currency: community.price_currency || 'NGN', canAccess,
     isOwner, isModerator, canModerate: isOwner || isModerator,
