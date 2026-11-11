@@ -90,7 +90,16 @@ router.post('/creator/content-library/schedule', asyncRoute(async (req, res) => 
   const analysis = await classify(req.body || {});
   const destination = ['profile', 'page', 'community', 'channel'].includes(String(req.body?.destination)) ? String(req.body.destination) : 'profile';
   const communityId = req.body?.communityId ? id(req.body.communityId) : null;
-  if (destination === 'community' && !communityId) return res.status(400).json({ message: 'Choose a community for this scheduled post.' });
+  if (destination !== 'profile') {
+    if (!communityId) return res.status(400).json({ message: `Choose a ${destination} before scheduling this post.` });
+    const target = await db.getOne(
+      'SELECT id FROM communities WHERE id = ? AND created_by = ? AND space_type = ?',
+      [communityId, req.user.id, destination]
+    );
+    if (!target) return res.status(404).json({ message: 'That destination was not found in your Creator Portal. Refresh your spaces and try again.' });
+  } else if (communityId) {
+    return res.status(400).json({ message: 'Choose a creator space destination or publish to your profile.' });
+  }
 
   const row = await db.insert(
     'INSERT INTO qc_scheduled_creator_posts (creator_id, body, media, category, hashtags, target_interests, topics, keywords, audience_signals, recommendation_interests, destination, community_id, visibility, scheduled_at, status, analysis_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'scheduled\', \'ready\')',
