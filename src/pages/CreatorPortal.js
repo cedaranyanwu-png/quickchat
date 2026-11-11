@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { API_BASE_URL, normalizeNetworkError, apiRequest } from '../api';
 import CreatorStudio from './CreatorStudio';
 
-export default function CreatorPortal() {
+export default function CreatorPortal({ onAuthenticated = () => {} }) {
   const portalPath = window.location.hostname.toLowerCase().startsWith('creator.') ? '/' : '/creator';
   const [signedIn, setSignedIn] = useState(Boolean(localStorage.getItem('token')));
   const [modalOpen, setModalOpen] = useState(false);
@@ -30,7 +30,7 @@ export default function CreatorPortal() {
       if (!response.ok) throw new Error(data.message || 'Unable to sign in.');
       localStorage.setItem('token', data.token);
       localStorage.setItem('user', JSON.stringify(data.user));
-      setModalOpen(false); setSignedIn(true);
+      setModalOpen(false); setSignedIn(true); onAuthenticated(true);
     } catch (e) { setError(normalizeNetworkError(e)); }
     finally { setBusy(false); }
   };
@@ -69,7 +69,7 @@ export default function CreatorPortal() {
 
   const signOut = () => {
     localStorage.removeItem('token'); localStorage.removeItem('user');
-    setSignedIn(false); setModalOpen(false);
+    setSignedIn(false); setModalOpen(false); onAuthenticated(false);
   };
 
   if (signedIn) return <div className="min-h-screen bg-slate-50">
