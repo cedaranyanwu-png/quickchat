@@ -20,13 +20,19 @@ export default function Verification() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [creatorStatus, setCreatorStatus] = useState(null);
+  const [creatorForm, setCreatorForm] = useState({ creatorName: '', niche: '', bio: '' });
+  const [creatorSubmitting, setCreatorSubmitting] = useState(false);
+  const [creatorSuccess, setCreatorSuccess] = useState('');
+  const [creatorError, setCreatorError] = useState('');
 
   const loadProfile = () => {
     Promise.allSettled([
       apiRequest('/profile/me'),
       apiRequest('/verification/status'),
+      apiRequest('/creator-studio/me'),
     ])
-      .then(([profileResult, statusResult]) => {
+      .then(([profileResult, statusResult, creatorResult]) => {
         if (profileResult.status === 'fulfilled') {
           setProfile(profileResult.value.profile || null);
         } else {
@@ -34,8 +40,11 @@ export default function Verification() {
         }
         if (statusResult.status === 'fulfilled') {
           setStatus(statusResult.value);
-          // If nobody has bought the badge yet, drop any stale success banner.
           if (!statusResult.value?.verified) setSuccess('');
+        }
+        if (creatorResult.status === 'fulfilled') {
+          setCreatorStatus(creatorResult.value);
+          if (creatorResult.value.creator) setCreatorForm({ creatorName: creatorResult.value.creator.creator_name || '', niche: creatorResult.value.creator.niche || '', bio: creatorResult.value.creator.bio || '' });
         }
         setLoading(false);
       })
@@ -75,6 +84,20 @@ export default function Verification() {
     }
   };
 
+  const handleCreatorActivation = async (event) => {
+    event.preventDefault();
+    setCreatorSubmitting(true); setCreatorError(''); setCreatorSuccess('');
+    try {
+      const result = await apiRequest('/creator-studio/activate', { method: 'POST', body: creatorForm });
+      setCreatorSuccess(result.message || 'Creator account activated. You can now open Creator Studio.');
+      setCreatorStatus((current) => ({ ...(current || {}), isCreator: true, creator: { creator_name: creatorForm.creatorName, niche: creatorForm.niche, bio: creatorForm.bio, status: 'active' } }));
+    } catch (err) {
+      setCreatorError(err?.message || 'Creator account activation could not be completed.');
+    } finally {
+      setCreatorSubmitting(false);
+    }
+  };
+
   const isVerified = Boolean(profile?.verified) || Boolean(status?.verified);
   const planPoints = Number(status?.planPoints) || DEFAULT_PLAN_POINTS;
   const pointsBalance = Number(status?.pointsBalance) || 0;
@@ -94,7 +117,7 @@ export default function Verification() {
         </Link>
         <div>
           <h1 className="text-lg font-extrabold text-slate-900">Account Verification</h1>
-          <p className="text-xs text-slate-500">QuickChat Creator & Authenticity Badge</p>
+          <p className="text-xs text-slate-500">Choose standard verification or activate Creator mode</p>
         </div>
       </header>
 
@@ -155,16 +178,43 @@ export default function Verification() {
           </div>
         </div>
 
+        {/* Creator account activation is separate from the standard verified badge. */}
+        <section className="overflow-hidden rounded-3xl border border-violet-200 bg-white shadow-sm">
+          <div className="border-b border-violet-100 bg-gradient-to-r from-violet-800 to-indigo-700 p-6 text-white">
+            <span className="inline-flex rounded-full bg-white/15 px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider">Creator verification</span>
+            <h3 className="mt-2 text-2xl font-black">Creator Account</h3>
+            <p className="mt-1 text-xs leading-5 text-white/80">Activate Creator mode to access Creator Studio and Content Studio. This is separate from purchasing the standard blue verified badge.</p>
+          </div>
+          <div className="p-5 sm:p-6">
+            {creatorError && <p role="alert" className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{creatorError}</p>}
+            {creatorSuccess && <p role="status" className="mb-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{creatorSuccess}</p>}
+            {creatorStatus?.isCreator ? (
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div><p className="font-bold text-emerald-800"><i className="fa-solid fa-circle-check mr-2"/>Creator account active</p><p className="mt-1 text-xs text-slate-500">Your creator tools are ready.</p></div>
+                <Link to="/creator-studio" className="rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-violet-800">Open Creator Studio</Link>
+              </div>
+            ) : (
+              <form onSubmit={handleCreatorActivation} className="space-y-4">
+                <p className="text-sm text-slate-600">Upgrade your existing account without creating a second account or losing your followers, posts or profile.</p>
+                <label className="block text-xs font-bold text-slate-600">Creator display name<input required maxLength="100" value={creatorForm.creatorName} onChange={e=>setCreatorForm({...creatorForm,creatorName:e.target.value})} placeholder="e.g. Cedar Creates" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-violet-600"/></label>
+                <label className="block text-xs font-bold text-slate-600">Main content category<select required value={creatorForm.niche} onChange={e=>setCreatorForm({...creatorForm,niche:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"><option value="">Choose a category</option>{['Entertainment','Education','Technology','Lifestyle','Comedy','Music','Gaming','Beauty & Fashion','Business','News & Commentary','Art & Design','Food','Sports','Other'].map(x=><option key={x}>{x}</option>)}</select></label>
+                <label className="block text-xs font-bold text-slate-600">Creator bio<textarea maxLength="500" rows="3" value={creatorForm.bio} onChange={e=>setCreatorForm({...creatorForm,bio:e.target.value})} placeholder="Tell people what you create…" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-violet-600"/></label>
+                <button disabled={creatorSubmitting} className="w-full rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{creatorSubmitting ? 'Activating Creator mode…' : 'Activate Creator Account'}</button>
+              </form>
+            )}
+          </div>
+        </section>
+
         {/* Plan card */}
         <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-100 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 p-6 text-white">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <span className="inline-block rounded-full bg-white/20 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider backdrop-blur-sm">
-                  QuickChat Premium Verification
+                  Standard account verification
                 </span>
-                <h3 className="mt-2 text-2xl font-black">Creator & Public Profile</h3>
-                <p className="mt-1 text-xs text-white/80">Build immediate credibility and trust with your audience.</p>
+                <h3 className="mt-2 text-2xl font-black">Normal Account Verification</h3>
+                <p className="mt-1 text-xs text-white/80">Get the standard blue verification badge for your QuickChat profile.</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-white/70">One-time</p>

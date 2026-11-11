@@ -6,22 +6,13 @@ const Metric = ({ label, value, icon }) => <div className="rounded-2xl border bo
 
 export default function CreatorStudio() {
   const [data, setData] = useState(null);
-  const [form, setForm] = useState({ creatorName: '', niche: '', bio: '' });
-  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const load = useCallback(async () => {
     const result = await apiRequest('/creator-studio/me');
     setData(result);
-    if (result.creator) setForm({ creatorName: result.creator.creator_name || '', niche: result.creator.niche || '', bio: result.creator.bio || '' });
   }, []);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
-  const activate = async (event) => {
-    event.preventDefault(); setBusy(true); setError(''); setNotice('');
-    try { const result = await apiRequest('/creator-studio/activate', { method: 'POST', body: form }); setNotice(result.message); await load(); }
-    catch (e) { setError(e.message || 'Could not activate creator mode.'); }
-    finally { setBusy(false); }
-  };
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(data.referralLink); setNotice('Your creator referral link has been copied.'); }
     catch { setError('Could not copy the link. Select and copy it manually.'); }
@@ -30,21 +21,19 @@ export default function CreatorStudio() {
   const isCreator = data.isCreator;
   return <div className="mx-auto max-w-5xl px-4 pb-28 pt-5 lg:pb-10">
     <header className="mb-6 overflow-hidden rounded-3xl bg-slate-950 p-6 text-white sm:p-8">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-300">QuickChat · Creator tools</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{isCreator ? 'Creator Studio' : 'Build your creator presence'}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">{isCreator ? 'Manage your creator identity, publish content and understand how your audience finds you.' : 'Switch your existing QuickChat account to Creator mode. Keep your followers, posts and profile while unlocking creator tools.'}</p></div><span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold">{isCreator ? 'Creator account active' : 'Normal account'}</span></div>
+      <div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] font-black uppercase tracking-[.22em] text-blue-300">QuickChat · Creator tools</p><h1 className="mt-2 text-3xl font-black sm:text-4xl">{isCreator ? 'Creator Studio' : 'Build your creator presence'}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">{isCreator ? 'Manage your creator identity, publish content and understand how your audience finds you.' : 'Activate Creator mode from Account Verification. Keep your existing followers, posts and profile while unlocking creator tools.'}</p></div><span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold">{isCreator ? 'Creator account active' : 'Normal account'}</span></div>
       {isCreator && <div className="mt-6 flex flex-wrap gap-2"><Link to="/compose/advanced" className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-blue-500"><i className="fa-solid fa-plus mr-2"/>Create content</Link><Link to="/profile/edit" className="rounded-xl border border-white/20 px-4 py-3 text-sm font-bold text-white no-underline hover:bg-white/10">Edit public profile</Link></div>}
     </header>
     {notice && <p role="status" className="mb-4 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
     {error && <p role="alert" className="mb-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     {!isCreator ? <section className="grid gap-5 lg:grid-cols-[1fr_.8fr]">
-      <form onSubmit={activate} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-extrabold text-slate-950">Become a creator</h2><p className="mt-1 text-sm text-slate-500">Set up your creator identity. You can update these details later.</p>
-        <label className="mt-5 block text-xs font-bold text-slate-600">Creator display name<input required maxLength="100" value={form.creatorName} onChange={e=>setForm({...form,creatorName:e.target.value})} placeholder="e.g. Cedar Creates" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-600"/></label>
-        <label className="mt-4 block text-xs font-bold text-slate-600">Main content category<select required value={form.niche} onChange={e=>setForm({...form,niche:e.target.value})} className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-sm"><option value="">Choose a category</option>{['Entertainment','Education','Technology','Lifestyle','Comedy','Music','Gaming','Beauty & Fashion','Business','News & Commentary','Art & Design','Food','Sports','Other'].map(x=><option key={x}>{x}</option>)}</select></label>
-        <label className="mt-4 block text-xs font-bold text-slate-600">Creator bio<textarea maxLength="500" rows="4" value={form.bio} onChange={e=>setForm({...form,bio:e.target.value})} placeholder="Tell people what you create…" className="mt-1.5 w-full rounded-xl border border-slate-300 px-3 py-3 text-sm outline-none focus:border-blue-600"/></label>
-        <button disabled={busy} className="mt-5 w-full rounded-xl bg-blue-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50">{busy?'Activating…':'Switch to Creator account'}</button>
-        <p className="mt-3 text-[11px] leading-5 text-slate-500">This changes your account mode, not your login. Your existing profile, followers and posts remain intact.</p>
-      </form>
-      <div className="rounded-2xl bg-blue-50 p-5"><h3 className="font-extrabold text-blue-950">Creator tools included</h3><div className="mt-4 space-y-4">{[['fa-chart-line','Audience overview','Track followers, posts and referral performance.'],['fa-pen-to-square','Content Studio','Open the composer to publish text, images and videos.'],['fa-link','Referral link','Share a personal invite link and track referred signups.'],['fa-award','Founding identity','Your First 100 badge remains attached to your account if eligible.']].map(([icon,title,desc])=><div key={title} className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-blue-700"><i className={'fa-solid '+icon}/></span><div><p className="text-sm font-bold text-blue-950">{title}</p><p className="mt-1 text-xs leading-5 text-blue-800">{desc}</p></div></div>)}</div></div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700"><i className="fa-solid fa-user-pen"/> Creator access</span>
+        <h2 className="mt-4 text-xl font-extrabold text-slate-950">Upgrade your account to Creator</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">Creator account activation is now handled in Account Verification. Complete the Creator Account section there to unlock this studio. Your existing profile, followers and posts stay intact.</p>
+        <Link to="/verification" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-700 px-5 py-3 text-sm font-bold text-white no-underline hover:bg-blue-800"><i className="fa-solid fa-shield-check"/> Go to Account Verification</Link>
+      </div>
+      <div className="rounded-2xl bg-blue-50 p-5"><h3 className="font-extrabold text-blue-950">Creator tools included</h3><div className="mt-4 space-y-4">{[['fa-chart-line','Audience overview','Track followers, posts and referral performance.'],['fa-pen-to-square','Content Studio','Publish text, images and videos.'],['fa-link','Referral link','Share a personal invite link and track referred signups.'],['fa-award','Founding identity','Your First 100 badge remains attached if eligible.']].map(([icon,title,desc])=><div key={title} className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-blue-700"><i className={'fa-solid '+icon}/></span><div><p className="text-sm font-bold text-blue-950">{title}</p><p className="mt-1 text-xs leading-5 text-blue-800">{desc}</p></div></div>)}</div></div>
     </section> : <>
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Followers" value={data.metrics.followers} icon="fa-users"/>
