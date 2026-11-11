@@ -28,7 +28,12 @@ export default function CreatorContentLibrary() {
       apiRequest('/creator-studio/entities')
     ]);
     setItems(data.items || []);
-    setSpaces({ communities: entityData.communities || [], pages: entityData.pages || [], channels: entityData.channels || [] });
+    const nextSpaces = { communities: entityData.communities || [], pages: entityData.pages || [], channels: entityData.channels || [] };
+    setSpaces(nextSpaces);
+    if (requestedCommunityId) {
+      const match = Object.entries(nextSpaces).find(([, rows]) => rows.some((space) => String(space.platformId) === String(requestedCommunityId)));
+      if (match) setForm((current) => ({ ...current, destination: match[0] === 'pages' ? 'page' : match[0] === 'channels' ? 'channel' : 'community', communityId: requestedCommunityId }));
+    }
   }, []);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
   useEffect(() => {

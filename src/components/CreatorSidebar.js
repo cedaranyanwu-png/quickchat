@@ -71,7 +71,7 @@ export default function CreatorSidebar() {
             if (!items.length) return null;
             return <div key={group.key}>
               <p className="px-3 pb-1 pt-2 text-[9px] font-extrabold uppercase tracking-[.16em] text-slate-400">{group.label}</p>
-              {items.map((space) => <Link key={space.id} to={`/communities/${space.platformId}`} title={space.name} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs no-underline transition-colors ${location.pathname === `/communities/${space.platformId}` ? 'bg-blue-50 font-bold text-blue-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}>
+              {items.map((space) => <Link key={space.id} to={`/creator/spaces/${space.platformId}`} title={space.name} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs no-underline transition-colors ${location.pathname === `/creator/spaces/${space.platformId}` ? 'bg-blue-50 font-bold text-blue-800' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-950'}`}>
                 <i className={`fa-solid ${group.icon} w-4 text-center text-[11px] text-slate-400`}/>
                 <span className="min-w-0 flex-1 truncate">{space.name}</span>
               </Link>)}
