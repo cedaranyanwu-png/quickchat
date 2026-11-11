@@ -47,6 +47,7 @@ import Menu from './pages/Menu';
 import AccountBooster from './pages/AccountBooster';
 import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
+import CreatorProgram from './pages/CreatorProgram';
 import VideoModal from './components/VideoModal';
 import PushNotificationPrompt from './components/PushNotificationPrompt';
 import EmailVerificationPrompt from './components/EmailVerificationPrompt';
@@ -197,6 +198,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/account-booster" element={<AccountBooster />} />
             <Route path="/first-100" element={<First100 />} />
             <Route path="/creator-studio" element={<CreatorStudio />} />
+            <Route path="/creator-program" element={<CreatorProgram />} />
             <Route path="/profile/:username" element={<ViewProfile openModal={openModal} openVideo={setActiveVideoId} />} />
           </Routes>
         </main>
