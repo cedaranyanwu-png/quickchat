@@ -193,7 +193,7 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
 
   let feedCandidates = rankedPosts;
   if (tab.toLowerCase() === 'all') {
-    const recentOwnVideos = scoredPosts
+    const recentOwnVideos = rankedPosts
       .filter((post) => {
         if (Number(post.authorId) !== Number(userId) || post.type !== 'video') return false;
         const createdAt = new Date(post.createdAt || 0).getTime();
@@ -203,7 +203,7 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
       .slice(0, 3);
     if (recentOwnVideos.length) {
       const pinnedIds = new Set(recentOwnVideos.map((post) => String(post.id)));
-      feedCandidates = [...recentOwnVideos, ...scoredPosts.filter((post) => !pinnedIds.has(String(post.id)))];
+      feedCandidates = [...recentOwnVideos, ...rankedPosts.filter((post) => !pinnedIds.has(String(post.id)))];
     }
   }
 
