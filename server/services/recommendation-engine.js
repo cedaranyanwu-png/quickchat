@@ -5,6 +5,7 @@ const { getEligibleAds } = require('./ads-service');
 const { getEligibleBoostedPosts, getEligibleBoostedProfiles } = require('./boost-service');
 const { getBusinessProfile, getBusinessOpportunities } = require('./business-service');
 const { getOrCreateRecProfile, getUserNegativeFilters, recordImpressions } = require('./feedback-service');
+const { rerankCandidates } = require('./jev-recommendation');
 
 const CONFIGURABLE_WEIGHTS = {
   interestMatch: 4.5,
@@ -190,9 +191,9 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
     scoredPosts.sort((a, b) => b.relevanceScore - a.relevanceScore);
   }
 
-  let feedCandidates = scoredPosts;
+  let feedCandidates = rankedPosts;
   if (tab.toLowerCase() === 'all') {
-    const recentOwnVideos = scoredPosts
+    const recentOwnVideos = rankedPosts
       .filter((post) => {
         if (Number(post.authorId) !== Number(userId) || post.type !== 'video') return false;
         const createdAt = new Date(post.createdAt || 0).getTime();
@@ -202,9 +203,23 @@ async function getRecommendedFeed(userId, { tab = 'All', limit = 30, live = fals
       .slice(0, 3);
     if (recentOwnVideos.length) {
       const pinnedIds = new Set(recentOwnVideos.map((post) => String(post.id)));
-      feedCandidates = [...recentOwnVideos, ...scoredPosts.filter((post) => !pinnedIds.has(String(post.id)))];
+      feedCandidates = [...recentOwnVideos, ...rankedPosts.filter((post) => !pinnedIds.has(String(post.id)))];
     }
   }
+
+  // Jev is a bounded decision layer over the deterministic candidate ranker.
+  // The existing scoring remains the fallback and provides the initial candidate set;
+  // Jev only reranks the strongest candidates and never controls visibility/access rules.
+  const jevResult = await rerankCandidates({
+    user: {
+      interests: targetInterests,
+      location: userProfile?.location || '',
+      businessCategory: bizCategory,
+      preferredCategories: Object.keys(recProfile.personalWeights || {}),
+    },
+    posts: scoredPosts,
+  });
+  const rankedPosts = jevResult.posts;
 
   // PROCESS B: Blending, Diversification & Frequency Capping
   // Interleave organic posts with sponsored ads and boosted promotions:
