@@ -18,7 +18,7 @@ function getClient() {
 }
 
 function compactText(value, max = 500) {
-  return String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 function buildCandidateState(user, posts) {
@@ -38,9 +38,9 @@ function buildCandidateState(user, posts) {
       text: compactText(post.text, 600),
       ageHours: Math.round(Math.max(0, (Date.now() - new Date(post.createdAt || 0).getTime()) / 3600000)),
       engagement: {
-        likes: Number(post.likeCount || 0),
-        replies: Number(post.replyCount || 0),
-        shares: Number(post.shareCount || 0),
+        likes: Number(post.likes || 0),
+        replies: Number(post.replies || 0),
+        shares: Number(post.shares || 0),
       },
     })),
   };
