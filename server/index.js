@@ -497,8 +497,8 @@ app.use((req, res, next) => {
         String(googleMeta || '').trim(),
         String(bingMeta || '').trim(),
         String(customHead || '').trim(),
-      ].filter(Boolean).join('\\n  ');
-      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\\n</head>`) : html;
+      ].filter(Boolean).join('\n  ');
+      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\n</head>`) : html;
       res.type('html').send(page);
     });
   }).catch(next);
