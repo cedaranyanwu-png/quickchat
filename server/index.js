@@ -348,7 +348,7 @@ app.get('/:verificationFile', async (req, res, next) => {
   try {
     const configured = String(await getSetting('google_site_verification_filename', '')).trim();
     const filename = String(req.params.verificationFile || '').trim();
-    if (!configured || filename !== configured || !/^[A-Za-z0-9._-]+\\.html$/i.test(filename)) return next();
+    if (!configured || filename !== configured || !/^[A-Za-z0-9._-]+\.html$/i.test(filename)) return next();
     const content = String(await getSetting('google_site_verification_html', '')).trim();
     if (!content) return res.status(404).type('text').send('Verification file not configured.');
     res.type('html').send(content);
@@ -373,7 +373,7 @@ app.get('/sitemap-:number.xml', async (req, res, next) => {
 
 app.get('/robots.txt', async (req, res, next) => {
   try {
-    const configured = String(process.env.PUBLIC_APP_URL || '').trim();
+    const configured = String(await getSetting('public_app_url', process.env.PUBLIC_APP_URL || '')).trim();
     const origin = configured ? new URL(configured).origin : `${req.protocol}://${req.get('host')}`;
     res.type('text/plain').send([
       'User-agent: *',
