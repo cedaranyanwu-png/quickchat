@@ -281,7 +281,7 @@ app.get('/communities/:communityId', async (req, res, next) => {
     const origin = getPublicOrigin(req);
     const canonical = origin + '/communities/' + encodeURIComponent(String(space.id));
     const type = String(space.space_type || 'community').toLowerCase();
-    const schemaType = type === 'page' ? 'Organization' : type === 'channel' ? 'BroadcastChannel' : 'OnlineCommunity';
+    const schemaType = 'Organization';
     const description = String(space.description || (space.name + ' on QuickChat.')).slice(0, 300);
     const jsonLd = {
       '@context': 'https://schema.org',
@@ -290,9 +290,8 @@ app.get('/communities/:communityId', async (req, res, next) => {
       description,
       url: canonical,
       dateCreated: space.created_at || undefined,
-      genre: space.category || undefined,
+      additionalType: type === 'page' ? 'QuickChat page' : type === 'channel' ? 'QuickChat content channel' : 'QuickChat community',
       founder: space.owner_name ? { '@type': 'Person', name: space.owner_name, url: space.owner_username ? origin + '/profile/' + encodeURIComponent(String(space.owner_username).replace(/^@/, '')) : undefined } : undefined,
-      isAccessibleForFree: !space.monthly_price,
       provider: { '@type': 'Organization', name: 'QuickChat', url: origin },
     };
     return sendStructuredPage(req, res, { title: String(space.name || 'QuickChat space') + ' | QuickChat', description, jsonLd }, '/communities/' + encodeURIComponent(String(space.id)), next);
