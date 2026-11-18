@@ -999,7 +999,7 @@ router.get('/admin/seo/sitemap-preview', requirePermission('settings.manage'), a
 router.get('/admin/seo/robots-preview', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const configured = String(await getSetting('public_app_url', process.env.PUBLIC_APP_URL || '')).trim();
   let origin;
-  try { origin = new URL(configured || \`${req.protocol}://${req.get('host')}\`).origin; } catch (_error) { origin = \`${req.protocol}://${req.get('host')}\`; }
+  try { origin = new URL(configured || `${req.protocol}://${req.get('host')}`).origin; } catch (_error) { origin = `${req.protocol}://${req.get('host')}`; }
   res.json({ content: [
     'User-agent: *',
     'Allow: /',
