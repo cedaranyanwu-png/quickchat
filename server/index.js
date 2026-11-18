@@ -234,11 +234,11 @@ app.get('/profile/:username', async (req, res, next) => {
     const username = String(req.params.username || '').trim().replace(/^@/, '');
     if (!username || username.toLowerCase() === 'edit') return next();
     const profile = await db.getOne(
-      \`SELECT id, fullname, username, bio, website, location, avatar_url, picture, cover_url, created_at, createdat, creator_account
+      `SELECT id, fullname, username, bio, website, location, avatar_url, picture, cover_url, created_at, createdat, creator_account
          FROM users
         WHERE LOWER(REPLACE(username, '@', '')) = LOWER(?)
           AND COALESCE(is_synthetic, 0) = 0
-        LIMIT 1\`,
+        LIMIT 1`,
       [username],
     );
     if (!profile) return res.status(404).send('Profile not found.');
@@ -271,10 +271,10 @@ app.get('/communities/:communityId', async (req, res, next) => {
     const id = positiveShareId(req.params.communityId);
     if (!id) return next();
     const space = await db.getOne(
-      \`SELECT c.id, c.name, c.slug, c.description, c.category, c.space_type, c.created_by, c.monthly_price, c.price_currency, c.created_at,
+      `SELECT c.id, c.name, c.slug, c.description, c.category, c.space_type, c.created_by, c.monthly_price, c.price_currency, c.created_at,
               u.fullname AS owner_name, u.username AS owner_username
          FROM communities c LEFT JOIN users u ON u.id = c.created_by
-        WHERE c.id = ?\`,
+        WHERE c.id = ?`,
       [id],
     );
     if (!space) return res.status(404).send('Community not found.');
