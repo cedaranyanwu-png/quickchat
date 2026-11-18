@@ -24,7 +24,7 @@ const messageRoutes = require('./routes/messages');
 const novaRoutes = require('./routes/nova');
 const mediaRoutes = require('./routes/media');
 const publicRoutes = require('./routes/public');
-const { buildSitemap, renderIndex, renderUrlset } = require('./services/seo-sitemap');
+const { buildSitemap, renderIndex, renderUrlset, renderDocument } = require('./services/seo-sitemap');
 const paymentRoutes = require('./routes/payments');
 const liveRoutes = require('./routes/live');
 const pushRoutes = require('./routes/push');
@@ -361,7 +361,8 @@ app.get('/:verificationFilename', async (req, res, next) => {
 app.get('/sitemap.xml', async (req, res, next) => {
   try {
     const sitemap = await buildSitemap(req);
-    res.type('application/xml').send(renderIndex(sitemap.origin, sitemap.chunks.length || 1));
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=300');
+    res.type('application/xml; charset=utf-8').send(renderDocument(sitemap));
   } catch (error) { next(error); }
 });
 
