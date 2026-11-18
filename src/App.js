@@ -97,7 +97,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     navigate('/compose/advanced', { state: handoff ? { handoff } : undefined });
   };
 
-  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/creator-program'].includes(location.pathname);
+  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/creator-program', '/about'].includes(location.pathname);
   const isSharePage = location.pathname.startsWith('/share/');
   const isLiveWatchPage = /^\/live\/[^/]+\/?$/.test(location.pathname);
   const isVideosPage = location.pathname === '/videos';
