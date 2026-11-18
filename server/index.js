@@ -419,8 +419,8 @@ app.get('/profile/:username', async (req, res, next) => {
       `<meta name="twitter:title" content="${escape(title)}">`,
       `<meta name="twitter:description" content="${escape(description)}">`,
       imageUrl && `<meta name="twitter:image" content="${escape(imageUrl)}">`,
-      `<script type="application/ld+json">${jsonLd.replace(/</g, '\u003c')}</script>`,
-    ].filter(Boolean).join('\\n');
+      `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`,
+    ].filter(Boolean).join('\n');
     fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
       if (error) return next(error);
       res.type('html').send(
