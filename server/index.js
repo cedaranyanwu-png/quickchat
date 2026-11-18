@@ -343,6 +343,20 @@ function escapeHtml(value) {
   }[character]));
 }
 
+// Google Search Console HTML verification files must be served from the domain root.
+app.get('/:verificationFilename', async (req, res, next) => {
+  try {
+    const filename = String(req.params.verificationFilename || '');
+    if (!/^google[0-9a-z_-]+\.html$/i.test(filename)) return next();
+    const configuredFilename = String(await getSetting('google_site_verification_filename', '') || '');
+    if (!configuredFilename || filename !== configuredFilename) return res.status(404).type('text').send('Verification file not found.');
+    const content = String(await getSetting('google_site_verification_html', '') || '');
+    if (!content) return res.status(404).type('text').send('Verification file not found.');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.type('html').send(content);
+  } catch (error) { next(error); }
+});
+
 // Public SEO surfaces must be available to search crawlers without authentication.
 app.get('/sitemap.xml', async (req, res, next) => {
   try {
