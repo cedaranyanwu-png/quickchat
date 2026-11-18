@@ -56,6 +56,7 @@ const Login = ({ googleEnabled, onAuthenticated }) => {
           <img src="/favicon/logo.png" alt="QuickChat Logo" className="w-16 h-16 object-contain mb-4" onError={(e) => { e.target.style.display = 'none'; }} />
           <h1 className="text-2xl font-extrabold text-slate-900">Welcome back</h1>
           <p className="text-sm text-slate-500 mt-1">Sign in to your QuickChat account</p>
+          <div className="mt-5 w-full rounded-xl border border-blue-100 bg-blue-50 p-4 text-left"><p className="text-sm font-extrabold text-slate-900">Create your presence. Build your audience.</p><p className="mt-1 text-xs leading-5 text-slate-600">QuickChat helps people and creators publish posts and videos, connect with followers, discover new ideas and build communities, pages and channels.</p><Link to="/about" className="mt-2 inline-flex text-xs font-bold text-blue-700 hover:underline">What is QuickChat? Learn more</Link></div>
         </div>
 
         {error && (

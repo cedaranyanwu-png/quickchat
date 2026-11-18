@@ -228,6 +228,91 @@ form.addEventListener('submit',async(e)=>{e.preventDefault();button.disabled=tru
 </html>`;
 }
 
+// Public profile and space pages are decorated in the first HTML response for search crawlers.
+app.get('/profile/:username', async (req, res, next) => {
+  try {
+    const username = String(req.params.username || '').trim().replace(/^@/, '');
+    if (!username || username.toLowerCase() === 'edit') return next();
+    const profile = await db.getOne(
+      `SELECT id, fullname, username, bio, website, location, avatar_url, picture, cover_url, created_at, createdat, creator_account
+         FROM users
+        WHERE LOWER(REPLACE(username, '@', '')) = LOWER(?)
+          AND COALESCE(is_synthetic, 0) = 0
+        LIMIT 1`,
+      [username],
+    );
+    if (!profile) return res.status(404).send('Profile not found.');
+    const origin = getPublicOrigin(req);
+    const canonical = origin + '/profile/' + encodeURIComponent(String(profile.username || username).replace(/^@/, ''));
+    const name = String(profile.fullname || profile.username || 'QuickChat member');
+    const description = String(profile.bio || (Number(profile.creator_account) ? name + ' is a creator on QuickChat.' : name + ' is on QuickChat.')).slice(0, 300);
+    const image = profile.avatar_url || profile.picture || '';
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      url: canonical,
+      dateCreated: profile.created_at || profile.createdat || undefined,
+      mainEntity: {
+        '@type': 'Person',
+        name,
+        alternateName: '@' + String(profile.username || username).replace(/^@/, ''),
+        description,
+        url: canonical,
+        image: image ? absolutePublicUrl(origin, image) : undefined,
+        sameAs: profile.website ? [normalizePublicUrl(profile.website)].filter(Boolean) : undefined,
+      },
+    };
+    return sendStructuredPage(req, res, { title: name + ' | QuickChat', description, image, jsonLd }, '/profile/' + encodeURIComponent(String(profile.username || username).replace(/^@/, '')), next);
+  } catch (error) { next(error); }
+});
+
+app.get('/communities/:communityId', async (req, res, next) => {
+  try {
+    const id = positiveShareId(req.params.communityId);
+    if (!id) return next();
+    const space = await db.getOne(
+      `SELECT c.id, c.name, c.slug, c.description, c.category, c.space_type, c.created_by, c.monthly_price, c.price_currency, c.created_at,
+              u.fullname AS owner_name, u.username AS owner_username
+         FROM communities c LEFT JOIN users u ON u.id = c.created_by
+        WHERE c.id = ?`,
+      [id],
+    );
+    if (!space) return res.status(404).send('Community not found.');
+    const origin = getPublicOrigin(req);
+    const canonical = origin + '/communities/' + encodeURIComponent(String(space.id));
+    const type = String(space.space_type || 'community').toLowerCase();
+    const schemaType = 'Organization';
+    const description = String(space.description || (space.name + ' on QuickChat.')).slice(0, 300);
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': schemaType,
+      name: String(space.name || 'QuickChat space'),
+      description,
+      url: canonical,
+      dateCreated: space.created_at || undefined,
+      additionalType: type === 'page' ? 'QuickChat page' : type === 'channel' ? 'QuickChat content channel' : 'QuickChat community',
+      founder: space.owner_name ? { '@type': 'Person', name: space.owner_name, url: space.owner_username ? origin + '/profile/' + encodeURIComponent(String(space.owner_username).replace(/^@/, '')) : undefined } : undefined,
+      provider: { '@type': 'Organization', name: 'QuickChat', url: origin },
+    };
+    return sendStructuredPage(req, res, { title: String(space.name || 'QuickChat space') + ' | QuickChat', description, jsonLd }, '/communities/' + encodeURIComponent(String(space.id)), next);
+  } catch (error) { next(error); }
+});
+
+app.get('/about', (req, res, next) => {
+  const origin = getPublicOrigin(req);
+  const description = 'QuickChat is a social platform where people, creators and businesses publish content, connect with audiences, discover ideas and build communities, pages and channels.';
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: 'About QuickChat',
+    description,
+    url: origin + '/about',
+    about: { '@type': 'Organization', name: 'QuickChat', url: origin, description },
+    isPartOf: { '@type': 'WebSite', name: 'QuickChat', url: origin },
+  };
+  sendStructuredPage(req, res, { title: 'About QuickChat', description, jsonLd }, '/about', next);
+});
+
 // Social crawlers do not execute the React app, so share URLs need their metadata
 // in the initial HTML response (not just in SharePreview after it loads).
 app.get('/share/post/:postId', async (req, res, next) => {
@@ -263,7 +348,24 @@ app.get('/share/post/:postId', async (req, res, next) => {
       ? 'View this post on QuickChat.'
       : (post.text || 'See this post on QuickChat').slice(0, 300);
     const image = firstImage?.url || videoPoster || '';
-    return sendSharePage(req, res, { title, description, image, type: 'article' }, `/share/post/${postId}`, next);
+    const publicPost = String(post.visibility || 'public').toLowerCase() === 'public';
+    const origin = getPublicOrigin(req);
+    const canonical = origin + '/share/post/' + postId;
+    const jsonLd = publicPost ? {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: String(post.text || title).slice(0, 110),
+      description,
+      url: canonical,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+      datePublished: post.createdAt || undefined,
+      dateModified: post.createdAt || undefined,
+      author: { '@type': 'Person', name: post.name || 'QuickChat member', url: post.username ? origin + '/profile/' + encodeURIComponent(String(post.username).replace(/^@/, '')) : undefined },
+      publisher: { '@type': 'Organization', name: 'QuickChat', url: origin },
+      image: image ? absolutePublicUrl(origin, image) : undefined,
+      isAccessibleForFree: true,
+    } : undefined;
+    return sendSharePage(req, res, { title, description, image, type: 'article', jsonLd, noIndex: !publicPost }, '/share/post/' + postId, next);
   } catch (error) {
     return next(error);
   }
@@ -274,17 +376,31 @@ app.get('/share/video/:videoId', async (req, res, next) => {
     const videoId = positiveShareId(req.params.videoId);
     if (!videoId) return res.status(400).send('Invalid video ID.');
     const video = await db.getOne(
-      `SELECT v.title, v.description, v.thumbnail_url
+      `SELECT v.title, v.description, v.thumbnail_url, v.created_at
          FROM videos v WHERE v.id = ?`,
       [videoId],
     );
     if (!video) return res.status(404).send('This video is unavailable.');
+    const origin = getPublicOrigin(req);
+    const canonical = origin + '/share/video/' + videoId;
+    const description = (video.description || ('Watch ' + (video.title || 'this video') + ' on QuickChat.')).slice(0, 300);
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'VideoObject',
+      name: String(video.title || 'QuickChat video'),
+      description,
+      thumbnailUrl: video.thumbnail_url ? absolutePublicUrl(origin, video.thumbnail_url) : undefined,
+      uploadDate: video.created_at || undefined,
+      url: canonical,
+      publisher: { '@type': 'Organization', name: 'QuickChat', url: origin },
+    };
     return sendSharePage(req, res, {
-      title: `${video.title || 'Video'} | QuickChat`,
-      description: (video.description || `Watch ${video.title || 'this video'} on QuickChat.`).slice(0, 300),
+      title: (video.title || 'Video') + ' | QuickChat',
+      description,
       image: video.thumbnail_url || '',
       type: 'video.other',
-    }, `/share/video/${videoId}`, next);
+      jsonLd,
+    }, '/share/video/' + videoId, next);
   } catch (error) {
     return next(error);
   }
@@ -293,6 +409,52 @@ app.get('/share/video/:videoId', async (req, res, next) => {
 function positiveShareId(value) {
   const id = Number(value);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+
+function getPublicOrigin(req) {
+  const configured = String(process.env.PUBLIC_APP_URL || '').trim();
+  try { return new URL(configured || (req.protocol + '://' + req.get('host'))).origin; }
+  catch (_error) { return req.protocol + '://' + req.get('host'); }
+}
+
+function absolutePublicUrl(origin, value) {
+  try { return new URL(String(value || ''), origin).toString(); } catch (_error) { return ''; }
+}
+
+function normalizePublicUrl(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try { return new URL(/^[a-z]+:\/\//i.test(text) ? text : 'https://' + text).toString(); }
+  catch (_error) { return ''; }
+}
+
+function safeJsonLd(value) {
+  return JSON.stringify(value || {}).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+}
+
+function sendStructuredPage(req, res, metadata, pagePath, next) {
+  const origin = getPublicOrigin(req);
+  const canonicalUrl = absolutePublicUrl(origin, pagePath);
+  const imageUrl = metadata.image ? absolutePublicUrl(origin, metadata.image) : '';
+  const tags = [
+    '<meta name="description" content="' + escapeHtml(metadata.description) + '" />',
+    '<link rel="canonical" href="' + escapeHtml(canonicalUrl) + '" />',
+    '<meta property="og:type" content="website" />',
+    '<meta property="og:site_name" content="QuickChat" />',
+    '<meta property="og:title" content="' + escapeHtml(metadata.title) + '" />',
+    '<meta property="og:description" content="' + escapeHtml(metadata.description) + '" />',
+    '<meta property="og:url" content="' + escapeHtml(canonicalUrl) + '" />',
+    imageUrl && '<meta property="og:image" content="' + escapeHtml(imageUrl) + '" />',
+    '<meta name="twitter:card" content="' + (imageUrl ? 'summary_large_image' : 'summary') + '" />',
+    metadata.jsonLd && '<script type="application/ld+json">' + safeJsonLd(metadata.jsonLd) + '</script>',
+  ].filter(Boolean).join('\n  ');
+  fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
+    if (error) return next(error);
+    const page = html.replace(/<title>[^<]*<\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
+      .replace('</head>', '  ' + tags + '\n</head>');
+    res.type('html').send(page);
+  });
 }
 
 function sendSharePage(req, res, metadata, sharePath, next) {
@@ -310,6 +472,8 @@ function sendSharePage(req, res, metadata, sharePath, next) {
   const canonicalUrl = absoluteUrl(sharePath);
   const imageUrl = metadata.image ? absoluteUrl(metadata.image) : '';
   const tags = [
+    `<meta name="description" content="${escapeHtml(metadata.description)}" />`,
+    `<link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`,
     `<meta property="og:type" content="${escapeHtml(metadata.type)}" />`,
     `<meta property="og:site_name" content="QuickChat" />`,
     `<meta property="og:title" content="${escapeHtml(metadata.title)}" />`,
@@ -322,13 +486,14 @@ function sendSharePage(req, res, metadata, sharePath, next) {
     `<meta name="twitter:title" content="${escapeHtml(metadata.title)}" />`,
     `<meta name="twitter:description" content="${escapeHtml(metadata.description)}" />`,
     imageUrl && `<meta name="twitter:image" content="${escapeHtml(imageUrl)}" />`,
+    metadata.jsonLd && `<script type="application/ld+json">${safeJsonLd(metadata.jsonLd)}</script>`,
   ].filter(Boolean).join('\n  ');
 
   fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
     if (error) return next(error);
     const page = html
       .replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`)
-      .replace('</head>', `  ${tags}\n</head>`);
+      .replace('</head>', `  ${tags}\n  ${metadata.noIndex ? '<meta name="robots" content="noindex, nofollow" />' : ''}\n</head>`);
     res.type('html').send(page);
   });
 }
