@@ -961,7 +961,12 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   settings.verification_reward_points = Number(settings.verification_reward_points || 2000);
   settings.google_drive_enabled = String(settings.google_drive_enabled || 'false').toLowerCase() === 'true';
   settings.gemini_enabled = String(settings.gemini_enabled || 'false').toLowerCase() === 'true';
-  settings.gemini_model = String(settings.gemini_model || 'gemini-2.5-flash');
+  settings.gemini_model = String(settings.gemini_model || 'gemini-3.8-flash');
+  settings.typesafe_jev_enabled = String(settings.typesafe_jev_enabled || 'true').toLowerCase() === 'true';
+  settings.typesafe_jev_model = String(settings.typesafe_jev_model || 'jev-latest');
+  settings.jev_recommendation_candidates = Number(settings.jev_recommendation_candidates || 12);
+  settings.jev_recommendation_min_confidence = Number(settings.jev_recommendation_min_confidence || 0.55);
+  settings.jev_recommendation_score_weight = Number(settings.jev_recommendation_score_weight || 2);
   res.json({ settings });
 }));
 
