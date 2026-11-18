@@ -5,6 +5,9 @@ export default function AdminSettingsPanel() {
   const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_env: 'live', flw_client_id: '', flw_client_secret: '', flw_encryption_key: '', flw_webhook_secret: '', flw_webhook_url: 'https://quickchat-production-d5e5.up.railway.app/api/webhooks/flutterwave', public_app_url: 'https://quickchat-production-d5e5.up.railway.app', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash', email_provider_mode: 'brevo', brevo_api_key: '', resend_api_key: '', smtp_user: '', smtp_password: '', smtp_from: '', smtp_host: '', smtp_port: '587', smtp_secure: false });
   const [testingGemini, setTestingGemini] = useState(false);
   const [sitemapCustomUrls, setSitemapCustomUrls] = useState('');
+  const [sitemapPreview, setSitemapPreview] = useState(null);
+  const [robotsPreview, setRobotsPreview] = useState('');
+  const [loadingSeoPreview, setLoadingSeoPreview] = useState(false);
   const [testingEmail, setTestingEmail] = useState(false);
   const [emailTestTo, setEmailTestTo] = useState('');
   const [emailTestMessage, setEmailTestMessage] = useState('');
@@ -31,6 +34,19 @@ export default function AdminSettingsPanel() {
     finally { setTestingGemini(false); }
   };
   const update = (key, value) => setForm(v => ({ ...v, [key]: value }));
+  const loadSeoPreview = async () => {
+    setLoadingSeoPreview(true);
+    try {
+      const [sitemap, robots] = await Promise.all([
+        adminRequest('/admin/seo/sitemap-preview'),
+        adminRequest('/admin/seo/robots-preview'),
+      ]);
+      setSitemapPreview(sitemap);
+      setRobotsPreview(robots.content || '');
+    } catch (e) {
+      setError(e.message || 'Unable to load SEO previews.');
+    } finally { setLoadingSeoPreview(false); }
+  };
   if (loading) return <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Loading configuration…</div>;
   return <section><div className="mb-5"><h2 className="text-lg font-black text-slate-900">Platform configuration</h2><p className="mt-1 text-sm text-slate-500">Configure the paid verification price, verification reward points, Flutterwave project credentials and optional Google Drive backup storage.</p></div>
     {error && <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">{error}</div>}
@@ -63,6 +79,34 @@ export default function AdminSettingsPanel() {
         <textarea value={sitemapCustomUrls} onChange={e => setSitemapCustomUrls(e.target.value)} rows="7" placeholder="/about\n/contact\n/creator-program" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" />
       </label>
       <p className="text-[11px] leading-5 text-slate-500">Only add public pages. Do not add admin, settings, private messages, API endpoints or other authenticated URLs.</p>
+    </section>
+    <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 space-y-4">
+      <div><h3 className="font-extrabold text-slate-900">Search engine verification</h3><p className="mt-1 text-xs leading-5 text-slate-600">Configure Google Search Console, Bing Webmaster verification and optional custom verification markup. Google can verify QuickChat using the HTML file method or a meta tag.</p></div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-xs font-bold text-slate-700">Google verification filename<input value={form.google_site_verification_filename || 'google-site-verification.html'} onChange={e => update('google_site_verification_filename', e.target.value)} placeholder="google-site-verification.html" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-700">Google verification meta tag<input value={form.google_site_verification_meta || ''} onChange={e => update('google_site_verification_meta', e.target.value)} placeholder='<meta name="google-site-verification" content="..." />' className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" /></label>
+      </div>
+      <label className="block text-xs font-bold text-slate-700">Google HTML verification file content
+        <textarea value={form.google_site_verification_html || ''} onChange={e => update('google_site_verification_html', e.target.value)} rows="3" placeholder="Paste the complete Google verification HTML file content here, or upload the .html file below." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" />
+      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="cursor-pointer rounded-xl border border-blue-300 bg-white px-4 py-2.5 text-xs font-extrabold text-blue-800">Load Google HTML file<input type="file" accept=".html,text/html" className="hidden" onChange={async e => { const file = e.target.files?.[0]; if (!file) return; update('google_site_verification_filename', file.name); update('google_site_verification_html', await file.text()); }} /></label>
+        <span className="text-[11px] text-slate-500">Your uploaded file can be stored as its original Google verification filename.</span>
+      </div>
+      <label className="block text-xs font-bold text-slate-700">Bing Webmaster verification meta tag<input value={form.bing_site_verification_meta || ''} onChange={e => update('bing_site_verification_meta', e.target.value)} placeholder='<meta name="msvalidate.01" content="..." />' className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" /></label>
+      <label className="block text-xs font-bold text-slate-700">Other custom verification HTML <span className="font-normal text-slate-400">(optional)</span>
+        <textarea value={form.seo_custom_head_html || ''} onChange={e => update('seo_custom_head_html', e.target.value)} rows="4" placeholder="Paste verification tags supplied by another search engine or webmaster service." className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" />
+      </label>
+      <p className="text-[11px] leading-5 text-slate-500">Verification markup is rendered server-side. Keep these fields limited to verification tags supplied by trusted search-engine/webmaster services.</p>
+    </section>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">Sitemap.xml & robots.txt preview</h3><p className="mt-1 text-xs leading-5 text-slate-600">Preview the exact crawler output generated from your current public profiles, spaces, posts and custom sitemap URLs.</p></div><button type="button" onClick={loadSeoPreview} disabled={loadingSeoPreview} className="rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-extrabold text-slate-700 disabled:opacity-50">{loadingSeoPreview ? 'Loading preview…' : 'Refresh preview'}</button></div>
+      {sitemapPreview ? <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-bold text-slate-500">URLs</div><div className="mt-1 text-lg font-black text-slate-900">{Number(sitemapPreview.totalUrls || 0).toLocaleString()}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-bold text-slate-500">Sitemap files</div><div className="mt-1 text-lg font-black text-slate-900">{sitemapPreview.files?.length || 0}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-[11px] font-bold text-slate-500">Index</div><div className="mt-1 text-lg font-black text-emerald-700">Ready</div></div></div>
+        <details className="rounded-xl border border-slate-200 bg-slate-50" open><summary className="cursor-pointer px-4 py-3 text-xs font-extrabold text-slate-800">/sitemap.xml index</summary><pre className="max-h-80 overflow-auto border-t border-slate-200 p-4 text-[11px] leading-5 text-slate-600 whitespace-pre-wrap break-all">{sitemapPreview.index}</pre></details>
+        {(sitemapPreview.files || []).map(file => <details key={file.name} className="rounded-xl border border-slate-200 bg-slate-50"><summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-xs font-extrabold text-slate-800"><span>/{file.name}</span><span className="font-normal text-slate-500">{file.urlCount} URLs</span></summary><pre className="max-h-96 overflow-auto border-t border-slate-200 p-4 text-[11px] leading-5 text-slate-600 whitespace-pre-wrap break-all">{file.xml}</pre></details>)}
+        <details className="rounded-xl border border-slate-200 bg-slate-50" open><summary className="cursor-pointer px-4 py-3 text-xs font-extrabold text-slate-800">/robots.txt</summary><pre className="border-t border-slate-200 p-4 text-[11px] leading-5 text-slate-600 whitespace-pre-wrap">{robotsPreview || 'No robots preview loaded.'}</pre></details>
+      </div> : <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">Click “Refresh preview” to generate the current sitemap and robots.txt output.</div>}
     </section>
     <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5 space-y-4">
       <div className="flex items-start justify-between gap-4"><div><h3 className="font-extrabold text-slate-900">Gemini AI · character engine</h3><p className="mt-1 text-xs leading-5 text-slate-600">Connect Google's Gemini API to power the existing character accounts. The key is encrypted in platform settings and is never returned to the browser.</p></div>
