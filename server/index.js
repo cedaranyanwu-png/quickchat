@@ -487,11 +487,27 @@ app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not fo
 
 // Serve the production React bundle from this same origin as the API.
 app.use(express.static(frontendBuildPath));
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(frontendBuildPath, 'index.html'), (error) => {
-    if (error) next(error);
-  });
+  try {
+    const [googleMeta, bingMeta] = await Promise.all([
+      getSetting('google_site_verification_meta', ''),
+      getSetting('bing_site_verification_meta', ''),
+    ]);
+    const safeMeta = (value, name) => {
+      const match = String(value || '').match(/content\\s*=\\s*["']([A-Za-z0-9_-]{1,256})["']/i);
+      return match ? `<meta name="${name}" content="${match[1]}" />` : '';
+    };
+    const verificationTags = [
+      safeMeta(googleMeta, 'google-site-verification'),
+      safeMeta(bingMeta, 'msvalidate.01'),
+    ].filter(Boolean).join('\\n');
+    fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
+      if (error) return next(error);
+      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\\n</head>`) : html;
+      res.type('html').send(page);
+    });
+  } catch (error) { next(error); }
 });
 
 app.use((error, _req, res, _next) => {
