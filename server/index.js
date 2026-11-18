@@ -351,10 +351,10 @@ app.get('/sitemap.xml', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get(/^\/sitemap-(\\d+)\\.xml$/, async (req, res, next) => {
+app.get('/sitemap-:number.xml', async (req, res, next) => {
   try {
     const sitemap = await buildSitemap(req);
-    const index = Number(req.params[0]) - 1;
+    const index = Number(req.params.number) - 1;
     if (!Number.isInteger(index) || index < 0 || index >= sitemap.chunks.length) return res.status(404).type('text').send('Sitemap not found.');
     res.type('application/xml').send(renderUrlset(sitemap.origin, sitemap.chunks[index]));
   } catch (error) { next(error); }
