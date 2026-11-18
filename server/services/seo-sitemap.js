@@ -103,7 +103,6 @@ async function collectEntries() {
     `SELECT p.id, p.media, p.created_at
        FROM posts p
       WHERE p.visibility = 'public'
-        AND p.community_id IS NULL
       ORDER BY p.id ASC`,
   ).catch(() => []);
   for (const post of posts) {
