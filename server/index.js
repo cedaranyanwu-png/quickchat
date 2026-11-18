@@ -245,7 +245,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
               (SELECT COUNT(*) FROM post_reposts rr WHERE rr.post_id = p.id) AS share_count,
               (SELECT COUNT(*) FROM post_likes l WHERE l.post_id = p.id) AS like_count,
               0 AS liked, 0 AS bookmarked, 0 AS reposted,
-              CASE WHEN p.visibility = 'public' AND p.community_id IS NULL THEN 1 ELSE 0 END AS can_view
+              CASE WHEN p.visibility = 'public' THEN 1 ELSE 0 END AS can_view
          FROM posts p JOIN users u ON u.id = p.author_id
          LEFT JOIN communities c ON c.id = p.community_id
         WHERE p.id = ?`,
