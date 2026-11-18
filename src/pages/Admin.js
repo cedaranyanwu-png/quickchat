@@ -479,7 +479,7 @@ export default function Admin() {
 
         {section === 'growth' && <section className="space-y-8"><div><h2 className="text-lg font-black text-slate-900">Growth & acquisition centre</h2><p className="mt-1 text-sm text-slate-500">Review campaign attribution and the existing First 100 programme. These figures come from recorded platform data, not estimates.</p></div><AdminAcquisitionPanel /><div className="border-t border-slate-200 pt-8"><First100Panel /></div></section>}
 
-        {section === 'ads' && <AdminAdsPanel />
+        {section === 'ads' && <AdminAdsPanel />}
 
         {section === 'rss' && <RSSAdmin />}
 
