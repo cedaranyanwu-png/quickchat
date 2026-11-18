@@ -971,6 +971,19 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  if (req.body?.google_site_verification_filename !== undefined || req.body?.google_site_verification_html !== undefined) {
+    const filename = String(req.body?.google_site_verification_filename || '').trim();
+    const html = String(req.body?.google_site_verification_html || '');
+    if (filename && !/^google[a-z0-9_-]+\.html$/i.test(filename)) {
+      return res.status(400).json({ message: 'Use the exact Google Search Console verification filename (google…​.html).' });
+    }
+    if (Buffer.byteLength(html, 'utf8') > 65536) {
+      return res.status(400).json({ message: 'The Google verification HTML file must be 64 KB or smaller.' });
+    }
+    if (filename && !html.trim()) {
+      return res.status(400).json({ message: 'The uploaded Google verification file is empty. Upload the original file again.' });
+    }
+  }
   const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_env', 'flw_client_id', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'typesafe_jev_enabled', 'typesafe_jev_model', 'jev_recommendation_candidates', 'jev_recommendation_min_confidence', 'jev_recommendation_score_weight', 'seo_sitemap_custom_urls', 'google_site_verification_filename', 'google_site_verification_html', 'google_site_verification_meta', 'bing_site_verification_meta', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
   const secrets = ['flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'typesafe_api_key', 'smtp_password', 'resend_api_key', 'brevo_api_key'];
   for (const key of normal) {
