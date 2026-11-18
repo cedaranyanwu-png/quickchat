@@ -64,7 +64,7 @@ async function collectEntries() {
 
   // Every normal public user profile is automatically discoverable.
   const users = await db.query(
-    `SELECT username, COALESCE(updated_at, created_at, createdat) AS lastmod
+    `SELECT username, COALESCE(created_at, createdat) AS lastmod
        FROM users
       WHERE COALESCE(username, '') <> ''
         AND COALESCE(is_synthetic, 0) = 0
@@ -85,7 +85,6 @@ async function collectEntries() {
     `SELECT id, slug, name, space_type, created_at
        FROM communities
       WHERE COALESCE(slug, '') <> ''
-        AND COALESCE(is_suspended, 0) = 0
       ORDER BY id ASC`,
   ).catch(() => []);
   for (const space of spaces) {
