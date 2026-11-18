@@ -372,7 +372,7 @@ app.get('/robots.txt', async (req, res, next) => {
       'Disallow: /settings',
       'Disallow: /messages',
       'Sitemap: ' + origin + '/sitemap.xml',
-    ].join('\\n'));
+    ].join('\n'));
   } catch (error) { next(error); }
 });
 
@@ -394,7 +394,7 @@ app.get('/profile/:username', async (req, res, next) => {
     const canonical = `${origin}/profile/${encodeURIComponent(String(user.username).replace(/^@/, ''))}`;
     const image = user.avatar_url || user.picture || user.cover_url || '';
     const title = `${user.fullname || user.username} | QuickChat`;
-    const description = String(user.bio || `${user.fullname || user.username} on QuickChat`).replace(/\\s+/g, ' ').slice(0, 300);
+    const description = String(user.bio || `${user.fullname || user.username} on QuickChat`).replace(/\s+/g, ' ').slice(0, 300);
     const imageUrl = image ? (() => { try { return new URL(image, origin).toString(); } catch (_error) { return ''; } })() : '';
     const jsonLd = JSON.stringify({
       '@context': 'https://schema.org',
@@ -419,14 +419,14 @@ app.get('/profile/:username', async (req, res, next) => {
       `<meta name="twitter:title" content="${escape(title)}">`,
       `<meta name="twitter:description" content="${escape(description)}">`,
       imageUrl && `<meta name="twitter:image" content="${escape(imageUrl)}">`,
-      `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`,
+      `<script type="application/ld+json">${jsonLd.replace(/</g, '\u003c')}</script>`,
     ].filter(Boolean).join('\\n');
     fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
       if (error) return next(error);
       res.type('html').send(
         html
-          .replace(/<title>[^<]*<\\/title>/i, `<title>${escape(title)}</title>`)
-          .replace('</head>', `  ${tags}\\n</head>`),
+          .replace(/<title>[^<]*<\/title>/i, `<title>${escape(title)}</title>`)
+          .replace('</head>', `  ${tags}\n</head>`),
       );
     });
   } catch (error) { next(error); }
