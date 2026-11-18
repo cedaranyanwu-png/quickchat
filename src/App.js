@@ -49,6 +49,9 @@ import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
 import About from './pages/About';
+import Investors from './pages/Investors';
+import Growth from './pages/Growth';
+import './styles/public-growth.css';
 import InvestorRelations from './pages/InvestorRelations';
 import GrowthProgramme from './pages/GrowthProgramme';
 import CreatorPortal from './pages/CreatorPortal';
@@ -130,6 +133,15 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
       <Route path="/share/post/:postId" element={<SharePreview kind="post" />} />
       <Route path="/share/video/:videoId" element={<SharePreview kind="video" />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>;
+  }
+
+  // Public investor and growth pages are available without a member session.
+  if (['/investors', '/growth'].includes(location.pathname.replace(/\\/+$/, '') || '/')) {
+    return <Routes>
+      <Route path="/investors" element={<Investors />} />
+      <Route path="/growth" element={<Growth />} />
+      <Route path="*" element={<Navigate to="/investors" replace />} />
     </Routes>;
   }
 
