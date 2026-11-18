@@ -24,6 +24,7 @@ const messageRoutes = require('./routes/messages');
 const novaRoutes = require('./routes/nova');
 const mediaRoutes = require('./routes/media');
 const publicRoutes = require('./routes/public');
+const { buildSitemap, renderIndex, renderUrlset } = require('./services/seo-sitemap');
 const paymentRoutes = require('./routes/payments');
 const liveRoutes = require('./routes/live');
 const pushRoutes = require('./routes/push');
@@ -341,6 +342,95 @@ function escapeHtml(value) {
     "'": '&#39;',
   }[character]));
 }
+
+// Public SEO surfaces must be available to search crawlers without authentication.
+app.get('/sitemap.xml', async (req, res, next) => {
+  try {
+    const sitemap = await buildSitemap(req);
+    res.type('application/xml').send(renderIndex(sitemap.origin, sitemap.chunks.length || 1));
+  } catch (error) { next(error); }
+});
+
+app.get(/^\/sitemap-(\\d+)\\.xml$/, async (req, res, next) => {
+  try {
+    const sitemap = await buildSitemap(req);
+    const index = Number(req.params[0]) - 1;
+    if (!Number.isInteger(index) || index < 0 || index >= sitemap.chunks.length) return res.status(404).type('text').send('Sitemap not found.');
+    res.type('application/xml').send(renderUrlset(sitemap.origin, sitemap.chunks[index]));
+  } catch (error) { next(error); }
+});
+
+app.get('/robots.txt', async (req, res, next) => {
+  try {
+    const configured = String(process.env.PUBLIC_APP_URL || '').trim();
+    const origin = configured ? new URL(configured).origin : `${req.protocol}://${req.get('host')}`;
+    res.type('text/plain').send([
+      'User-agent: *',
+      'Allow: /',
+      'Disallow: /admin',
+      'Disallow: /api/',
+      'Disallow: /settings',
+      'Disallow: /messages',
+      'Sitemap: ' + origin + '/sitemap.xml',
+    ].join('\\n'));
+  } catch (error) { next(error); }
+});
+
+app.get('/profile/:username', async (req, res, next) => {
+  try {
+    const username = String(req.params.username || '').trim().replace(/^@/, '');
+    if (!username || !/^[a-zA-Z0-9_.-]{1,60}$/.test(username)) return res.status(404).send('Profile not found.');
+    const user = await db.getOne(
+      `SELECT u.id, u.username, u.fullname, u.bio, u.location, u.website, u.avatar_url, u.picture, u.cover_url,
+              u.verified, u.created_at,
+              (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
+              (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id AND p.visibility = 'public') AS posts
+         FROM users u
+        WHERE LOWER(REPLACE(u.username, '@', '')) = LOWER(?) AND COALESCE(u.is_synthetic, 0) = 0`,
+      [username],
+    );
+    if (!user) return res.status(404).send('Profile not found.');
+    const origin = (() => { try { return new URL(String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).trim()).origin; } catch (_error) { return `${req.protocol}://${req.get('host')}`; } })();
+    const canonical = `${origin}/profile/${encodeURIComponent(String(user.username).replace(/^@/, ''))}`;
+    const image = user.avatar_url || user.picture || user.cover_url || '';
+    const title = `${user.fullname || user.username} | QuickChat`;
+    const description = String(user.bio || `${user.fullname || user.username} on QuickChat`).replace(/\\s+/g, ' ').slice(0, 300);
+    const imageUrl = image ? (() => { try { return new URL(image, origin).toString(); } catch (_error) { return ''; } })() : '';
+    const jsonLd = JSON.stringify({
+      '@context': 'https://schema.org',
+      '@type': 'Person',
+      name: user.fullname || user.username,
+      url: canonical,
+      image: imageUrl || undefined,
+      description,
+      address: user.location ? { '@type': 'PostalAddress', addressLocality: user.location } : undefined,
+      sameAs: user.website ? [user.website] : undefined,
+    });
+    const escape = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
+    const tags = [
+      `<meta name="description" content="${escape(description)}">`,
+      `<link rel="canonical" href="${escape(canonical)}">`,
+      `<meta property="og:type" content="profile">`,
+      `<meta property="og:title" content="${escape(title)}">`,
+      `<meta property="og:description" content="${escape(description)}">`,
+      `<meta property="og:url" content="${escape(canonical)}">`,
+      imageUrl && `<meta property="og:image" content="${escape(imageUrl)}">`,
+      `<meta name="twitter:card" content="${imageUrl ? 'summary_large_image' : 'summary'}">`,
+      `<meta name="twitter:title" content="${escape(title)}">`,
+      `<meta name="twitter:description" content="${escape(description)}">`,
+      imageUrl && `<meta name="twitter:image" content="${escape(imageUrl)}">`,
+      `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`,
+    ].filter(Boolean).join('\\n');
+    fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
+      if (error) return next(error);
+      res.type('html').send(
+        html
+          .replace(/<title>[^<]*<\\/title>/i, `<title>${escape(title)}</title>`)
+          .replace('</head>', `  ${tags}\\n</head>`),
+      );
+    });
+  } catch (error) { next(error); }
+});
 
 // Page APIs require the bearer token returned by the login and registration routes.
 app.use('/api', (req, res, next) => {
