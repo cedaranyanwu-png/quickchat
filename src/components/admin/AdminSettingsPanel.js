@@ -64,6 +64,40 @@ export default function AdminSettingsPanel() {
       </label>
       <p className="text-[11px] leading-5 text-slate-500">Only add public pages. Do not add admin, settings, private messages, API endpoints or other authenticated URLs.</p>
     </section>
+    <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 space-y-4">
+      <div>
+        <h3 className="font-extrabold text-slate-900">Google Search Console · HTML verification file</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-600">Upload the exact HTML verification file downloaded from Google Search Console. QuickChat will serve it at the root of your public domain so Google can fetch it without signing in.</p>
+      </div>
+      <label className="block text-xs font-bold text-slate-700">Google verification HTML file
+        <input type="file" accept=".html,text/html" onChange={async (event) => {
+          const file = event.target.files?.[0];
+          if (!file) return;
+          if (!file.name.toLowerCase().endsWith('.html')) { setError('Choose the .html verification file downloaded from Google.'); event.target.value = ''; return; }
+          if (file.size > 65536) { setError('The verification HTML file must be 64 KB or smaller.'); event.target.value = ''; return; }
+          try {
+            const content = await file.text();
+            update('google_site_verification_filename', file.name);
+            update('google_site_verification_html', content);
+            setError('');
+            setMessage(file.name + ' loaded. Click Save configuration below to publish it.');
+          } catch (_error) { setError('Unable to read the selected verification file.'); }
+        }} className="mt-1.5 block w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
+      </label>
+      <div className="rounded-xl border border-slate-200 bg-white p-3">
+        <div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Selected verification file</div>
+        <div className="mt-1 break-all text-sm font-bold text-slate-800">{form.google_site_verification_filename || 'No verification file uploaded yet'}</div>
+        {form.google_site_verification_filename && <a className="mt-2 inline-block text-xs font-bold text-blue-700 underline" href={'/' + encodeURIComponent(form.google_site_verification_filename)} target="_blank" rel="noreferrer">Open public verification URL</a>}
+        <p className="mt-2 text-[11px] leading-5 text-slate-500">The public URL will be https://your-domain/{'{'}filename{'}'}. Keep the original filename unchanged. Uploading a new file replaces the previous configured verification file.</p>
+      </div>
+      <label className="block text-xs font-bold text-slate-700">Google verification meta tag <span className="font-normal text-slate-400">(optional alternative)</span>
+        <input value={form.google_site_verification_meta || ''} onChange={e => update('google_site_verification_meta', e.target.value)} placeholder='<meta name="google-site-verification" content="..." />' className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
+      </label>
+      <label className="block text-xs font-bold text-slate-700">Bing verification meta tag <span className="font-normal text-slate-400">(optional)</span>
+        <input value={form.bing_site_verification_meta || ''} onChange={e => update('bing_site_verification_meta', e.target.value)} placeholder='<meta name="msvalidate.01" content="..." />' className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" />
+      </label>
+      <p className="text-[11px] leading-5 text-slate-500">After saving, return to Search Console and click Verify. The file must remain available at the exact root URL Google supplied.</p>
+    </section>
     <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5 space-y-4">
       <div className="flex items-start justify-between gap-4"><div><h3 className="font-extrabold text-slate-900">Gemini AI · character engine</h3><p className="mt-1 text-xs leading-5 text-slate-600">Connect Google's Gemini API to power the existing character accounts. The key is encrypted in platform settings and is never returned to the browser.</p></div>
         <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={Boolean(form.gemini_enabled)} onChange={e => update('gemini_enabled', e.target.checked)} /> Enable character AI</label></div>
