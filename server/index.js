@@ -495,16 +495,16 @@ app.use(async (req, res, next) => {
       getSetting('bing_site_verification_meta', ''),
     ]);
     const safeMeta = (value, name) => {
-      const match = String(value || '').match(/content\\s*=\\s*["']([A-Za-z0-9_-]{1,256})["']/i);
+      const match = String(value || '').match(/content\s*=\s*["']([A-Za-z0-9_-]{1,256})["']/i);
       return match ? `<meta name="${name}" content="${match[1]}" />` : '';
     };
     const verificationTags = [
       safeMeta(googleMeta, 'google-site-verification'),
       safeMeta(bingMeta, 'msvalidate.01'),
-    ].filter(Boolean).join('\\n');
+    ].filter(Boolean).join('\n');
     fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
       if (error) return next(error);
-      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\\n</head>`) : html;
+      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\n</head>`) : html;
       res.type('html').send(page);
     });
   } catch (error) { next(error); }
