@@ -377,7 +377,7 @@ app.get('/share/video/:videoId', async (req, res, next) => {
     const videoId = positiveShareId(req.params.videoId);
     if (!videoId) return res.status(400).send('Invalid video ID.');
     const video = await db.getOne(
-      `SELECT v.title, v.description, v.thumbnail_url
+      `SELECT v.title, v.description, v.thumbnail_url, v.created_at
          FROM videos v WHERE v.id = ?`,
       [videoId],
     );
