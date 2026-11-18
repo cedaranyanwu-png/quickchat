@@ -137,7 +137,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   }
 
   // Public investor and growth pages are available without a member session.
-  if (['/investors', '/growth'].includes(location.pathname.replace(/\\/+$/, '') || '/')) {
+  if (['/investors', '/growth'].includes(location.pathname.replace(/\/+$/, '') || '/')) {
     return <Routes>
       <Route path="/investors" element={<Investors />} />
       <Route path="/growth" element={<Growth />} />
