@@ -4,18 +4,21 @@ import { adminRequest } from '../../api';
 export default function AdminSettingsPanel() {
   const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_env: 'live', flw_client_id: '', flw_client_secret: '', flw_encryption_key: '', flw_webhook_secret: '', flw_webhook_url: 'https://quickchat-production-d5e5.up.railway.app/api/webhooks/flutterwave', public_app_url: 'https://quickchat-production-d5e5.up.railway.app', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash', email_provider_mode: 'brevo', brevo_api_key: '', resend_api_key: '', smtp_user: '', smtp_password: '', smtp_from: '', smtp_host: '', smtp_port: '587', smtp_secure: false });
   const [testingGemini, setTestingGemini] = useState(false);
+  const [sitemapCustomUrls, setSitemapCustomUrls] = useState('');
   const [testingEmail, setTestingEmail] = useState(false);
   const [emailTestTo, setEmailTestTo] = useState('');
   const [emailTestMessage, setEmailTestMessage] = useState('');
   const [geminiMessage, setGeminiMessage] = useState('');
   const [bots, setBots] = useState([]); const [botTotal, setBotTotal] = useState(0); const [botCount, setBotCount] = useState(100); const [generatingBots, setGeneratingBots] = useState(false); const [botMessage, setBotMessage] = useState('');
   const [saving, setSaving] = useState(false); const [loading, setLoading] = useState(true); const [message, setMessage] = useState(''); const [error, setError] = useState('');
-  const load = async () => { try { const data = await adminRequest('/admin/settings'); const settings = { ...data.settings }; if (!settings.email_provider_mode) settings.email_provider_mode = 'brevo'; settings.smtp_port = settings.smtp_port || '587'; settings.smtp_secure = String(settings.smtp_secure || 'false').toLowerCase() === 'true'; if (!settings.gemini_model || ['gemini-2.5-flash', 'gemini-2.5-pro', 'models/gemini-2.5-flash', 'models/gemini-2.5-pro'].includes(settings.gemini_model)) settings.gemini_model = 'gemini-3.8-flash'; setForm(v => ({ ...v, ...settings })); } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
+  const load = async () => { try { const data = await adminRequest('/admin/settings'); const settings = { ...data.settings }; if (!settings.email_provider_mode) settings.email_provider_mode = 'brevo'; settings.smtp_port = settings.smtp_port || '587'; settings.smtp_secure = String(settings.smtp_secure || 'false').toLowerCase() === 'true'; if (!settings.gemini_model || ['gemini-2.5-flash', 'gemini-2.5-pro', 'models/gemini-2.5-flash', 'models/gemini-2.5-pro'].includes(settings.gemini_model)) settings.gemini_model = 'gemini-3.8-flash'; setForm(v => ({ ...v, ...settings }));
+      try { const custom = JSON.parse(settings.seo_sitemap_custom_urls || '[]'); setSitemapCustomUrls(Array.isArray(custom) ? custom.map(item => item.url || '').filter(Boolean).join('\n') : ''); } catch (_e) { setSitemapCustomUrls(''); } } catch (e) { setError(e.message || 'Unable to load platform settings.'); } finally { setLoading(false); } };
   const loadBots = async () => { try { const data = await adminRequest('/admin/bots'); setBots(data.bots || []); setBotTotal(Number(data.total || 0)); } catch (e) { setBotMessage(e.message || 'Unable to load bot accounts.'); } };
   useEffect(() => { load(); loadBots(); }, []);
   const generateBots = async () => { const count = Math.max(1, Math.min(10000, Number(botCount) || 1)); setGeneratingBots(true); setBotMessage(''); try { const result = await adminRequest('/admin/bots/generate', { method: 'POST', body: { count } }); setBotMessage(result.message || 'Bot accounts generated.'); await loadBots(); } catch (e) { setBotMessage(e.message || 'Bot generation failed.'); } finally { setGeneratingBots(false); } };
   const setBotStatus = async (id, status) => { try { await adminRequest(`/admin/bots/${id}`, { method: 'PATCH', body: { status } }); await loadBots(); } catch (e) { setBotMessage(e.message || 'Unable to update bot.'); } };
-  const save = async (e) => { e.preventDefault(); setSaving(true); setError(''); setMessage(''); try { await adminRequest('/admin/settings', { method: 'PUT', body: form }); setMessage('Platform configuration saved securely.'); } catch (e) { setError(e.message || 'Unable to save configuration.'); } finally { setSaving(false); } };
+  const save = async (e) => { e.preventDefault(); setSaving(true); setError(''); setMessage(''); try { const customUrls = sitemapCustomUrls.split(/\r?\n/).map(url => url.trim()).filter(Boolean).slice(0, 5000).map(url => ({ url, priority: '0.5', changefreq: 'weekly' }));
+      await adminRequest('/admin/settings', { method: 'PUT', body: { ...form, seo_sitemap_custom_urls: JSON.stringify(customUrls) } }); setMessage('Platform configuration saved securely.'); } catch (e) { setError(e.message || 'Unable to save configuration.'); } finally { setSaving(false); } };
   const testGemini = async () => {
     setTestingGemini(true); setGeminiMessage('');
     try {
@@ -33,6 +36,34 @@ export default function AdminSettingsPanel() {
     {error && <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">{error}</div>}
     {message && <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">{message}</div>}
     <form onSubmit={save} className="space-y-5">
+    <section className="rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div><h3 className="font-extrabold text-slate-900">TypeSafe AI · Jev decision engine</h3>
+        <p className="mt-1 text-xs leading-5 text-slate-600">Configure Jev for QuickChat's recommendation and decision layer. Credentials stay encrypted server-side and are never exposed to the frontend.</p></div>
+        <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={Boolean(form.typesafe_jev_enabled)} onChange={e => update('typesafe_jev_enabled', e.target.checked)} /> Enable Jev</label>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="text-xs font-bold text-slate-700 md:col-span-2">TypeSafe API key<input type="password" autoComplete="new-password" value={form.typesafe_api_key || ''} onChange={e => update('typesafe_api_key', e.target.value)} placeholder="Paste your TypeSafe API key" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-700">Jev model<input value={form.typesafe_jev_model || 'jev-latest'} onChange={e => update('typesafe_jev_model', e.target.value)} placeholder="jev-latest" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-700">Candidate count<input type="number" min="4" max="20" value={form.jev_recommendation_candidates || 12} onChange={e => update('jev_recommendation_candidates', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-700">Minimum confidence<input type="number" min="0" max="1" step="0.01" value={form.jev_recommendation_min_confidence || 0.55} onChange={e => update('jev_recommendation_min_confidence', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+        <label className="text-xs font-bold text-slate-700">Jev score weight<input type="number" min="0" step="0.1" value={form.jev_recommendation_score_weight || 2} onChange={e => update('jev_recommendation_score_weight', e.target.value)} className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm" /></label>
+      </div>
+      <p className="text-[11px] leading-5 text-slate-500">Recommended flow: keep QuickChat's deterministic ranking as the safety and eligibility layer, then let Jev rerank only the strongest candidates. If Jev is unavailable, QuickChat automatically falls back to its existing algorithm.</p>
+    </section>
+    <section className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 space-y-4">
+      <div><h3 className="font-extrabold text-slate-900">SEO indexing · profiles, spaces and posts</h3>
+      <p className="mt-1 text-xs leading-5 text-slate-600">Public human profiles are automatically included in the sitemap. Public channels, pages, communities and public post share pages are also discovered automatically. Add additional public URLs below when you create landing pages outside those automatic routes.</p></div>
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="rounded-xl bg-white/80 p-3 text-xs"><div className="font-black text-slate-900">Automatic</div><div className="mt-1 text-slate-500">Profiles, spaces and public posts</div></div>
+        <div className="rounded-xl bg-white/80 p-3 text-xs"><div className="font-black text-slate-900">Images</div><div className="mt-1 text-slate-500">Profile and public post images are added to the image sitemap data.</div></div>
+        <div className="rounded-xl bg-white/80 p-3 text-xs"><div className="font-black text-slate-900">Crawler endpoints</div><div className="mt-1 text-slate-500">/sitemap.xml and /robots.txt</div></div>
+      </div>
+      <label className="block text-xs font-bold text-slate-700">Additional public sitemap URLs <span className="font-normal text-slate-400">(one URL per line)</span>
+        <textarea value={sitemapCustomUrls} onChange={e => setSitemapCustomUrls(e.target.value)} rows="7" placeholder="/about\n/contact\n/creator-program" className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white p-3 text-sm font-mono" />
+      </label>
+      <p className="text-[11px] leading-5 text-slate-500">Only add public pages. Do not add admin, settings, private messages, API endpoints or other authenticated URLs.</p>
+    </section>
     <section className="rounded-2xl border border-violet-200 bg-violet-50/60 p-5 space-y-4">
       <div className="flex items-start justify-between gap-4"><div><h3 className="font-extrabold text-slate-900">Gemini AI · character engine</h3><p className="mt-1 text-xs leading-5 text-slate-600">Connect Google's Gemini API to power the existing character accounts. The key is encrypted in platform settings and is never returned to the browser.</p></div>
         <label className="flex items-center gap-2 text-xs font-bold text-slate-700"><input type="checkbox" checked={Boolean(form.gemini_enabled)} onChange={e => update('gemini_enabled', e.target.checked)} /> Enable character AI</label></div>
