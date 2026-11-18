@@ -35,6 +35,7 @@ function urlNode(origin, entry) {
     entry.lastmod ? `<lastmod>${xmlEscape(lastmod(entry.lastmod))}</lastmod>` : '',
     entry.changefreq ? `<changefreq>${xmlEscape(entry.changefreq)}</changefreq>` : '',
     entry.priority ? `<priority>${xmlEscape(entry.priority)}</priority>` : '',
+    ...(Array.isArray(entry.images) ? entry.images.slice(0, 10).map((image) => `<image:image xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"><image:loc>${xmlEscape(absoluteUrl(origin, image))}</image:loc></image:image>`) : []),
     '</url>',
   ];
   return parts.filter(Boolean).join('');
@@ -64,7 +65,7 @@ async function collectEntries() {
 
   // Every normal public user profile is automatically discoverable.
   const users = await db.query(
-    `SELECT username, COALESCE(created_at, createdat) AS lastmod
+    `SELECT username, avatar_url, picture, cover_url, COALESCE(created_at, createdat) AS lastmod
        FROM users
       WHERE COALESCE(username, '') <> ''
         AND COALESCE(is_synthetic, 0) = 0
@@ -77,6 +78,7 @@ async function collectEntries() {
       lastmod: user.lastmod,
       priority: '0.7',
       changefreq: 'weekly',
+      images: [user.avatar_url || user.picture, user.cover_url].filter(Boolean),
     });
   }
 
@@ -98,7 +100,7 @@ async function collectEntries() {
 
   // Public, non-paywalled posts get their own crawlable share URL.
   const posts = await db.query(
-    `SELECT p.id, p.created_at
+    `SELECT p.id, p.media, p.created_at
        FROM posts p
       WHERE p.visibility = 'public'
         AND p.community_id IS NULL
@@ -110,6 +112,7 @@ async function collectEntries() {
       lastmod: post.created_at,
       priority: '0.5',
       changefreq: 'weekly',
+      images: (() => { try { return (JSON.parse(String(post.media || '[]')) || []).map((item) => item?.url || item?.thumbnailUrl).filter(Boolean); } catch (_error) { return []; } })(),
     });
   }
 
