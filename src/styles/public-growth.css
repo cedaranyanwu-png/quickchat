@@ -1,0 +1,13 @@
+.qc-public a { text-decoration: none; }
+.qc-public { overflow-x: hidden; }
+.qc-public section[id] { scroll-margin-top: 88px; }
+.qc-enter { animation: qc-enter .8s cubic-bezier(.2,.7,.2,1) both; }
+.qc-delay { animation-delay: .16s; }
+.qc-slide { animation: qc-slide-in .35s ease both; }
+.qc-card { transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+.qc-card:hover { transform: translateY(-5px); box-shadow: 0 18px 45px rgba(15,23,42,.08); }
+.qc-orb { animation: qc-orb-float 9s ease-in-out infinite alternate; }
+@keyframes qc-enter { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
+@keyframes qc-slide-in { from { opacity:0; transform:translateX(12px); } to { opacity:1; transform:translateX(0); } }
+@keyframes qc-orb-float { from { transform:translate3d(0,0,0) scale(1); } to { transform:translate3d(-25px,24px,0) scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .qc-enter,.qc-slide,.qc-orb { animation:none !important; } .qc-card { transition:none; } .qc-card:hover { transform:none; } }
