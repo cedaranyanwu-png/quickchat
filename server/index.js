@@ -344,6 +344,17 @@ function escapeHtml(value) {
 }
 
 // Public SEO surfaces must be available to search crawlers without authentication.
+app.get('/:verificationFile', async (req, res, next) => {
+  try {
+    const configured = String(await getSetting('google_site_verification_filename', '')).trim();
+    const filename = String(req.params.verificationFile || '').trim();
+    if (!configured || filename !== configured || !/^[A-Za-z0-9._-]+\\.html$/i.test(filename)) return next();
+    const content = String(await getSetting('google_site_verification_html', '')).trim();
+    if (!content) return res.status(404).type('text').send('Verification file not configured.');
+    res.type('html').send(content);
+  } catch (error) { next(error); }
+});
+
 app.get('/sitemap.xml', async (req, res, next) => {
   try {
     const sitemap = await buildSitemap(req);
@@ -472,12 +483,25 @@ app.use('/api', creatorStudioRoutes.router);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
 
 // Serve the production React bundle from this same origin as the API.
-app.use(express.static(frontendBuildPath));
+app.use(express.static(frontendBuildPath, { index: false }));
 app.use((req, res, next) => {
   if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(frontendBuildPath, 'index.html'), (error) => {
-    if (error) next(error);
-  });
+  Promise.all([
+    getSetting('google_site_verification_meta', ''),
+    getSetting('bing_site_verification_meta', ''),
+    getSetting('seo_custom_head_html', ''),
+  ]).then(([googleMeta, bingMeta, customHead]) => {
+    fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
+      if (error) return next(error);
+      const verificationTags = [
+        String(googleMeta || '').trim(),
+        String(bingMeta || '').trim(),
+        String(customHead || '').trim(),
+      ].filter(Boolean).join('\\n  ');
+      const page = verificationTags ? html.replace('</head>', `  ${verificationTags}\\n</head>`) : html;
+      res.type('html').send(page);
+    });
+  }).catch(next);
 });
 
 app.use((error, _req, res, _next) => {
