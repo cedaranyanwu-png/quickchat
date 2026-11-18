@@ -185,6 +185,7 @@ const Register = ({ googleEnabled, onAuthenticated }) => {
           </div>
         )}
 
+        <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4"><p className="text-sm font-extrabold text-slate-900">Join a platform built for creators and communities.</p><p className="mt-1 text-xs leading-5 text-slate-600">Publish posts, photos and videos, grow your audience, connect with followers and create communities, pages or channels around your work.</p><Link to="/about" className="mt-2 inline-flex text-xs font-bold text-blue-700 hover:underline">Discover what QuickChat offers</Link></div>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
