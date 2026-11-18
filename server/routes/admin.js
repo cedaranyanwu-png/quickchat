@@ -7,6 +7,7 @@ const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
 const { getTrafficOverview } = require('../traffic-security');
 const { fetchFeed, validateFeedUrl, syncSource } = require('../services/rss-service');
+const { buildSitemap, renderIndex, renderUrlset } = require('../services/seo-sitemap');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -948,7 +949,7 @@ router.patch('/admin/bots/:id', requirePermission('settings.manage'), asyncRoute
 }));
 
 router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
-  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_env', 'flw_client_id', 'flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id', 'gemini_enabled', 'gemini_api_key', 'gemini_model', 'typesafe_jev_enabled', 'typesafe_api_key', 'typesafe_jev_model', 'jev_recommendation_candidates', 'jev_recommendation_min_confidence', 'jev_recommendation_score_weight', 'seo_sitemap_custom_urls', 'email_provider_mode', 'resend_api_key', 'brevo_api_key', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
+  const keys = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_env', 'flw_client_id', 'flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_client_secret', 'google_drive_refresh_token', 'google_drive_folder_id', 'gemini_enabled', 'gemini_api_key', 'gemini_model', 'typesafe_jev_enabled', 'typesafe_api_key', 'typesafe_jev_model', 'jev_recommendation_candidates', 'jev_recommendation_min_confidence', 'jev_recommendation_score_weight', 'seo_sitemap_custom_urls', 'google_site_verification_filename', 'google_site_verification_html', 'google_site_verification_meta', 'bing_site_verification_meta', 'seo_custom_head_html', 'email_provider_mode', 'resend_api_key', 'brevo_api_key', 'smtp_user', 'smtp_password', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
   const values = await Promise.all(keys.map((key) => getSetting(key, null)));
   const settings = Object.fromEntries(keys.map((key, index) => [key, values[index]]));
   for (const key of ['flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'typesafe_api_key', 'smtp_password', 'resend_api_key', 'brevo_api_key']) {
@@ -967,11 +968,12 @@ router.get('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   settings.jev_recommendation_candidates = Number(settings.jev_recommendation_candidates || 12);
   settings.jev_recommendation_min_confidence = Number(settings.jev_recommendation_min_confidence || 0.55);
   settings.jev_recommendation_score_weight = Number(settings.jev_recommendation_score_weight || 2);
+  settings.google_site_verification_filename = String(settings.google_site_verification_filename || 'google-site-verification.html');
   res.json({ settings });
 }));
 
 router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
-  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_env', 'flw_client_id', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'typesafe_jev_enabled', 'typesafe_jev_model', 'jev_recommendation_candidates', 'jev_recommendation_min_confidence', 'jev_recommendation_score_weight', 'seo_sitemap_custom_urls', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
+  const normal = ['boost_synthetic_test_mode', 'bots_enabled', 'bots_show_find_friends', 'bots_show_home', 'bots_show_explore', 'verification_points', 'verification_reward_points', 'flw_env', 'flw_client_id', 'flw_webhook_url', 'public_app_url', 'google_drive_enabled', 'google_drive_client_id', 'google_drive_folder_id', 'gemini_enabled', 'gemini_model', 'typesafe_jev_enabled', 'typesafe_jev_model', 'jev_recommendation_candidates', 'jev_recommendation_min_confidence', 'jev_recommendation_score_weight', 'seo_sitemap_custom_urls', 'google_site_verification_filename', 'google_site_verification_html', 'google_site_verification_meta', 'bing_site_verification_meta', 'seo_custom_head_html', 'email_provider_mode', 'smtp_user', 'smtp_from', 'smtp_host', 'smtp_port', 'smtp_secure'];
   const secrets = ['flw_client_secret', 'flw_encryption_key', 'flw_webhook_secret', 'google_drive_client_secret', 'google_drive_refresh_token', 'gemini_api_key', 'typesafe_api_key', 'smtp_password', 'resend_api_key', 'brevo_api_key'];
   for (const key of normal) {
     if (req.body?.[key] !== undefined) await setSetting(key, String(req.body[key] ?? ''), { secret: false, updatedBy: req.user.id });
@@ -982,6 +984,31 @@ router.put('/admin/settings', requirePermission('settings.manage'), asyncRoute(a
   }
   await audit(req, 'platform.settings_updated', 'settings', null, 'Platform configuration updated', null, { keys: [...normal, ...secrets] });
   res.json({ message: 'Platform configuration saved.' });
+}));
+
+router.get('/admin/seo/sitemap-preview', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const sitemap = await buildSitemap(req);
+  const parts = sitemap.chunks.map((chunk, index) => ({
+    name: `sitemap-${index + 1}.xml`,
+    urlCount: chunk.length,
+    xml: renderUrlset(sitemap.origin, chunk),
+  }));
+  res.json({ index: renderIndex(sitemap.origin, sitemap.chunks.length || 1), totalUrls: sitemap.entries.length, files: parts });
+}));
+
+router.get('/admin/seo/robots-preview', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const configured = String(await getSetting('public_app_url', process.env.PUBLIC_APP_URL || '')).trim();
+  let origin;
+  try { origin = new URL(configured || \`${req.protocol}://${req.get('host')}\`).origin; } catch (_error) { origin = \`${req.protocol}://${req.get('host')}\`; }
+  res.json({ content: [
+    'User-agent: *',
+    'Allow: /',
+    'Disallow: /admin',
+    'Disallow: /api/',
+    'Disallow: /settings',
+    'Disallow: /messages',
+    `Sitemap: ${origin}/sitemap.xml`,
+  ].join('\\n') });
 }));
 router.post('/admin/email/test', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const recipient = String(req.body?.to || '').trim().toLowerCase();
