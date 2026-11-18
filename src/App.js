@@ -49,6 +49,8 @@ import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
 import About from './pages/About';
+import InvestorRelations from './pages/InvestorRelations';
+import GrowthProgramme from './pages/GrowthProgramme';
 import CreatorPortal from './pages/CreatorPortal';
 import CreatorContentLibrary from './pages/CreatorContentLibrary';
 import CreatorAnalytics from './pages/CreatorAnalytics';
@@ -97,7 +99,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
     navigate('/compose/advanced', { state: handoff ? { handoff } : undefined });
   };
 
-  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/creator-program', '/about'].includes(location.pathname);
+  const isAuthPage = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/creator-program', '/about', '/investors', '/growth', '/growth/admin'].includes(location.pathname);
   const isSharePage = location.pathname.startsWith('/share/');
   const isLiveWatchPage = /^\/live\/[^/]+\/?$/.test(location.pathname);
   const isVideosPage = location.pathname === '/videos';
@@ -167,6 +169,9 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/creator-program" element={<CreatorProgram />} />
       <Route path="/about" element={<About />} />
+      <Route path="/investors" element={<InvestorRelations />} />
+      <Route path="/growth" element={<GrowthProgramme />} />
+      <Route path="/growth/admin" element={<Navigate to="/admin" replace />} />
     </Routes>;
   }
 
@@ -256,7 +261,7 @@ export default function App() {
 
   useEffect(() => {
     const path = window.location.pathname.replace(/\/$/, '') || '/';
-    if (!['/', '/login', '/register', '/creator-program'].includes(path)) return undefined;
+    if (!['/', '/login', '/register', '/creator-program', '/investors', '/growth'].includes(path)) return undefined;
     const controller = new AbortController();
     fetch(`${API_BASE_URL}/traffic/landing`, {
       method: 'POST',
