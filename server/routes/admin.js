@@ -1008,7 +1008,7 @@ router.get('/admin/seo/robots-preview', requirePermission('settings.manage'), as
     'Disallow: /settings',
     'Disallow: /messages',
     `Sitemap: ${origin}/sitemap.xml`,
-  ].join('\\n') });
+  ].join('\n') });
 }));
 router.post('/admin/email/test', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const recipient = String(req.body?.to || '').trim().toLowerCase();
