@@ -87,6 +87,7 @@ async function collectEntries() {
   addEntry(entries, seen, { loc: '/explore', priority: '0.8', changefreq: 'daily' });
   addEntry(entries, seen, { loc: '/communities', priority: '0.7', changefreq: 'daily' });
   addEntry(entries, seen, { loc: '/creator-program', priority: '0.7', changefreq: 'weekly' });
+  addEntry(entries, seen, { loc: '/about', priority: '0.8', changefreq: 'monthly' });
 
   // Public human profiles.
   const users = await db.query(
