@@ -48,6 +48,7 @@ import AccountBooster from './pages/AccountBooster';
 import First100 from './pages/First100';
 import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
+import About from './pages/About';
 import CreatorPortal from './pages/CreatorPortal';
 import CreatorContentLibrary from './pages/CreatorContentLibrary';
 import CreatorAnalytics from './pages/CreatorAnalytics';
@@ -165,6 +166,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/verify-email" element={<VerifyEmail />} />
       <Route path="/creator-program" element={<CreatorProgram />} />
+      <Route path="/about" element={<About />} />
     </Routes>;
   }
 
@@ -224,6 +226,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
             <Route path="/first-100" element={<First100 />} />
             <Route path="/creator-studio" element={<Navigate to="/creator" replace />} />
             <Route path="/creator-program" element={<CreatorProgram />} />
+            <Route path="/about" element={<About />} />
             <Route path="/profile/:username" element={<ViewProfile openModal={openModal} openVideo={setActiveVideoId} />} />
           </Routes>
         </main>
