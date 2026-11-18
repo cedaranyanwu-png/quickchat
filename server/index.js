@@ -323,6 +323,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
       `SELECT p.id, p.author_id, p.body, p.kind, p.category, p.hashtags, p.target_interests, p.source_link,
               p.visibility, p.price_amount, p.price_currency,
               p.community_id, c.name AS community_name, p.media, p.video_id, p.created_at,
+              v.video_url AS attached_video_url, v.thumbnail_url AS attached_video_thumbnail, v.title AS attached_video_title, v.description AS attached_video_description, v.duration AS attached_video_duration,
               u.fullname AS name, u.username, u.avatar_url, u.picture, u.verified,
               u.creator_membership_price AS author_fan_price, u.creator_membership_currency AS author_fan_currency,
               u.interests AS author_interests, u.is_synthetic AS author_is_synthetic,
@@ -333,6 +334,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
               CASE WHEN p.visibility = 'public' THEN 1 ELSE 0 END AS can_view
          FROM posts p JOIN users u ON u.id = p.author_id
          LEFT JOIN communities c ON c.id = p.community_id
+         LEFT JOIN videos v ON v.id = p.video_id
         WHERE p.id = ?`,
       [postId],
     );
@@ -363,6 +365,14 @@ app.get('/share/post/:postId', async (req, res, next) => {
       author: { '@type': 'Person', name: post.name || 'QuickChat member', url: post.username ? origin + '/profile/' + encodeURIComponent(String(post.username).replace(/^@/, '')) : undefined },
       publisher: { '@type': 'Organization', name: 'QuickChat', url: origin },
       image: image ? absolutePublicUrl(origin, image) : undefined,
+      hasPart: postRow.attached_video_url ? {
+        '@type': 'VideoObject',
+        name: postRow.attached_video_title || title,
+        description: postRow.attached_video_description || description,
+        contentUrl: absolutePublicUrl(origin, postRow.attached_video_url),
+        thumbnailUrl: postRow.attached_video_thumbnail ? absolutePublicUrl(origin, postRow.attached_video_thumbnail) : (videoPoster ? absolutePublicUrl(origin, videoPoster) : undefined),
+        uploadDate: post.createdAt || undefined,
+      } : undefined,
       isAccessibleForFree: true,
     } : undefined;
     return sendSharePage(req, res, { title, description, image, type: 'article', jsonLd, noIndex: !publicPost }, '/share/post/' + postId, next);
@@ -376,7 +386,7 @@ app.get('/share/video/:videoId', async (req, res, next) => {
     const videoId = positiveShareId(req.params.videoId);
     if (!videoId) return res.status(400).send('Invalid video ID.');
     const video = await db.getOne(
-      `SELECT v.title, v.description, v.thumbnail_url, v.created_at
+      `SELECT v.title, v.description, v.video_url, v.thumbnail_url, v.duration, v.created_at
          FROM videos v WHERE v.id = ?`,
       [videoId],
     );
@@ -390,6 +400,7 @@ app.get('/share/video/:videoId', async (req, res, next) => {
       name: String(video.title || 'QuickChat video'),
       description,
       thumbnailUrl: video.thumbnail_url ? absolutePublicUrl(origin, video.thumbnail_url) : undefined,
+      contentUrl: video.video_url ? absolutePublicUrl(origin, video.video_url) : undefined,
       uploadDate: video.created_at || undefined,
       url: canonical,
       publisher: { '@type': 'Organization', name: 'QuickChat', url: origin },
