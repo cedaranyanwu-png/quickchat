@@ -9,7 +9,8 @@
     "dev": "node --use-system-ca --watch index.js",
     "ai-poster:start": "node --use-system-ca ai-poster.js",
     "rss-worker:start": "node --use-system-ca rss-worker.js",
-    "email:test": "node --use-system-ca test-email.js"
+    "email:test": "node --use-system-ca test-email.js",
+    "storage:migrate-r2": "node --use-system-ca migrate-storage-to-r2.js"
   },
   "keywords": [],
   "author": "",
