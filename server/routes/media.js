@@ -36,7 +36,7 @@ function r2Config() {
   const accessKey = process.env.R2_ACCESS_KEY_ID;
   const secretKey = process.env.R2_SECRET_ACCESS_KEY;
   if (![endpoint, bucket, accessKey, secretKey].every(Boolean)) return null;
-  return { endpoint: endpoint.replace(/\\/$/, ''), bucket, region, accessKey, secretKey };
+  return { endpoint: endpoint.replace(/\/$/, ''), bucket, region, accessKey, secretKey };
 }
 function hmac(key, value) { return crypto.createHmac('sha256', key).update(value, 'utf8').digest(); }
 function signingKey(secret, date, region) {
@@ -99,7 +99,7 @@ async function storeBufferForUser(ownerId, buffer, mimeType) {
   if (!hasExpectedSignature(mimeType, buffer.subarray(0, 32))) {
     throw new Error('Generated media contents do not match the declared file type.');
   }
-  const storage = s3Config();
+  const storage = r2Config();
   if (!storage) throw new Error('Railway media storage is not configured.');
   const filename = `${crypto.randomUUID()}.${type.extension}`;
   const filePath = path.join(uploadDirectory, filename);
@@ -118,7 +118,7 @@ async function storeBufferForUser(ownerId, buffer, mimeType) {
     return { id: upload.id, filename, url: `${publicOrigin}/uploads/${filename}`, type: mimeType.startsWith('video/') ? 'video' : mimeType.startsWith('audio/') ? 'audio' : 'image', size: buffer.length };
   } catch (error) {
     if (stored) {
-      const url = s3RequestUrl(storage, filename);
+      const url = r2ObjectUrl(storage, r2Key(filename));
       const headers = signedHeaders(storage, 'DELETE', url, crypto.createHash('sha256').update('').digest('hex'));
       await fetch(url, { method: 'DELETE', headers }).catch(() => {});
     }
@@ -126,13 +126,6 @@ async function storeBufferForUser(ownerId, buffer, mimeType) {
   } finally {
     await fsPromises.rm(filePath, { force: true }).catch(() => {});
   }
-}
-
-async function getObject(config, filename, range) {
-  const url = s3RequestUrl(config, filename);
-  const headers = signedHeaders(config, 'GET', url, crypto.createHash('sha256').update('').digest('hex'));
-  if (range) headers.Range = range;
-  return fetch(url, { method: 'GET', headers });
 }
 
 router.post('/media', asyncRoute(async (req, res) => {
@@ -167,7 +160,7 @@ router.post('/media', asyncRoute(async (req, res) => {
     if (bytes === 0) return res.status(400).json({ message: 'The uploaded file is empty.' });
     if (!hasExpectedSignature(mimeType, header)) return res.status(415).json({ message: 'The file contents do not match the selected image or video type.' });
 
-    const storage = s3Config();
+    const storage = r2Config();
     if (!storage) {
       return res.status(503).json({ message: 'Media storage is not configured yet. Please try again shortly.' });
     }
