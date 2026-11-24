@@ -29,90 +29,66 @@ const videoTypes = {
 };
 const fileTypes = { ...imageTypes, ...videoTypes, ...audioTypes };
 
-function s3Config() {
-  const endpoint = process.env.QUICKCHAT_S3_ENDPOINT;
-  const bucket = process.env.QUICKCHAT_S3_BUCKET;
-  const region = process.env.QUICKCHAT_S3_REGION;
-  const accessKey = process.env.QUICKCHAT_S3_ACCESS_KEY_ID;
-  const secretKey = process.env.QUICKCHAT_S3_SECRET_ACCESS_KEY;
-  if (![endpoint, bucket, region, accessKey, secretKey].every(Boolean)) return null;
-  return { endpoint: endpoint.replace(/\/$/, ''), bucket, region, accessKey, secretKey };
+function r2Config() {
+  const endpoint = process.env.R2_ENDPOINT || 'https://62809542fc864ad1186326309f104278.r2.cloudflarestorage.com';
+  const bucket = process.env.R2_BUCKET || 'uploadbackup';
+  const region = process.env.R2_REGION || 'auto';
+  const accessKey = process.env.R2_ACCESS_KEY_ID;
+  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
+  if (![endpoint, bucket, accessKey, secretKey].every(Boolean)) return null;
+  return { endpoint: endpoint.replace(/\\/$/, ''), bucket, region, accessKey, secretKey };
 }
-
-function hmac(key, value) {
-  return crypto.createHmac('sha256', key).update(value, 'utf8').digest();
-}
-
+function hmac(key, value) { return crypto.createHmac('sha256', key).update(value, 'utf8').digest(); }
 function signingKey(secret, date, region) {
-  const dateKey = hmac(`AWS4${secret}`, date);
+  const dateKey = hmac('AWS4' + secret, date);
   const regionKey = hmac(dateKey, region);
   const serviceKey = hmac(regionKey, 's3');
   return hmac(serviceKey, 'aws4_request');
 }
-
-function s3RequestUrl(config, filename) {
-  // Railway Object Storage exposes virtual-host-style S3 endpoints.
+function r2ObjectUrl(config, key) {
   const url = new URL(config.endpoint);
-  url.hostname = `${config.bucket}.${url.hostname}`;
-  url.pathname = `${url.pathname.replace(/\/$/, '')}/${encodeURIComponent(filename)}`;
+  url.pathname = '/' + encodeURIComponent(config.bucket) + '/' + String(key).split('/').map(encodeURIComponent).join('/');
   url.search = '';
   return url;
 }
-
 function signedHeaders(config, method, url, payloadHash, contentType = '') {
-  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const amzDate = new Date().toISOString().replace(/[:-]|\\.\\d{3}/g, '');
   const date = amzDate.slice(0, 8);
-  const headers = {
-    host: url.host,
-    'x-amz-content-sha256': payloadHash,
-    'x-amz-date': amzDate,
-  };
+  const headers = { host: url.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate };
   if (contentType) headers['content-type'] = contentType;
   const names = Object.keys(headers).sort();
-  const canonicalHeaders = names.map((name) => `${name}:${headers[name].trim()}\n`).join('');
+  const canonicalHeaders = names.map((name) => name + ':' + headers[name].trim() + '\\n').join('');
   const signedNames = names.join(';');
-  const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedNames, payloadHash].join('\n');
-  const scope = `${date}/${config.region}/s3/aws4_request`;
-  const stringToSign = [
-    'AWS4-HMAC-SHA256',
-    amzDate,
-    scope,
-    crypto.createHash('sha256').update(canonicalRequest).digest('hex'),
-  ].join('\n');
-  const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region))
-    .update(stringToSign).digest('hex');
-  return {
-    ...headers,
-    Authorization: `AWS4-HMAC-SHA256 Credential=${config.accessKey}/${scope}, SignedHeaders=${signedNames}, Signature=${signature}`,
-  };
+  const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedNames, payloadHash].join('\\n');
+  const scope = date + '/' + config.region + '/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\\n');
+  const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region)).update(stringToSign).digest('hex');
+  return { ...headers, Authorization: 'AWS4-HMAC-SHA256 Credential=' + config.accessKey + '/' + scope + ', SignedHeaders=' + signedNames + ', Signature=' + signature };
 }
-
+function r2Key(filename) { return 'uploads/' + filename; }
 async function hashFile(filePath) {
   const hash = crypto.createHash('sha256');
   for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
   return hash.digest('hex');
 }
-
 async function putObject(config, filename, filePath, mimeType) {
-  const url = s3RequestUrl(config, filename);
-  const fileStats = await fsPromises.stat(filePath);
+  const url = r2ObjectUrl(config, r2Key(filename));
+  const stat = await fsPromises.stat(filePath);
   const headers = signedHeaders(config, 'PUT', url, await hashFile(filePath), mimeType);
-
-  // Railway's S3-compatible storage requires a fixed Content-Length for streamed
-  // PUT requests. Node's fetch otherwise sends the stream without one, and the
-  // object API rejects it with HTTP 411 (Length Required).
-  headers['content-length'] = String(fileStats.size);
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: fs.createReadStream(filePath),
-    duplex: 'half',
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '');
-    throw new Error(`Cloud media storage rejected the upload (${response.status}): ${detail.slice(0, 300)}`);
-  }
+  headers['content-length'] = String(stat.size);
+  const response = await fetch(url, { method: 'PUT', headers, body: fs.createReadStream(filePath), duplex: 'half' });
+  if (!response.ok) throw new Error('Cloudflare R2 upload failed (' + response.status + '): ' + (await response.text()).slice(0, 300));
+}
+async function deleteObject(config, filename) {
+  const url = r2ObjectUrl(config, r2Key(filename));
+  const response = await fetch(url, { method: 'DELETE', headers: signedHeaders(config, 'DELETE', url, crypto.createHash('sha256').update('').digest('hex')) });
+  if (!response.ok && response.status !== 404) throw new Error('Could not remove the media object from Cloudflare R2.');
+}
+async function getObject(config, filename, range) {
+  const url = r2ObjectUrl(config, r2Key(filename));
+  const headers = signedHeaders(config, 'GET', url, crypto.createHash('sha256').update('').digest('hex'));
+  if (range) headers.range = range;
+  return fetch(url, { method: 'GET', headers });
 }
 
 async function storeBufferForUser(ownerId, buffer, mimeType) {
