@@ -34,10 +34,10 @@ async function list(c,prefix=''){
   const r=await fetch(u,{headers:headers(c,'GET',u,emptyHash())}); if(!r.ok)throw new Error('List failed '+r.status+' '+await r.text());
   const x=await r.text(); return [...x.matchAll(/<Key>([^<]+)<\\/Key>/g)].map(m=>m[1].replace(/&amp;/g,'&'));
 }
-async function copy(src,dst,key){
+async function copy(src,dst,key,targetKey){
   const get=await fetch(urlFor(src,key),{headers:headers(src,'GET',urlFor(src,key),emptyHash())});
   if(!get.ok)throw new Error('GET '+key+' failed '+get.status);
-  const data=Buffer.from(await get.arrayBuffer()), u=urlFor(dst,key), h=crypto.createHash('sha256').update(data).digest('hex'), hs=headers(dst,'PUT',u,h);
+  const data=Buffer.from(await get.arrayBuffer()), u=urlFor(dst,targetKey || key), h=crypto.createHash('sha256').update(data).digest('hex'), hs=headers(dst,'PUT',u,h);
   hs['content-length']=String(data.length);
   const put=await fetch(u,{method:'PUT',headers:hs,body:data}); if(!put.ok)throw new Error('PUT '+key+' failed '+put.status+' '+await put.text());
   console.log('migrated',key,data.length,'bytes');
