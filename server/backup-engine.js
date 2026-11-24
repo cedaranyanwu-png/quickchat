@@ -6,9 +6,35 @@ const zlib = require('zlib');
 const { db } = require('./routes/utils');
 const { getSetting } = require('./platform-settings');
 const { OAuth2Client } = require('google-auth-library');
+const r2 = require('./r2-storage');
 
 const backupDirectory = path.resolve(__dirname, process.env.BACKUP_DIRECTORY || '../private-backups');
 const mediaDirectory = path.join(__dirname, 'uploads');
+const r2BackupPrefix = 'backup/';
+function backupStorageConfig() { return r2.configFromEnv('R2'); }
+async function uploadBackupToR2(filePath, filename) {
+  const config = backupStorageConfig();
+  if (!config) return null;
+  return r2.putFile(config, r2BackupPrefix + filename, filePath, 'application/zip');
+}
+async function downloadBackupFromR2(filename) {
+  const config = backupStorageConfig();
+  if (!config) return null;
+  const response = await r2.getObject(config, r2BackupPrefix + filename);
+  if (!response.ok) return null;
+  return Buffer.from(await response.arrayBuffer());
+}
+async function deleteBackupFromR2(filename) {
+  const config = backupStorageConfig();
+  if (!config) return;
+  await r2.deleteObject(config, r2BackupPrefix + filename);
+}
+async function listR2Backups() {
+  const config = backupStorageConfig();
+  if (!config) return [];
+  const objects = await r2.listObjects(config, r2BackupPrefix);
+  return objects.filter((item) => /^[0-9TZa-z-]+\\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: null, createdAt: null, storage: 'r2' }));
+}
 let running = false;
 
 function crc32(buffer) {
@@ -162,7 +188,8 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
       throw new Error('Backup checksum verification failed; the incomplete archive was removed.');
     }
     const stat = await fsp.stat(finalPath);
-    return { id, filename, path: finalPath, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString() };
+    const r2Object = await uploadBackupToR2(finalPath, filename);
+    return { id, filename, path: finalPath, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString(), r2: r2Object ? { key: r2Object.key, size: r2Object.size } : null };
   } finally {
     running = false;
   }
@@ -176,7 +203,9 @@ async function cleanupExpiredBackups(retentionDays = 30) {
   for (const backup of backups) {
     if (new Date(backup.createdAt).getTime() < cutoff) {
       const fullPath = getBackupPath(backup.filename);
-      if (fullPath) { await fsp.unlink(fullPath).catch(() => {}); deleted += 1; }
+      if (fullPath) { await fsp.unlink(fullPath).catch(() => {}); }
+      await deleteBackupFromR2(backup.filename).catch(() => {});
+      deleted += 1;
     }
   }
   return deleted;
@@ -193,7 +222,11 @@ async function listBackups() {
       if (stat.isFile()) results.push({ id: name.slice(0, -4), filename: name, sizeBytes: stat.size, createdAt: stat.mtime.toISOString() });
     } catch (_) {}
   }
-  return results.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const r2Backups = await listR2Backups().catch(() => []);
+  const merged = new Map();
+  for (const item of results) merged.set(item.filename, { ...item, storage: 'local' });
+  for (const item of r2Backups) merged.set(item.filename, { ...merged.get(item.filename), ...item, storage: 'r2' });
+  return [...merged.values()].sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
 function getBackupPath(filename) {
@@ -336,5 +369,5 @@ async function downloadFromGoogleDrive(fileId) {
   return Buffer.from(await response.arrayBuffer());
 }
 
-module.exports = { createBackup, listBackups, getBackupPath, cleanupExpiredBackups, backupDirectory, isRunning: () => running, restoreBackup, uploadToGoogleDrive, listGoogleDriveBackups, downloadFromGoogleDrive };
+module.exports = { createBackup, listBackups, getBackupPath, cleanupExpiredBackups, backupDirectory, isRunning: () => running, restoreBackup, uploadToGoogleDrive, listGoogleDriveBackups, downloadFromGoogleDrive, downloadBackupFromR2, deleteBackupFromR2 };
 
