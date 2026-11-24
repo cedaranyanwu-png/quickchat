@@ -35,8 +35,16 @@ router.post('/admin/backups', requirePermission('backups.create'), asyncRoute(as
 router.get('/admin/backups/:filename/download', requirePermission('backups.download'), asyncRoute(async (req, res) => {
   const fullPath = engine.getBackupPath(req.params.filename);
   if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
-  const stat = await fsp.stat(fullPath).catch(() => null);
-  if (!stat?.isFile()) return res.status(404).json({ message: 'Backup not found.' });
+  let stat = await fsp.stat(fullPath).catch(() => null);
+  if (!stat?.isFile()) {
+    const data = await engine.downloadBackupFromR2(req.params.filename);
+    if (!data) return res.status(404).json({ message: 'Backup not found.' });
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Length', data.length);
+    res.setHeader('Content-Disposition', 'attachment; filename="' + path.basename(fullPath) + '"');
+    return res.end(data);
+  }
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Length', stat.size);
@@ -54,10 +62,17 @@ router.post('/admin/backups/:filename/restore', requirePermission('backups.creat
   const filename = String(req.params.filename || '');
   const fullPath = engine.getBackupPath(filename);
   if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
-  const stat = await fsp.stat(fullPath).catch(() => null);
-  if (!stat?.isFile()) return res.status(404).json({ message: 'Backup not found.' });
+  let stat = await fsp.stat(fullPath).catch(() => null);
+  let restorePath = fullPath;
+  if (!stat?.isFile()) {
+    const data = await engine.downloadBackupFromR2(filename);
+    if (!data) return res.status(404).json({ message: 'Backup not found.' });
+    restorePath = path.join(os.tmpdir(), 'quickchat-r2-restore-' + Date.now() + '-' + Math.random().toString(16).slice(2) + '.zip');
+    await fsp.writeFile(restorePath, data, { mode: 0o600 });
+  }
   if (!req.body?.confirm) return res.status(400).json({ message: 'Restore confirmation is required.' });
-  const result = await engine.restoreBackup(fullPath, { restoredBy: req.user.id, reason: String(req.body?.reason || 'Administrator restore').slice(0, 300) });
+  const result = await engine.restoreBackup(restorePath, { restoredBy: req.user.id, reason: String(req.body?.reason || 'Administrator restore').slice(0, 300) });
+  if (restorePath !== fullPath) await fsp.unlink(restorePath).catch(() => {});
   await audit(req, 'backup.restored', 'backup', filename, result.reason, null, { checksum: result.checksum, restoredRows: result.restoredRows, restoredTables: result.restoredTables });
   res.json({ message: 'Backup restored successfully.', result });
 }));
@@ -81,7 +96,8 @@ router.delete('/admin/backups/:filename', requirePermission('backups.delete'), a
   if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
   const stat = await fsp.stat(fullPath).catch(() => null);
   if (!stat?.isFile()) return res.status(404).json({ message: 'Backup not found.' });
-  await fsp.unlink(fullPath);
+  if (stat?.isFile()) await fsp.unlink(fullPath).catch(() => {});
+  await engine.deleteBackupFromR2(req.params.filename).catch(() => {});
   await audit(req, 'backup.deleted', 'backup', req.params.filename, 'Administrator deleted a backup archive', { sizeBytes: stat.size }, null);
   res.json({ message: 'Backup deleted.' });
 }));
