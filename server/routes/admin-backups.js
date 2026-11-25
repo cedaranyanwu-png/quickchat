@@ -19,13 +19,33 @@ router.get('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({
     activeId: saved.activeId || null,
-    buckets: (Array.isArray(saved.buckets) ? saved.buckets : []).map((bucket) => ({
+    buckets: (Array.isArray(saved.buckets) && saved.buckets.length ? saved.buckets : (r2.configFromEnv('R2') ? [{ ...r2.configFromEnv('R2'), id: 'railway-env', name: 'Current Railway R2 configuration', enabled: true }] : [])).map((bucket) => ({
       id: bucket.id, name: bucket.name, endpoint: bucket.endpoint, bucket: bucket.bucket,
       region: bucket.region || 'auto', enabled: bucket.enabled !== false,
       hasCredentials: Boolean(bucket.accessKey && bucket.secretKey),
       accessKey: bucket.accessKey ? '••••••••' : '', secretKey: bucket.secretKey ? '••••••••' : '',
     })),
   });
+}));
+
+router.post('/admin/r2-buckets/import-environment', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const config = r2.configFromEnv('R2');
+  if (!config) return res.status(400).json({ message: 'The current Railway R2 environment variables are incomplete.' });
+  await r2.listObjects(config, '');
+  const raw = await getSetting('r2_buckets', '');
+  let saved = { buckets: [], activeId: null };
+  try { if (raw) saved = JSON.parse(raw); } catch (_) {}
+  const existing = (saved.buckets || []).find((item) => item.bucket === config.bucket && item.endpoint === config.endpoint);
+  if (existing) {
+    saved.activeId = existing.id;
+  } else {
+    const id = crypto.randomUUID();
+    saved.buckets = [...(saved.buckets || []), { id, name: config.bucket, endpoint: config.endpoint, bucket: config.bucket, region: config.region, accessKey: config.accessKey, secretKey: config.secretKey, enabled: true }];
+    saved.activeId = id;
+  }
+  await setSetting('r2_buckets', JSON.stringify(saved), { secret: true, updatedBy: req.user.id });
+  await audit(req, 'storage.r2_environment_imported', 'storage_bucket', saved.activeId, 'Existing Railway R2 environment configuration imported into encrypted admin storage');
+  res.json({ message: 'Current R2 configuration imported and activated.', activeId: saved.activeId });
 }));
 
 router.post('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
