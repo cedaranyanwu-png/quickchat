@@ -310,7 +310,7 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
 async function restoreMedia(entries, configuredStorage = null) {
   const archivedMedia = [...entries].filter(([name]) => {
     const base = path.basename(name);
-    return name.startsWith('media/') && /^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base);
+    return name.startsWith('media/') && /^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base);
   });
 
   // Older archives may contain media payloads. Restore those objects when present.
