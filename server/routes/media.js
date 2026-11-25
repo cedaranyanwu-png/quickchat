@@ -6,6 +6,7 @@ const { Readable, Transform } = require('stream');
 const { pipeline } = require('stream/promises');
 const express = require('express');
 const { db, asyncRoute, notFound } = require('./utils');
+const r2 = require('../r2-storage');
 
 const router = express.Router();
 const uploadDirectory = path.join(__dirname, '..', 'uploads');
@@ -29,15 +30,7 @@ const videoTypes = {
 };
 const fileTypes = { ...imageTypes, ...videoTypes, ...audioTypes };
 
-function r2Config() {
-  const endpoint = process.env.R2_ENDPOINT || 'https://62809542fc864ad1186326309f104278.r2.cloudflarestorage.com';
-  const bucket = process.env.R2_BUCKET || 'uploadbackup';
-  const region = process.env.R2_REGION || 'auto';
-  const accessKey = process.env.R2_ACCESS_KEY_ID;
-  const secretKey = process.env.R2_SECRET_ACCESS_KEY;
-  if (![endpoint, bucket, accessKey, secretKey].every(Boolean)) return null;
-  return { endpoint: endpoint.replace(/\/$/, ''), bucket, region, accessKey, secretKey };
-}
+async function r2Config() { return r2.getActiveConfig(); }
 function hmac(key, value) { return crypto.createHmac('sha256', key).update(value, 'utf8').digest(); }
 function signingKey(secret, date, region) {
   const dateKey = hmac('AWS4' + secret, date);
@@ -99,7 +92,7 @@ async function storeBufferForUser(ownerId, buffer, mimeType) {
   if (!hasExpectedSignature(mimeType, buffer.subarray(0, 32))) {
     throw new Error('Generated media contents do not match the declared file type.');
   }
-  const storage = r2Config();
+  const storage = await r2Config();
   if (!storage) throw new Error('Railway media storage is not configured.');
   const filename = `${crypto.randomUUID()}.${type.extension}`;
   const filePath = path.join(uploadDirectory, filename);
@@ -160,7 +153,7 @@ router.post('/media', asyncRoute(async (req, res) => {
     if (bytes === 0) return res.status(400).json({ message: 'The uploaded file is empty.' });
     if (!hasExpectedSignature(mimeType, header)) return res.status(415).json({ message: 'The file contents do not match the selected image or video type.' });
 
-    const storage = r2Config();
+    const storage = await r2Config();
     if (!storage) {
       return res.status(503).json({ message: 'Media storage is not configured yet. Please try again shortly.' });
     }
@@ -244,13 +237,8 @@ router.delete('/media/:filename', asyncRoute(async (req, res) => {
   if (!upload) return notFound(res, 'Media file not found.');
   const filePath = path.join(uploadDirectory, filename);
   if (fs.existsSync(filePath)) await fsPromises.rm(filePath, { force: true });
-  const storage = s3Config();
-  if (storage) {
-    const url = s3RequestUrl(storage, filename);
-    const headers = signedHeaders(storage, 'DELETE', url, crypto.createHash('sha256').update('').digest('hex'));
-    const response = await fetch(url, { method: 'DELETE', headers });
-    if (!response.ok && response.status !== 404) throw new Error('Could not remove the media object from cloud storage.');
-  }
+  const storage = await r2Config();
+  if (storage) await r2.deleteObject(storage, 'uploads/' + filename);
   await db.delete('DELETE FROM media_uploads WHERE id = ? AND owner_id = ?', [upload.id, req.user.id]);
   res.json({ message: 'Media file deleted.' });
 }));
