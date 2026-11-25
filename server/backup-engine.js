@@ -11,29 +11,29 @@ const r2 = require('./r2-storage');
 const backupDirectory = path.resolve(__dirname, process.env.BACKUP_DIRECTORY || '../private-backups');
 const mediaDirectory = path.join(__dirname, 'uploads');
 const r2BackupPrefix = 'backup/';
-function backupStorageConfig() { return r2.configFromEnv('R2'); }
+async function backupStorageConfig() { return r2.getActiveConfig(); }
 async function uploadBackupToR2(filePath, filename) {
-  const config = backupStorageConfig();
-  if (!config) return null;
+  const config = await backupStorageConfig();
+  if (!config) throw new Error('No active Cloudflare R2 bucket is configured for database backups.');
   return r2.putFile(config, r2BackupPrefix + filename, filePath, 'application/zip');
 }
 async function downloadBackupFromR2(filename) {
-  const config = backupStorageConfig();
+  const config = await backupStorageConfig();
   if (!config) return null;
   const response = await r2.getObject(config, r2BackupPrefix + filename);
   if (!response.ok) return null;
   return Buffer.from(await response.arrayBuffer());
 }
 async function deleteBackupFromR2(filename) {
-  const config = backupStorageConfig();
+  const config = await backupStorageConfig();
   if (!config) return;
   await r2.deleteObject(config, r2BackupPrefix + filename);
 }
 async function listR2Backups() {
-  const config = backupStorageConfig();
+  const config = await backupStorageConfig();
   if (!config) return [];
   const objects = await r2.listObjects(config, r2BackupPrefix);
-  return objects.filter((item) => /^[0-9TZa-z-]+\\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: null, createdAt: null, storage: 'r2' }));
+  return objects.filter((item) => /^[0-9TZa-z-]+\\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: Number(item.size || 0), createdAt: item.lastModified || null, storage: 'r2' }));
 }
 let running = false;
 
@@ -143,20 +143,20 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
 
     let mediaFiles = 0;
     let mediaBytes = 0;
-    try {
-      const files = await fsp.readdir(mediaDirectory, { withFileTypes: true });
-      for (const file of files) {
-        if (!file.isFile() || !/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(file.name)) continue;
-        const fullPath = path.join(mediaDirectory, file.name);
-        const stat = await fsp.stat(fullPath);
-        if (!stat.isFile()) continue;
-        const data = await fsp.readFile(fullPath);
-        entries.push({ name: 'media/' + file.name, data });
-        mediaFiles += 1;
-        mediaBytes += data.length;
-      }
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+    const storage = await backupStorageConfig();
+    if (!storage) throw new Error('Configure an active R2 bucket before creating a database backup.');
+    const mediaRows = await db.query('SELECT filename, mime_type FROM media_uploads ORDER BY id');
+    for (const media of mediaRows) {
+      const filename = String(media.filename || '');
+      if (!/^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
+      let data = null;
+      const remote = await r2.getObject(storage, 'uploads/' + filename);
+      if (remote.ok) data = Buffer.from(await remote.arrayBuffer());
+      else data = await fsp.readFile(path.join(mediaDirectory, filename)).catch(() => null);
+      if (!data) throw new Error('A media file is missing from R2 and local storage: ' + filename);
+      entries.push({ name: 'media/' + filename, data });
+      mediaFiles += 1;
+      mediaBytes += data.length;
     }
 
     const manifest = {
@@ -189,7 +189,8 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
     }
     const stat = await fsp.stat(finalPath);
     const r2Object = await uploadBackupToR2(finalPath, filename);
-    return { id, filename, path: finalPath, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString(), r2: r2Object ? { key: r2Object.key, size: r2Object.size } : null };
+    await fsp.unlink(finalPath).catch(() => {});
+    return { id, filename, path: null, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString(), r2: { key: r2Object.key, size: r2Object.size, bucket: storage.bucket } };
   } finally {
     running = false;
   }
@@ -296,11 +297,15 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
 }
 
 async function restoreMedia(entries) {
-  await fsp.mkdir(mediaDirectory, { recursive: true });
+  const storage = await backupStorageConfig();
+  if (!storage) throw new Error('Configure an active R2 bucket before restoring backup media.');
   for (const [name, data] of entries) {
     const base = path.basename(name);
-    if (name.startsWith('media/') && /^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov)$/i.test(base)) await fsp.writeFile(path.join(mediaDirectory, base), data, { flag: 'w', mode: 0o600 });
+    if (name.startsWith('media/') && /^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base)) {
+      await r2.putBuffer(storage, 'uploads/' + base, data, 'application/octet-stream');
+    }
   }
+
 }
 
 async function googleDriveConfig() {
