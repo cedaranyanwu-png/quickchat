@@ -3,7 +3,6 @@ import { API_BASE_URL, normalizeNetworkError, apiRequest } from '../api';
 import CreatorStudio from './CreatorStudio';
 
 export default function CreatorPortal({ onAuthenticated = () => {} }) {
-  const portalPath = window.location.hostname.toLowerCase().startsWith('creator.') ? '/' : '/creator';
   const [signedIn, setSignedIn] = useState(Boolean(localStorage.getItem('token')));
   const [modalOpen, setModalOpen] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
