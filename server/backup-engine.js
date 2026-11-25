@@ -18,22 +18,28 @@ async function uploadBackupToR2(filePath, filename) {
   return r2.putFile(config, r2BackupPrefix + filename, filePath, 'application/zip');
 }
 async function downloadBackupFromR2(filename) {
-  const config = await backupStorageConfig();
-  if (!config) return null;
-  const response = await r2.getObject(config, r2BackupPrefix + filename);
-  if (!response.ok) return null;
-  return Buffer.from(await response.arrayBuffer());
+  const configs = await r2.getAllConfigs();
+  for (const config of configs) {
+    const response = await r2.getObject(config, r2BackupPrefix + filename);
+    if (response.ok) return Buffer.from(await response.arrayBuffer());
+    if (response.status !== 404) throw new Error('R2 backup download failed (' + response.status + ').');
+  }
+  return null;
 }
 async function deleteBackupFromR2(filename) {
-  const config = await backupStorageConfig();
-  if (!config) return;
-  await r2.deleteObject(config, r2BackupPrefix + filename);
+  const configs = await r2.getAllConfigs();
+  for (const config of configs) await r2.deleteObject(config, r2BackupPrefix + filename);
 }
 async function listR2Backups() {
-  const config = await backupStorageConfig();
-  if (!config) return [];
-  const objects = await r2.listObjects(config, r2BackupPrefix);
-  return objects.filter((item) => /^[0-9TZa-z-]+\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: Number(item.size || 0), createdAt: item.lastModified || null, storage: 'r2' }));
+  const configs = await r2.getAllConfigs();
+  const results = [];
+  for (const config of configs) {
+    const objects = await r2.listObjects(config, r2BackupPrefix);
+    for (const item of objects.filter((entry) => /^[0-9TZa-z-]+\.zip$/.test(path.basename(entry.key)))) {
+      results.push({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: Number(item.size || 0), createdAt: item.lastModified || null, storage: 'r2', bucket: config.bucket, bucketId: config.id });
+    }
+  }
+  return results;
 }
 let running = false;
 
