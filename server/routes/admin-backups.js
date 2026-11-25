@@ -126,7 +126,7 @@ router.get('/admin/backups', requirePermission('backups.view'), asyncRoute(async
 
 router.post('/admin/backups', requirePermission('backups.create'), asyncRoute(async (req, res) => {
   const result = await engine.createBackup({ createdBy: req.user.id, reason: String(req.body?.reason || 'Manual administrator backup').slice(0, 300) });
-  await audit(req, 'backup.created', 'backup', result.id, 'Administrator created a full platform backup', null, {
+  await audit(req, 'backup.created', 'backup', result.id, 'Administrator created a database-only backup', null, {
     sizeBytes: result.sizeBytes, checksum: result.checksum, tableCount: result.tableCount, totalRows: result.totalRows, mediaFiles: result.mediaFiles,
   });
   let drive = null;
