@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiRequest } from '../api';
 import AdFeedSlot from '../components/AdFeedSlot';
@@ -43,12 +43,12 @@ export default function Explore({ openModal, openVideo }) {
     if (searchParams.get('cat')) setSelectedCategory(searchParams.get('cat'));
   }, [searchParams]);
 
-  const setTab = (tab) => {
+  const setTab = useCallback((tab) => {
     setActiveTab(tab);
     const params = new URLSearchParams(searchParams);
     params.set('tab', tab);
     setSearchParams(params);
-  };
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     let active = true;
@@ -62,7 +62,7 @@ export default function Explore({ openModal, openVideo }) {
 
   useEffect(() => {
     if (rssConfigLoaded && !rssEnabled && activeTab === 'rss') setTab('for_you');
-  }, [rssConfigLoaded, rssEnabled, activeTab]);
+  }, [rssConfigLoaded, rssEnabled, activeTab, setTab]);
 
   const handleSelectCategory = (cat) => {
     if (selectedCategory === cat) {
