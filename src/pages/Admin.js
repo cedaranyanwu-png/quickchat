@@ -76,15 +76,12 @@ export default function Admin() {
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
-  const [backups, setBackups] = useState([]);
   const [whatsappConfig, setWhatsappConfig] = useState(false);
   const [whatsappLogs, setWhatsappLogs] = useState([]);
   const [whatsappForm, setWhatsappForm] = useState({ title: '', message: '' });
   const [whatsappBusy, setWhatsappBusy] = useState(false);
   const [whatsappOffset, setWhatsappOffset] = useState(0);
   const [whatsappHasMore, setWhatsappHasMore] = useState(false);
-  const [backupRunning, setBackupRunning] = useState(false);
-  const [backupBusy, setBackupBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -141,10 +138,6 @@ export default function Admin() {
       } else if (key === 'audit') {
         const data = await adminRequest('/admin/audit-logs?limit=50');
         setAuditLogs(data.logs || []);
-      } else if (key === 'backups') {
-        const data = await adminRequest('/admin/backups');
-        setBackups(data.backups || []);
-        setBackupRunning(Boolean(data.running));
       } else if (key === 'whatsapp') {
         const data = await adminRequest('/admin/whatsapp/messages');
         setWhatsappConfig(Boolean(data.configured));
@@ -279,52 +272,6 @@ export default function Admin() {
     } finally {
       setWhatsappBusy(false);
     }
-  };
-
-  const createPlatformBackup = async () => {
-    if (!window.confirm('Create a full QuickChat database and uploaded-media backup now?')) return;
-    setBackupBusy(true);
-    setError('');
-    setNotice('');
-    try {
-      const result = await adminRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual backup from admin dashboard' } });
-      setNotice(result.message || 'Backup created.');
-      await loadSection('backups');
-    } catch (err) { setError(err.message || 'Backup creation failed.'); }
-    finally { setBackupBusy(false); }
-  };
-
-  const downloadPlatformBackup = async (backup) => {
-    try {
-      const token = localStorage.getItem('adminToken');
-      const response = await fetch(`${API_BASE_URL}/admin/backups/${encodeURIComponent(backup.filename)}/download`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || 'Backup download failed.');
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = backup.filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (err) { setError(err.message); }
-  };
-
-  const deletePlatformBackup = async (backup) => {
-    if (!window.confirm(`Permanently delete backup ${backup.filename}? This cannot be undone.`)) return;
-    setBackupBusy(true);
-    try {
-      await adminRequest(`/admin/backups/${encodeURIComponent(backup.filename)}`, { method: 'DELETE' });
-      setNotice('Backup deleted.');
-      await loadSection('backups');
-    } catch (err) { setError(err.message); }
-    finally { setBackupBusy(false); }
   };
 
   const createRole = async () => {
