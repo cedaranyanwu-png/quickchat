@@ -164,13 +164,34 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
       stage = `collecting media ${filename || '(unnamed)'}`;
       if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
       let data = null;
+      const remoteFailures = [];
       for (const mediaStorage of storageConfigs) {
-        const remote = await r2.getObject(mediaStorage, 'uploads/' + filename);
-        if (remote.ok) { data = Buffer.from(await remote.arrayBuffer()); break; }
-        if (remote.status !== 404) throw new Error('Unable to read media from R2 bucket ' + mediaStorage.bucket + ' (HTTP ' + remote.status + ').');
+        try {
+          const remote = await r2.getObject(mediaStorage, 'uploads/' + filename);
+          if (remote.ok) { data = Buffer.from(await remote.arrayBuffer()); break; }
+          if (remote.status !== 404) {
+            const detail = (await remote.text().catch(() => '')).slice(0, 240);
+            remoteFailures.push({ bucket: mediaStorage.bucket, status: remote.status, detail });
+          }
+        } catch (error) {
+          remoteFailures.push({ bucket: mediaStorage.bucket, status: null, detail: error.message });
+        }
       }
+      // A remote authorization/network failure must not prevent recovery from
+      // a valid local copy. Never skip the media entry from the archive.
       if (!data) data = await fsp.readFile(path.join(mediaDirectory, filename)).catch(() => null);
-      if (!data) throw new Error('A media file is missing from R2 and local storage: ' + filename);
+      if (!data) {
+        if (remoteFailures.length) {
+          const failure = remoteFailures[0];
+          const error = new Error('Unable to retrieve media ' + filename + ' from R2 bucket ' + failure.bucket +
+            (failure.status ? ' (HTTP ' + failure.status + ')' : '') +
+            (failure.detail ? ': ' + failure.detail : '') +
+            '; no local copy is available.');
+          error.code = 'BACKUP_MEDIA_UNAVAILABLE';
+          throw error;
+        }
+        throw new Error('A media file is missing from all configured R2 buckets and local storage: ' + filename);
+      }
       entries.push({ name: 'media/' + filename, data });
       mediaFiles += 1;
       mediaBytes += data.length;
