@@ -4,7 +4,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const os = require('os');
-const { asyncRoute } = require('./utils');
+const { asyncRoute, db } = require('./utils');
 const { requirePermission, audit } = require('./admin');
 const engine = require('../backup-engine');
 const r2 = require('../r2-storage');
@@ -91,6 +91,31 @@ router.post('/admin/r2-buckets/:id/activate', requirePermission('settings.manage
   await setSetting('r2_buckets', JSON.stringify(saved), { secret: true, updatedBy: req.user.id });
   await audit(req, 'storage.r2_bucket_activated', 'storage_bucket', selected.id, 'Active R2 storage bucket changed', null, { name: selected.name, bucket: selected.bucket });
   res.json({ message: 'Active R2 bucket changed.', activeId: selected.id });
+}));
+
+router.post('/admin/r2-buckets/cleanup-local-media', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const configs = await r2.getAllConfigs();
+  if (!configs.length) return res.status(400).json({ message: 'No R2 buckets are configured.' });
+  const mediaDirectory = path.join(__dirname, '..', 'uploads');
+  const names = await fsp.readdir(mediaDirectory).catch((error) => error.code === 'ENOENT' ? [] : Promise.reject(error));
+  let removed = 0;
+  let retained = 0;
+  let missing = 0;
+  for (const filename of names) {
+    if (!/^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
+    const fullPath = path.join(mediaDirectory, filename);
+    const stat = await fsp.stat(fullPath).catch(() => null);
+    if (!stat?.isFile()) continue;
+    let verified = false;
+    for (const config of configs) {
+      if (await r2.headObject(config, 'uploads/' + filename)) { verified = true; break; }
+    }
+    if (!verified) { missing += 1; retained += 1; continue; }
+    await fsp.unlink(fullPath);
+    removed += 1;
+  }
+  await audit(req, 'storage.local_media_cleanup', 'storage', null, 'Removed local media files only after confirming their R2 copies exist', null, { removed, retained, missing });
+  res.json({ message: 'Local media cleanup completed.', removed, retained, missing });
 }));
 
 router.get('/admin/backups', requirePermission('backups.view'), asyncRoute(async (_req, res) => {
