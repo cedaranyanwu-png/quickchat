@@ -12,6 +12,7 @@ export default function BackupRecoveryPanel({ can }) {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [bucketBusy, setBucketBusy] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
@@ -95,6 +96,16 @@ export default function BackupRecoveryPanel({ can }) {
     finally { setBucketBusy(false); }
   };
 
+  const cleanupLocalMedia = async () => {
+    if (!window.confirm('QuickChat will check every local media file against all configured R2 buckets and delete only files whose R2 copies are confirmed. Files without a verified R2 copy will be retained. Continue?')) return;
+    setCleanupBusy(true); setError(''); setNotice('');
+    try {
+      const result = await adminRequest('/admin/r2-buckets/cleanup-local-media', { method: 'POST', body: {} });
+      setNotice(`Local cleanup complete: ${result.removed || 0} verified copies removed; ${result.retained || 0} files retained because they were not confirmed in R2.`);
+    } catch (e) { setError(e.message || 'Local media cleanup failed.'); }
+    finally { setCleanupBusy(false); }
+  };
+
   const activate = async (bucket) => {
     if (!window.confirm(`Test and activate ${bucket.name || bucket.bucket} for all new uploads and backups?`)) return;
     setBucketBusy(true); setError(''); setNotice('');
@@ -115,7 +126,7 @@ export default function BackupRecoveryPanel({ can }) {
     {notice && <div role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-700">{notice}</div>}
 
     {can('settings.manage') && <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">R2 storage buckets</h3><p className="mt-1 text-xs text-slate-500">Add multiple buckets. Only the active bucket receives new uploads and backups.</p></div><button type="button" disabled={bucketBusy} onClick={importCurrent} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50">Use current Railway R2 configuration</button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-extrabold text-slate-900">R2 storage buckets</h3><p className="mt-1 text-xs text-slate-500">Add multiple buckets. Only the active bucket receives new uploads and backups.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={bucketBusy} onClick={importCurrent} className="rounded-lg border border-blue-200 px-3 py-2 text-xs font-bold text-blue-700 disabled:opacity-50">Use current Railway R2 configuration</button><button type="button" disabled={cleanupBusy || bucketBusy} onClick={cleanupLocalMedia} className="rounded-lg border border-rose-200 px-3 py-2 text-xs font-bold text-rose-700 disabled:opacity-50">{cleanupBusy ? 'Verifying R2 copies…' : 'Remove verified local media copies'}</button></div></div>
       <div className="mt-4 space-y-2">
         {buckets.map((bucket) => <div key={bucket.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-3">
           <div><div className="flex flex-wrap items-center gap-2"><strong className="text-sm text-slate-900">{bucket.name || bucket.bucket}</strong>{activeId === bucket.id && <span className="rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-extrabold text-emerald-700">ACTIVE</span>}</div><p className="mt-1 text-xs text-slate-500">{bucket.bucket} · {bucket.region || 'auto'} · {bucket.endpoint}</p></div>
