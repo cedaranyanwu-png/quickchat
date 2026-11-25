@@ -297,8 +297,8 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
           restoredRows += 1;
         }
       }
-      await restoreMedia(entries, restoreStorageConfig);
-      return { checksum, restoredRows, restoredTables: restoreTables.length, skippedTables, mediaFiles: manifest.mediaFiles || 0, reason, restoredBy };
+      const mediaRecovery = await restoreMedia(entries, restoreStorageConfig);
+      return { checksum, restoredRows, restoredTables: restoreTables.length, skippedTables, mediaFiles: mediaRecovery.restoredFromArchive, mediaRecovery, reason, restoredBy };
     } finally {
       if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
       if (db.type === 'mysql') await db.query('SET FOREIGN_KEY_CHECKS = 1');
@@ -308,15 +308,46 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
 }
 
 async function restoreMedia(entries, configuredStorage = null) {
-  const storage = configuredStorage || await backupStorageConfig();
-  if (!storage) throw new Error('Configure an active R2 bucket before restoring backup media.');
-  for (const [name, data] of entries) {
+  const archivedMedia = [...entries].filter(([name]) => {
     const base = path.basename(name);
-    if (name.startsWith('media/') && /^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base)) {
-      await r2.putBuffer(storage, 'uploads/' + base, data, 'application/octet-stream');
+    return name.startsWith('media/') && /^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base);
+  });
+
+  // Older archives may contain media payloads. Restore those objects when present.
+  // Current database-only archives contain no media payloads; their media rows
+  // simply reconnect to the existing uploads/<filename> objects in R2.
+  if (archivedMedia.length) {
+    const storage = configuredStorage || await backupStorageConfig();
+    if (!storage) throw new Error('Configure an active R2 bucket before restoring archived media.');
+    for (const [name, data] of archivedMedia) {
+      const filename = path.basename(name);
+      await r2.putBuffer(storage, 'uploads/' + filename, data, 'application/octet-stream');
     }
   }
 
+  const uploads = await db.query('SELECT filename FROM media_uploads');
+  const configs = await r2.getAllConfigs();
+  let linkedMedia = 0;
+  let missingMedia = 0;
+  let checkedMedia = 0;
+  const concurrency = 12;
+  for (let offset = 0; offset < uploads.length; offset += concurrency) {
+    const batch = uploads.slice(offset, offset + concurrency);
+    const results = await Promise.all(batch.map(async (upload) => {
+      const filename = String(upload.filename || '');
+      if (!filename || !configs.length) return false;
+      for (const config of configs) {
+        if (await r2.headObject(config, 'uploads/' + filename)) return true;
+      }
+      return false;
+    }));
+    for (const exists of results) {
+      checkedMedia += 1;
+      if (exists) linkedMedia += 1;
+      else missingMedia += 1;
+    }
+  }
+  return { restoredFromArchive: archivedMedia.length, checkedMedia, linkedMedia, missingMedia };
 }
 
 async function googleDriveConfig() {
