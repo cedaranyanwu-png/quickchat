@@ -71,15 +71,45 @@ async function deleteObject(config, key) {
   if (!response.ok && response.status !== 404) throw new Error('R2 delete failed (' + response.status + ').');
 }
 async function listObjects(config, prefix = '') {
-  const url = new URL(config.endpoint);
-  url.pathname = '/' + encodeURIComponent(config.bucket);
-  url.searchParams.set('list-type', '2');
-  if (prefix) url.searchParams.set('prefix', prefix);
-  const response = await fetch(url, { method: 'GET', headers: signedHeaders(config, 'GET', url, emptyHash()) });
-  if (!response.ok) throw new Error('R2 list failed (' + response.status + '): ' + (await response.text()).slice(0, 300));
-  const xml = await response.text();
-  return [...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => ({ key: decodeXml(m[1]) }));
+  const objects = [];
+  let token = '';
+  do {
+    const url = new URL(config.endpoint);
+    url.pathname = '/' + encodeURIComponent(config.bucket);
+    url.searchParams.set('list-type', '2');
+    url.searchParams.set('max-keys', '1000');
+    if (prefix) url.searchParams.set('prefix', prefix);
+    if (token) url.searchParams.set('continuation-token', token);
+    const response = await fetch(url, { method: 'GET', headers: signedHeaders(config, 'GET', url, emptyHash()) });
+    if (!response.ok) throw new Error('R2 list failed (' + response.status + '): ' + (await response.text()).slice(0, 300));
+    const xml = await response.text();
+    for (const match of xml.matchAll(/<Key>([^<]+)<\\/Key>/g)) objects.push({ key: decodeXml(match[1]) });
+    const truncated = /<IsTruncated>true<\\/IsTruncated>/i.test(xml);
+    const next = xml.match(/<NextContinuationToken>([^<]+)<\\/NextContinuationToken>/i);
+    token = truncated && next ? decodeXml(next[1]) : '';
+    if (truncated && !token) throw new Error('R2 returned a truncated listing without a continuation token.');
+  } while (token);
+  return objects;
 }
+
+async function getActiveConfig() {
+  try {
+    const { getSetting } = require('./platform-settings');
+    const raw = await getSetting('r2_buckets', '');
+    if (raw) {
+      const saved = JSON.parse(raw);
+      const active = Array.isArray(saved.buckets) ? saved.buckets.find((item) => item.id === saved.activeId && item.enabled !== false) : null;
+      if (active && [active.endpoint, active.bucket, active.accessKey, active.secretKey].every(Boolean)) {
+        return { endpoint: String(active.endpoint).replace(/\\/$/, ''), bucket: active.bucket, region: active.region || 'auto', accessKey: active.accessKey, secretKey: active.secretKey, id: active.id, name: active.name || active.bucket };
+      }
+    }
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error('Saved R2 bucket configuration is invalid JSON.');
+    throw error;
+  }
+  return configFromEnv('R2');
+}
+
 function decodeXml(value) { return value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'"); }
 async function sha256File(filePath) {
   const hash = crypto.createHash('sha256');
@@ -89,4 +119,4 @@ async function sha256File(filePath) {
 async function streamToBuffer(response) { return response.ok ? Buffer.from(await response.arrayBuffer()) : null; }
 function streamToNode(response) { return response.body ? Readable.fromWeb(response.body) : null; }
 
-module.exports = { configFromEnv, objectUrl, putFile, putBuffer, getObject, deleteObject, listObjects, streamToBuffer, streamToNode };
+module.exports = { configFromEnv, getActiveConfig, objectUrl, putFile, putBuffer, getObject, deleteObject, listObjects, streamToBuffer, streamToNode };
