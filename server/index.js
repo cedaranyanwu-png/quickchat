@@ -691,7 +691,7 @@ app.use((error, _req, res, _next) => {
   console.error('[API] Request failed:', error);
   if (res.headersSent) return;
   res.status(error.status || 500).json({
-    message: error.status ? error.message : 'The request could not be completed.',
+    message: error.publicMessage || (error.status ? error.message : 'The request could not be completed.'),
     ...(error.providerCode ? { providerCode: error.providerCode } : {}),
     ...(error.providerRequestId ? { providerRequestId: error.providerRequestId } : {}),
   });
