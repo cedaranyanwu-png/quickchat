@@ -131,14 +131,18 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
   running = true;
   const startedAt = new Date();
   const id = startedAt.toISOString().replace(/[:.]/g, '-') + '-' + crypto.randomBytes(4).toString('hex');
+  let stage = 'initialization';
   try {
+    stage = 'preparing backup directory';
     await fsp.mkdir(backupDirectory, { recursive: true, mode: 0o700 });
+    stage = 'reading database schema';
     const tables = await tableDefinitions();
     const entries = [];
     const tableManifest = [];
     let totalRows = 0;
     for (const table of tables) {
       if (!/^[a-zA-Z0-9_]+$/.test(table.name)) continue;
+      stage = `reading table ${table.name}`;
       const columns = await columnsFor(table);
       const rows = await db.query('SELECT * FROM ' + quoteIdentifier(table.name));
       totalRows += rows.length;
@@ -149,12 +153,15 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
 
     let mediaFiles = 0;
     let mediaBytes = 0;
+    stage = 'loading Cloudflare R2 configuration';
     const storageConfigs = await r2.getAllConfigs();
     const storage = storageConfigs[0];
     if (!storage) throw new Error('Configure an active R2 bucket before creating a database backup.');
+    stage = 'reading media inventory';
     const mediaRows = await db.query('SELECT filename, mime_type FROM media_uploads ORDER BY id');
     for (const media of mediaRows) {
       const filename = String(media.filename || '');
+      stage = `collecting media ${filename || '(unnamed)'}`;
       if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
       let data = null;
       for (const mediaStorage of storageConfigs) {
@@ -184,11 +191,13 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
       tables: tableManifest,
     };
     entries.push({ name: 'manifest.json', data: JSON.stringify(manifest, null, 2) });
+    stage = 'building backup archive';
     const archive = zip(entries);
     const checksum = crypto.createHash('sha256').update(archive).digest('hex');
     const filename = id + '.zip';
     const tempPath = path.join(backupDirectory, filename + '.tmp');
     const finalPath = path.join(backupDirectory, filename);
+    stage = 'writing backup archive';
     await fsp.writeFile(tempPath, archive, { flag: 'wx', mode: 0o600 });
     await fsp.rename(tempPath, finalPath);
     const persisted = await fsp.readFile(finalPath);
@@ -198,9 +207,17 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
       throw new Error('Backup checksum verification failed; the incomplete archive was removed.');
     }
     const stat = await fsp.stat(finalPath);
+    stage = 'uploading backup to Cloudflare R2';
     const r2Object = await uploadBackupToR2(finalPath, filename);
     await fsp.unlink(finalPath).catch(() => {});
     return { id, filename, path: null, sizeBytes: stat.size, checksum, totalRows, tableCount: tableManifest.length, mediaFiles, mediaBytes, createdAt: startedAt.toISOString(), r2: { key: r2Object.key, size: r2Object.size, bucket: storage.bucket } };
+  } catch (error) {
+    const wrapped = new Error(`Backup failed while ${stage}: ${error?.message || String(error)}`);
+    wrapped.status = error?.status || 500;
+    wrapped.cause = error;
+    wrapped.publicMessage = wrapped.message;
+    console.error(`[Backup] ${wrapped.message}`);
+    throw wrapped;
   } finally {
     running = false;
   }
