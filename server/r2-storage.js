@@ -84,7 +84,17 @@ async function listObjects(config, prefix = '') {
     const response = await fetch(url, { method: 'GET', headers: signedHeaders(config, 'GET', url, emptyHash()) });
     if (!response.ok) throw new Error('R2 list failed (' + response.status + '): ' + (await response.text()).slice(0, 300));
     const xml = await response.text();
-    for (const match of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) objects.push({ key: decodeXml(match[1]) });
+    const entries = [...xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)];
+    if (entries.length) {
+      for (const entry of entries) {
+        const key = entry[1].match(/<Key>([^<]+)<\/Key>/);
+        const size = entry[1].match(/<Size>(\d+)<\/Size>/);
+        const modified = entry[1].match(/<LastModified>([^<]+)<\/LastModified>/);
+        if (key) objects.push({ key: decodeXml(key[1]), size: size ? Number(size[1]) : null, lastModified: modified ? decodeXml(modified[1]) : null });
+      }
+    } else {
+      for (const match of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) objects.push({ key: decodeXml(match[1]) });
+    }
     const truncated = /<IsTruncated>true<\/IsTruncated>/i.test(xml);
     const next = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/i);
     token = truncated && next ? decodeXml(next[1]) : '';
