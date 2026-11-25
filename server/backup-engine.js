@@ -151,51 +151,13 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
       tableManifest.push({ name: table.name, columns, rows: rows.length, file, createSql: table.createSql || null });
     }
 
-    let mediaFiles = 0;
-    let mediaBytes = 0;
+    // Database backups are intentionally database-only. Uploaded media already
+    // lives in its own R2 uploads/ objects and must not block a database export.
+    const mediaFiles = 0;
+    const mediaBytes = 0;
     stage = 'loading Cloudflare R2 configuration';
-    const storageConfigs = await r2.getAllConfigs();
-    const storage = storageConfigs[0];
+    const storage = await r2.getActiveConfig();
     if (!storage) throw new Error('Configure an active R2 bucket before creating a database backup.');
-    stage = 'reading media inventory';
-    const mediaRows = await db.query('SELECT filename, mime_type FROM media_uploads ORDER BY id');
-    for (const media of mediaRows) {
-      const filename = String(media.filename || '');
-      stage = `collecting media ${filename || '(unnamed)'}`;
-      if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
-      let data = null;
-      const remoteFailures = [];
-      for (const mediaStorage of storageConfigs) {
-        try {
-          const remote = await r2.getObject(mediaStorage, 'uploads/' + filename);
-          if (remote.ok) { data = Buffer.from(await remote.arrayBuffer()); break; }
-          if (remote.status !== 404) {
-            const detail = (await remote.text().catch(() => '')).slice(0, 240);
-            remoteFailures.push({ bucket: mediaStorage.bucket, status: remote.status, detail });
-          }
-        } catch (error) {
-          remoteFailures.push({ bucket: mediaStorage.bucket, status: null, detail: error.message });
-        }
-      }
-      // A remote authorization/network failure must not prevent recovery from
-      // a valid local copy. Never skip the media entry from the archive.
-      if (!data) data = await fsp.readFile(path.join(mediaDirectory, filename)).catch(() => null);
-      if (!data) {
-        if (remoteFailures.length) {
-          const failure = remoteFailures[0];
-          const error = new Error('Unable to retrieve media ' + filename + ' from R2 bucket ' + failure.bucket +
-            (failure.status ? ' (HTTP ' + failure.status + ')' : '') +
-            (failure.detail ? ': ' + failure.detail : '') +
-            '; no local copy is available.');
-          error.code = 'BACKUP_MEDIA_UNAVAILABLE';
-          throw error;
-        }
-        throw new Error('A media file is missing from all configured R2 buckets and local storage: ' + filename);
-      }
-      entries.push({ name: 'media/' + filename, data });
-      mediaFiles += 1;
-      mediaBytes += data.length;
-    }
 
     const manifest = {
       format: 'quickchat-admin-backup',
