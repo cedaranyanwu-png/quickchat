@@ -186,10 +186,14 @@ async function servePublicMedia(req, res, next) {
     if (!upload) return res.status(404).end();
 
     const filePath = path.join(uploadDirectory, filename);
-    const storage = await r2Config();
-    if (!storage) return res.status(503).end();
-    const remote = await getObject(storage, filename, req.headers.range);
-    if (!remote.ok && remote.status !== 206 && remote.status !== 404) return res.status(502).end();
+    const storageConfigs = await r2.getAllConfigs();
+    if (!storageConfigs.length) return res.status(503).end();
+    let remote = null;
+    for (const storage of storageConfigs) {
+      remote = await getObject(storage, filename, req.headers.range);
+      if (remote.ok || remote.status === 206) break;
+      if (remote.status !== 404) return res.status(502).end();
+    }
     if (remote.ok || remote.status === 206) {
     res.status(remote.status);
     res.setHeader('Content-Type', upload.mime_type);
@@ -241,8 +245,8 @@ router.delete('/media/:filename', asyncRoute(async (req, res) => {
   if (!upload) return notFound(res, 'Media file not found.');
   const filePath = path.join(uploadDirectory, filename);
   if (fs.existsSync(filePath)) await fsPromises.rm(filePath, { force: true });
-  const storage = await r2Config();
-  if (storage) await r2.deleteObject(storage, 'uploads/' + filename);
+  const storageConfigs = await r2.getAllConfigs();
+  for (const storage of storageConfigs) await r2.deleteObject(storage, 'uploads/' + filename);
   await db.delete('DELETE FROM media_uploads WHERE id = ? AND owner_id = ?', [upload.id, req.user.id]);
   res.json({ message: 'Media file deleted.' });
 }));
