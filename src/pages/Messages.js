@@ -670,7 +670,7 @@ export default function Messages() {
                           <span className="block truncate">{message.replyTo.text}</span>
                         </button>
                       )}
-                      {message.mediaType === 'image' && message.mediaUrl && <img src={message.mediaUrl} alt="Shared image" loading="lazy" className="mb-2 max-h-72 max-w-full rounded-xl object-contain" />}
+                      {message.mediaType === 'image' && message.mediaUrl && <img src={message.mediaUrl} alt="Shared attachment" loading="lazy" className="mb-2 max-h-72 max-w-full rounded-xl object-contain" />}
                       {message.mediaType === 'video' && message.mediaUrl && <video src={message.mediaUrl} controls playsInline preload="metadata" className="mb-2 max-h-80 max-w-full rounded-xl bg-black" />}
                       {message.mediaType === 'audio' && message.mediaUrl && <div className="mb-2 flex min-w-[220px] items-center gap-2"><i className={`fa-solid fa-microphone ${isMine ? 'text-white' : 'text-blue-700'}`} /><audio src={message.mediaUrl} controls preload="metadata" className="h-9 max-w-full" /></div>}
                       {message.text && <p id={`message-${message.id}`} className="break-words whitespace-pre-wrap text-sm">{message.text}</p>}
