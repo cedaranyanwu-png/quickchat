@@ -213,7 +213,7 @@ async function servePublicMedia(req, res, next) {
       return pipeline(fs.createReadStream(filePath), res);
     }
 
-    const storage = s3Config();
+    const storage = r2Config();
     if (!storage) return res.status(404).end();
     const remote = await getObject(storage, filename, req.headers.range);
     if (!remote.ok && remote.status !== 206) return res.status(remote.status === 404 ? 404 : 502).end();
