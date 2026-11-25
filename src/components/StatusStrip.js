@@ -207,7 +207,7 @@ function StatusViewer({ viewer, onClose, onMove, onDelete }) {
       }).catch((error) => { if (active) setDetailsError(error.message); });
     }
     return () => { active = false; };
-  }, [status?.id, viewer.group.isOwn]);
+  }, [status?.id, status?.liked, viewer.group.isOwn]);
 
   if (!status) return null;
   const elapsed = status.createdAt ? new Date(status.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
