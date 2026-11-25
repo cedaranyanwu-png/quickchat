@@ -186,6 +186,23 @@ async function servePublicMedia(req, res, next) {
     if (!upload) return res.status(404).end();
 
     const filePath = path.join(uploadDirectory, filename);
+    const storage = await r2Config();
+    if (!storage) return res.status(503).end();
+    const remote = await getObject(storage, filename, req.headers.range);
+    if (!remote.ok && remote.status !== 206 && remote.status !== 404) return res.status(502).end();
+    if (remote.ok || remote.status === 206) {
+    res.status(remote.status);
+    res.setHeader('Content-Type', upload.mime_type);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    for (const header of ['content-length', 'content-range']) {
+      const value = remote.headers.get(header);
+      if (value) res.setHeader(header, value);
+    }
+    if (!remote.body) return res.end();
+    return pipeline(Readable.fromWeb(remote.body), res);
+    }
+
     if (fs.existsSync(filePath)) {
       res.setHeader('Content-Type', upload.mime_type);
       res.setHeader('Accept-Ranges', 'bytes');
@@ -206,20 +223,7 @@ async function servePublicMedia(req, res, next) {
       return pipeline(fs.createReadStream(filePath), res);
     }
 
-    const storage = await r2Config();
-    if (!storage) return res.status(404).end();
-    const remote = await getObject(storage, filename, req.headers.range);
-    if (!remote.ok && remote.status !== 206) return res.status(remote.status === 404 ? 404 : 502).end();
-    res.status(remote.status);
-    res.setHeader('Content-Type', upload.mime_type);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-    for (const header of ['content-length', 'content-range']) {
-      const value = remote.headers.get(header);
-      if (value) res.setHeader(header, value);
-    }
-    if (!remote.body) return res.end();
-    return pipeline(Readable.fromWeb(remote.body), res);
+
   } catch (error) {
     return next(error);
   }
