@@ -1,4 +1,8 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { pipeline } = require('stream/promises');
 
 function cfg(prefix) {
   const endpoint = process.env[prefix + '_ENDPOINT'];
@@ -11,45 +15,101 @@ function cfg(prefix) {
 }
 function hmac(key, value) { return crypto.createHmac('sha256', key).update(value, 'utf8').digest(); }
 function signingKey(secret, date, region) {
-  let k = hmac('AWS4' + secret, date); k = hmac(k, region); k = hmac(k, 's3'); return hmac(k, 'aws4_request');
+  let key = hmac('AWS4' + secret, date);
+  key = hmac(key, region);
+  key = hmac(key, 's3');
+  return hmac(key, 'aws4_request');
 }
-function urlFor(c, key) {
-  const u = new URL(c.endpoint);
-  u.pathname = '/' + encodeURIComponent(c.bucket) + '/' + String(key).split('/').map(encodeURIComponent).join('/');
-  u.search = ''; return u;
+function awsEncode(value) {
+  return encodeURIComponent(value).replace(/[!'()*]/g, (char) => '%' + char.charCodeAt(0).toString(16).toUpperCase());
 }
-function headers(c, method, u, payloadHash) {
-  const amz = new Date().toISOString().replace(/[:-]|\.\d{3}/g, ''), date = amz.slice(0,8);
-  const h = { host:u.host, 'x-amz-content-sha256':payloadHash, 'x-amz-date':amz };
-  const names = Object.keys(h).sort(), canonical = names.map(n=>n+':'+h[n].trim()+'\n').join(''), signed=names.join(';');
-  const canonicalRequest=[method,u.pathname,'',canonical,signed,payloadHash].join('\n');
-  const scope=date+'/'+c.region+'/s3/aws4_request';
-  const sts=['AWS4-HMAC-SHA256',amz,scope,crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\\n');
-  const sig=crypto.createHmac('sha256',signingKey(c.secretKey,date,c.region)).update(sts).digest('hex');
-  return {...h,Authorization:'AWS4-HMAC-SHA256 Credential='+c.accessKey+'/'+scope+', SignedHeaders='+signed+', Signature='+sig};
+function canonicalQuery(url) {
+  return [...url.searchParams.entries()]
+    .map(([key, value]) => [awsEncode(key), awsEncode(value)])
+    .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]))
+    .map(([key, value]) => key + '=' + value)
+    .join('&');
 }
-function emptyHash(){return crypto.createHash('sha256').update('').digest('hex');}
-async function list(c,prefix=''){
-  const u=new URL(c.endpoint); u.pathname='/'+encodeURIComponent(c.bucket); u.searchParams.set('list-type','2'); if(prefix)u.searchParams.set('prefix',prefix);
-  const r=await fetch(u,{headers:headers(c,'GET',u,emptyHash())}); if(!r.ok)throw new Error('List failed '+r.status+' '+await r.text());
-  const x=await r.text(); return [...x.matchAll(/<Key>([^<]+)<\/Key>/g)].map(m=>m[1].replace(/&amp;/g,'&'));
+function urlFor(config, key) {
+  const url = new URL(config.endpoint);
+  url.pathname = '/' + awsEncode(config.bucket) + '/' + String(key).split('/').map(awsEncode).join('/');
+  url.search = '';
+  return url;
 }
-async function copy(src,dst,key,targetKey){
-  const get=await fetch(urlFor(src,key),{headers:headers(src,'GET',urlFor(src,key),emptyHash())});
-  if(!get.ok)throw new Error('GET '+key+' failed '+get.status);
-  const data=Buffer.from(await get.arrayBuffer()), u=urlFor(dst,targetKey || key), h=crypto.createHash('sha256').update(data).digest('hex'), hs=headers(dst,'PUT',u,h);
-  hs['content-length']=String(data.length);
-  const put=await fetch(u,{method:'PUT',headers:hs,body:data}); if(!put.ok)throw new Error('PUT '+key+' failed '+put.status+' '+await put.text());
-  console.log('migrated',key,data.length,'bytes');
+function signedHeaders(config, method, url, payloadHash, extraHeaders = {}) {
+  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+  const date = amzDate.slice(0, 8);
+  const headers = { host: url.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate, ...extraHeaders };
+  const names = Object.keys(headers).map((name) => name.toLowerCase()).sort();
+  const canonicalHeaders = names.map((name) => name + ':' + String(headers[name]).trim().replace(/\s+/g, ' ') + '\n').join('');
+  const signedNames = names.join(';');
+  const canonicalRequest = [method, url.pathname, canonicalQuery(url), canonicalHeaders, signedNames, payloadHash].join('\n');
+  const scope = date + '/' + config.region + '/s3/aws4_request';
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
+  const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region)).update(stringToSign).digest('hex');
+  return { ...headers, Authorization: 'AWS4-HMAC-SHA256 Credential=' + config.accessKey + '/' + scope + ', SignedHeaders=' + signedNames + ', Signature=' + signature };
 }
-(async()=>{
-  const src=cfg('RAILWAY_S3'), dst=cfg('R2');
-  const keys=await list(src);
-  console.log('Found',keys.length,'objects in Railway storage.');
-  for(const key of keys){
-    let target=key;
-    if(!target.startsWith('uploads/') && !target.startsWith('backup/')) target='uploads/'+target;
-    await copy(src,dst,key,target);
+function emptyHash() { return crypto.createHash('sha256').update('').digest('hex'); }
+function decodeXml(value) {
+  return value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'");
+}
+async function listPage(config, token) {
+  const url = new URL(config.endpoint);
+  url.pathname = '/' + awsEncode(config.bucket);
+  url.searchParams.set('list-type', '2');
+  url.searchParams.set('max-keys', '1000');
+  if (token) url.searchParams.set('continuation-token', token);
+  const response = await fetch(url, { headers: signedHeaders(config, 'GET', url, emptyHash()) });
+  if (!response.ok) throw new Error('Source list failed (' + response.status + '): ' + (await response.text()).slice(0, 500));
+  const xml = await response.text();
+  const keys = [...xml.matchAll(/<Key>([\s\S]*?)<\/Key>/g)].map((match) => decodeXml(match[1]));
+  const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+  const nextToken = (xml.match(/<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/) || [])[1];
+  if (truncated && !nextToken) throw new Error('Source storage returned a truncated page without a continuation token.');
+  return { keys, nextToken: nextToken ? decodeXml(nextToken) : null, truncated };
+}
+async function sha256File(filePath) {
+  const hash = crypto.createHash('sha256');
+  for await (const chunk of fs.createReadStream(filePath)) hash.update(chunk);
+  return hash.digest('hex');
+}
+async function copy(src, dst, key, targetKey) {
+  const sourceUrl = urlFor(src, key);
+  const get = await fetch(sourceUrl, { headers: signedHeaders(src, 'GET', sourceUrl, emptyHash()) });
+  if (!get.ok) throw new Error('GET ' + key + ' failed (' + get.status + '): ' + (await get.text()).slice(0, 300));
+  const tempPath = path.join(os.tmpdir(), 'quickchat-r2-' + crypto.randomUUID());
+  try {
+    await pipeline(get.body, fs.createWriteStream(tempPath, { flags: 'wx' }));
+    const stat = await fs.promises.stat(tempPath);
+    const targetUrl = urlFor(dst, targetKey);
+    const headers = signedHeaders(dst, 'PUT', targetUrl, await sha256File(tempPath));
+    headers['content-length'] = String(stat.size);
+    const put = await fetch(targetUrl, { method: 'PUT', headers, body: fs.createReadStream(tempPath), duplex: 'half' });
+    if (!put.ok) throw new Error('PUT ' + targetKey + ' failed (' + put.status + '): ' + (await put.text()).slice(0, 300));
+    console.log('MIGRATED', JSON.stringify({ key, targetKey, bytes: stat.size }));
+    return stat.size;
+  } finally {
+    await fs.promises.rm(tempPath, { force: true }).catch(() => {});
   }
-  console.log('Migration complete.');
-})().catch(e=>{console.error(e.stack||e);process.exit(1);});
+}
+(async () => {
+  const src = cfg('RAILWAY_S3');
+  const dst = cfg('R2');
+  let token = null;
+  let totalObjects = 0;
+  let totalBytes = 0;
+  do {
+    const page = await listPage(src, token);
+    console.log('SOURCE_PAGE', JSON.stringify({ objects: page.keys.length, truncated: page.truncated }));
+    for (const key of page.keys) {
+      const targetKey = key.startsWith('uploads/') || key.startsWith('backup/') ? key : 'uploads/' + key;
+      totalBytes += await copy(src, dst, key, targetKey);
+      totalObjects += 1;
+    }
+    token = page.nextToken;
+  } while (token);
+  console.log('R2_MIGRATION_COMPLETE', JSON.stringify({ totalObjects, totalBytes }));
+})().catch((error) => {
+  console.error('R2_MIGRATION_FAILED', error.stack || error);
+  process.exit(1);
+});
