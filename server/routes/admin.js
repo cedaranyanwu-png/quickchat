@@ -1150,6 +1150,21 @@ router.get('/admin/google-search-console/sitemaps', requirePermission('settings.
   res.json({ sitemaps });
 }));
 
+
+router.get('/admin/google-search-console/analytics', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const days = Math.max(1, Math.min(90, Number(req.query.days) || 28));
+  res.json(await googleSearchConsole.getSearchAnalytics(days));
+}));
+
+router.get('/admin/google-search-console/indexing', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  res.json(await googleSearchConsole.getIndexingOverview());
+}));
+
+router.post('/admin/google-search-console/inspect-pages', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const limit = Math.max(1, Math.min(50, Number(req.body?.limit) || 25));
+  res.json(await googleSearchConsole.inspectUrls(limit));
+}));
+
 router.post('/admin/google-search-console/submit-sitemap', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const result = await googleSearchConsole.submitSitemap();
   await audit(req, 'seo.google_sitemap_submitted', 'sitemap', result.sitemapUrl, 'Google Search Console sitemap submission requested', null, {
