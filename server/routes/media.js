@@ -227,7 +227,9 @@ async function servePublicMedia(req, res, next) {
       return pipeline(fs.createReadStream(filePath), res);
     }
 
-
+    // Every configured R2 bucket missed this object and there is no legacy local
+    // copy. End the request explicitly instead of leaving media requests hanging.
+    return res.status(404).end();
   } catch (error) {
     return next(error);
   }
