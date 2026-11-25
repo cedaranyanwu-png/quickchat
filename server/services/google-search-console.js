@@ -6,7 +6,7 @@ const API_BASE = 'https://searchconsole.googleapis.com/webmasters/v3';
 function getConfiguration() {
   const rawCredentials = String(process.env.GOOGLE_SEARCH_CONSOLE_SERVICE_ACCOUNT_JSON || '').trim();
   const siteUrl = String(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || '').trim();
-  const publicAppUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/\\/$/, '');
+  const publicAppUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/[/]$/, '');
 
   if (!rawCredentials) {
     const error = new Error('Google Search Console service account credentials are not configured.');
@@ -99,7 +99,7 @@ async function getStatus() {
   try {
     const data = await requestGoogle('GET', '/sites');
     const sites = Array.isArray(data.siteEntry) ? data.siteEntry : [];
-    const property = sites.find((site) => String(site.siteUrl || '').replace(/\\/$/, '') === config.siteUrl.replace(/\\/$/, '') || site.siteUrl === config.siteUrl);
+    const property = sites.find((site) => String(site.siteUrl || '').replace(/[/]$/, '') === config.siteUrl.replace(/[/]$/, '') || site.siteUrl === config.siteUrl);
     return {
       configured: true,
       connected: Boolean(property),
