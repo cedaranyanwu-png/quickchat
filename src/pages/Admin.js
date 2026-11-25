@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { adminRequest } from '../api';
 import ModerationPanel from '../components/admin/ModerationPanel';
 import AdminSettingsPanel from '../components/admin/AdminSettingsPanel';
+import GoogleSearchConsolePanel from '../components/admin/GoogleSearchConsolePanel';
 import BackupRecoveryPanel from '../components/admin/BackupRecoveryPanel';
 import RewardsPanel from '../components/admin/RewardsPanel';
 import AdminNotificationsPanel from '../components/admin/AdminNotificationsPanel';
@@ -29,6 +30,7 @@ const NAV = [
   { key: 'audit', label: 'Audit logs', icon: 'fa-clock-rotate-left', permission: 'audit_logs.view' },
   { key: 'backups', label: 'Backup & recovery', icon: 'fa-database', permission: 'backups.view' },
   { key: 'rewards', label: 'Rewards & withdrawals', icon: 'fa-wallet', permission: 'rewards.manage' },
+  { key: 'googleSearch', label: 'Google Search Console', icon: 'fa-google', permission: 'settings.manage' },
   { key: 'settings', label: 'Admin settings', icon: 'fa-gear', permission: 'settings.manage' },
 ];
 
@@ -437,6 +439,8 @@ export default function Admin() {
         {section === 'notifications' && <AdminNotificationsPanel />}
 
         {section === 'rewards' && <><RewardsPanel /><AdminRewardsProgramPanel /></>}
+
+        {section === 'googleSearch' && <section className="space-y-4"><div><h2 className="text-lg font-black text-slate-900">Google Search Console</h2><p className="mt-1 text-sm text-slate-500">Sitemap submission, indexed URL totals, URL inspection and Google Search performance for QuickChat.</p></div><GoogleSearchConsolePanel /></section>}
 
         {section === 'settings' && <AdminSettingsPanel />}
 
