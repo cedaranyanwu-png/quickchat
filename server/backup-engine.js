@@ -329,25 +329,32 @@ async function restoreMedia(entries, configuredStorage = null) {
   const configs = await r2.getAllConfigs();
   let linkedMedia = 0;
   let missingMedia = 0;
+  let unverifiedMedia = 0;
   let checkedMedia = 0;
   const concurrency = 12;
   for (let offset = 0; offset < uploads.length; offset += concurrency) {
     const batch = uploads.slice(offset, offset + concurrency);
     const results = await Promise.all(batch.map(async (upload) => {
       const filename = String(upload.filename || '');
-      if (!filename || !configs.length) return false;
+      if (!filename || !configs.length) return { exists: false, uncertain: false };
+      let uncertain = false;
       for (const config of configs) {
-        if (await r2.headObject(config, 'uploads/' + filename)) return true;
+        try {
+          if (await r2.headObject(config, 'uploads/' + filename)) return { exists: true, uncertain: false };
+        } catch (_) {
+          uncertain = true;
+        }
       }
-      return false;
+      return { exists: false, uncertain };
     }));
-    for (const exists of results) {
+    for (const result of results) {
       checkedMedia += 1;
-      if (exists) linkedMedia += 1;
+      if (result.exists) linkedMedia += 1;
+      else if (result.uncertain) unverifiedMedia += 1;
       else missingMedia += 1;
     }
   }
-  return { restoredFromArchive: archivedMedia.length, checkedMedia, linkedMedia, missingMedia };
+  return { restoredFromArchive: archivedMedia.length, checkedMedia, linkedMedia, missingMedia, unverifiedMedia };
 }
 
 async function googleDriveConfig() {
