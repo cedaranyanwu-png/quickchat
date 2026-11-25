@@ -33,7 +33,7 @@ export default function BackupRecoveryPanel({ can }) {
   useEffect(() => { load(); }, []);
 
   const create = async () => {
-    if (!window.confirm('Create a full database and media backup and store the archive in the active R2 bucket under backups/?')) return;
+    if (!window.confirm('Create a database-only backup and store it in the active R2 bucket under backups/?')) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const r = await adminRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual administrator R2 backup' } });
@@ -44,12 +44,12 @@ export default function BackupRecoveryPanel({ can }) {
   };
 
   const restore = async (b) => {
-    if (!window.confirm(`Recover backed up data from ${b.filename}? This replaces current database records. Create a fresh backup first if you need to preserve the current state.`)) return;
+    if (!window.confirm(`Recover database data from ${b.filename}? This replaces current database records. Media files already stored in R2 will remain untouched and their database references will be checked. Create a fresh backup first if you need to preserve the current state.`)) return;
     if (!window.confirm('FINAL CONFIRMATION: restore this snapshot to the live QuickChat database now?')) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const r = await adminRequest(`/admin/backups/${encodeURIComponent(b.filename)}/restore`, { method: 'POST', body: { confirm: true, reason: `Admin recovery of ${b.filename}` } });
-      setNotice(`Recovery complete: ${r.result?.restoredRows || 0} database rows restored across ${r.result?.restoredTables || 0} tables. Media was written to the active R2 bucket.`);
+      setNotice(`Recovery complete: ${r.result?.restoredRows || 0} database rows restored across ${r.result?.restoredTables || 0} tables. R2 media linked: ${r.result?.mediaRecovery?.linkedMedia || 0}; missing: ${r.result?.mediaRecovery?.missingMedia || 0}; unverified: ${r.result?.mediaRecovery?.unverifiedMedia || 0}. Existing R2 files were not deleted.`);
       await load();
     } catch (e) { setError(e.message || 'Database recovery failed.'); }
     finally { setBusy(false); }
@@ -119,7 +119,7 @@ export default function BackupRecoveryPanel({ can }) {
 
   return <section>
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div><h2 className="text-lg font-black text-slate-900">Backup &amp; recovery</h2><p className="mt-1 text-sm text-slate-500">Database snapshots and uploaded media are stored in Cloudflare R2.</p></div>
+      <div><h2 className="text-lg font-black text-slate-900">Backup &amp; recovery</h2><p className="mt-1 text-sm text-slate-500">Database snapshots are stored under backups/; user-uploaded media is stored separately under uploads/ in Cloudflare R2.</p></div>
       {can('backups.create') && <button disabled={busy || running} onClick={create} className="rounded-xl bg-blue-700 px-4 py-2.5 text-xs font-extrabold text-white disabled:opacity-50">{busy || running ? 'Backup operation running…' : 'Back up database now'}</button>}
     </div>
     {error && <div role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-700">{error}</div>}
@@ -146,8 +146,8 @@ export default function BackupRecoveryPanel({ can }) {
     </div>}
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">R2 database backups</h3><p className="mt-1 text-xs text-slate-500">Archives are saved under backups/ in the active bucket. Media referenced by the database is included from uploads/.</p></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Backup archive</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Size</th><th className="px-4 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{backups.map(b => <tr key={b.id}><td className="px-5 py-4 font-bold text-slate-800">{b.filename}<div className="mt-1 text-[10px] font-semibold uppercase text-emerald-700">{b.storage || 'legacy local'} storage</div></td><td className="px-4 py-4 text-xs text-slate-500">{b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'}</td><td className="px-4 py-4 text-xs">{b.sizeBytes ? (b.sizeBytes / 1048576).toFixed(2) + ' MB' : '—'}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={busy} onClick={() => download(b)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold disabled:opacity-50">Download</button>{can('backups.create') && <button disabled={busy} onClick={() => restore(b)} className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800 disabled:opacity-50">Recover backed up data</button>}{can('backups.delete') && <button disabled={busy} onClick={() => remove(b)} className="rounded-lg bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-700 disabled:opacity-50">Delete</button>}</div></td></tr>)}</tbody></table></div>
+      <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">R2 database backups</h3><p className="mt-1 text-xs text-slate-500">Database records only are saved under backups/. Media stays in uploads/ and is reconnected by its stored filename during recovery.</p></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Backup archive</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Size</th><th className="px-4 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{backups.map(b => <tr key={b.id}><td className="px-5 py-4 font-bold text-slate-800">{b.filename}<div className="mt-1 text-[10px] font-semibold uppercase text-emerald-700">{b.storage || 'legacy local'} storage</div></td><td className="px-4 py-4 text-xs text-slate-500">{b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'}</td><td className="px-4 py-4 text-xs">{b.sizeBytes ? (b.sizeBytes / 1048576).toFixed(2) + ' MB' : '—'}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={busy} onClick={() => download(b)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold disabled:opacity-50">Download</button>{can('backups.create') && <button disabled={busy} onClick={() => restore(b)} className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800 disabled:opacity-50">Recover Data</button>}{can('backups.delete') && <button disabled={busy} onClick={() => remove(b)} className="rounded-lg bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-700 disabled:opacity-50">Delete</button>}</div></td></tr>)}</tbody></table></div>
       {!backups.length && <p className="p-10 text-center text-sm text-slate-400">No R2 backups yet. Create the first database backup now.</p>}
     </div>
 
