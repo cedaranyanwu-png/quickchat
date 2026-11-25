@@ -18,7 +18,7 @@ router.get('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute
   try { if (raw) saved = JSON.parse(raw); } catch (_) {}
   res.setHeader('Cache-Control', 'private, no-store');
   res.json({
-    activeId: saved.activeId || null,
+    activeId: saved.activeId || (!saved.buckets?.length && r2.configFromEnv('R2') ? 'railway-env' : null),
     buckets: (Array.isArray(saved.buckets) && saved.buckets.length ? saved.buckets : (r2.configFromEnv('R2') ? [{ ...r2.configFromEnv('R2'), id: 'railway-env', name: 'Current Railway R2 configuration', enabled: true }] : [])).map((bucket) => ({
       id: bucket.id, name: bucket.name, endpoint: bucket.endpoint, bucket: bucket.bucket,
       region: bucket.region || 'auto', enabled: bucket.enabled !== false,
@@ -63,6 +63,14 @@ router.post('/admin/r2-buckets', requirePermission('settings.manage'), asyncRout
   const raw = await getSetting('r2_buckets', '');
   let saved = { buckets: [], activeId: null };
   try { if (raw) saved = JSON.parse(raw); } catch (_) {}
+  if (!Array.isArray(saved.buckets) || saved.buckets.length === 0) {
+    const envConfig = r2.configFromEnv('R2');
+    if (envConfig) {
+      const envId = crypto.randomUUID();
+      saved.buckets = [{ id: envId, name: envConfig.bucket, endpoint: envConfig.endpoint, bucket: envConfig.bucket, region: envConfig.region, accessKey: envConfig.accessKey, secretKey: envConfig.secretKey, enabled: true }];
+      saved.activeId = envId;
+    }
+  }
   const id = crypto.randomUUID();
   const record = { id, name, endpoint, bucket, region, accessKey, secretKey, enabled: true };
   saved.buckets = [...(Array.isArray(saved.buckets) ? saved.buckets : []), record];
