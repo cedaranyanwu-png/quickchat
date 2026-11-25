@@ -10,7 +10,7 @@ const r2 = require('./r2-storage');
 
 const backupDirectory = path.resolve(__dirname, process.env.BACKUP_DIRECTORY || '../private-backups');
 const mediaDirectory = path.join(__dirname, 'uploads');
-const r2BackupPrefix = 'backup/';
+const r2BackupPrefix = 'backups/';
 async function backupStorageConfig() { return r2.getActiveConfig(); }
 async function uploadBackupToR2(filePath, filename) {
   const config = await backupStorageConfig();
