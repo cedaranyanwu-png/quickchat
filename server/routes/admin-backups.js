@@ -102,7 +102,7 @@ router.post('/admin/r2-buckets/cleanup-local-media', requirePermission('settings
   let retained = 0;
   let missing = 0;
   for (const filename of names) {
-    if (!/^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
+    if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
     const fullPath = path.join(mediaDirectory, filename);
     const stat = await fsp.stat(fullPath).catch(() => null);
     if (!stat?.isFile()) continue;
