@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
@@ -6,8 +7,63 @@ const os = require('os');
 const { asyncRoute } = require('./utils');
 const { requirePermission, audit } = require('./admin');
 const engine = require('../backup-engine');
+const r2 = require('../r2-storage');
+const { getSetting, setSetting } = require('../platform-settings');
 
 const router = express.Router();
+
+router.get('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  const raw = await getSetting('r2_buckets', '');
+  let saved = { buckets: [], activeId: null };
+  try { if (raw) saved = JSON.parse(raw); } catch (_) {}
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json({
+    activeId: saved.activeId || null,
+    buckets: (Array.isArray(saved.buckets) ? saved.buckets : []).map((bucket) => ({
+      id: bucket.id, name: bucket.name, endpoint: bucket.endpoint, bucket: bucket.bucket,
+      region: bucket.region || 'auto', enabled: bucket.enabled !== false,
+      hasCredentials: Boolean(bucket.accessKey && bucket.secretKey),
+      accessKey: bucket.accessKey ? '••••••••' : '', secretKey: bucket.secretKey ? '••••••••' : '',
+    })),
+  });
+}));
+
+router.post('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const name = String(req.body?.name || '').trim().slice(0, 80);
+  const endpoint = String(req.body?.endpoint || '').trim().replace(/\\/$/, '');
+  const bucket = String(req.body?.bucket || '').trim();
+  const region = String(req.body?.region || 'auto').trim();
+  const accessKey = String(req.body?.accessKey || '').trim();
+  const secretKey = String(req.body?.secretKey || '').trim();
+  if (!name || !bucket || !/^https:\/\//i.test(endpoint) || !accessKey || !secretKey) {
+    return res.status(400).json({ message: 'Enter a name, HTTPS endpoint, bucket name, Access Key ID and Secret Access Key.' });
+  }
+  const config = { endpoint, bucket, region, accessKey, secretKey };
+  await r2.listObjects(config, ''); // Verify credentials and bucket access before saving.
+  const raw = await getSetting('r2_buckets', '');
+  let saved = { buckets: [], activeId: null };
+  try { if (raw) saved = JSON.parse(raw); } catch (_) {}
+  const id = crypto.randomUUID();
+  const record = { id, name, endpoint, bucket, region, accessKey, secretKey, enabled: true };
+  saved.buckets = [...(Array.isArray(saved.buckets) ? saved.buckets : []), record];
+  if (!saved.activeId) saved.activeId = id;
+  await setSetting('r2_buckets', JSON.stringify(saved), { secret: true, updatedBy: req.user.id });
+  await audit(req, 'storage.r2_bucket_added', 'storage_bucket', id, 'R2 bucket connection added and tested', null, { name, bucket, endpoint });
+  res.status(201).json({ message: 'R2 bucket connected and verified.', id, activeId: saved.activeId });
+}));
+
+router.post('/admin/r2-buckets/:id/activate', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const raw = await getSetting('r2_buckets', '');
+  let saved = { buckets: [], activeId: null };
+  try { if (raw) saved = JSON.parse(raw); } catch (_) {}
+  const selected = (saved.buckets || []).find((item) => item.id === req.params.id);
+  if (!selected || !selected.accessKey || !selected.secretKey) return res.status(404).json({ message: 'R2 bucket configuration not found.' });
+  await r2.listObjects(selected, '');
+  saved.activeId = selected.id;
+  await setSetting('r2_buckets', JSON.stringify(saved), { secret: true, updatedBy: req.user.id });
+  await audit(req, 'storage.r2_bucket_activated', 'storage_bucket', selected.id, 'Active R2 storage bucket changed', null, { name: selected.name, bucket: selected.bucket });
+  res.json({ message: 'Active R2 bucket changed.', activeId: selected.id });
+}));
 
 router.get('/admin/backups', requirePermission('backups.view'), asyncRoute(async (_req, res) => {
   const backups = await engine.listBackups();
