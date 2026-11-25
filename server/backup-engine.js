@@ -33,7 +33,7 @@ async function listR2Backups() {
   const config = await backupStorageConfig();
   if (!config) return [];
   const objects = await r2.listObjects(config, r2BackupPrefix);
-  return objects.filter((item) => /^[0-9TZa-z-]+\\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: Number(item.size || 0), createdAt: item.lastModified || null, storage: 'r2' }));
+  return objects.filter((item) => /^[0-9TZa-z-]+\.zip$/.test(path.basename(item.key))).map((item) => ({ filename: path.basename(item.key), id: path.basename(item.key, '.zip'), sizeBytes: Number(item.size || 0), createdAt: item.lastModified || null, storage: 'r2' }));
 }
 let running = false;
 
@@ -148,7 +148,7 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
     const mediaRows = await db.query('SELECT filename, mime_type FROM media_uploads ORDER BY id');
     for (const media of mediaRows) {
       const filename = String(media.filename || '');
-      if (!/^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
+      if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
       let data = null;
       const remote = await r2.getObject(storage, 'uploads/' + filename);
       if (remote.ok) data = Buffer.from(await remote.arrayBuffer());
@@ -301,7 +301,7 @@ async function restoreMedia(entries) {
   if (!storage) throw new Error('Configure an active R2 bucket before restoring backup media.');
   for (const [name, data] of entries) {
     const base = path.basename(name);
-    if (name.startsWith('media/') && /^[a-f0-9-]{36}\\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base)) {
+    if (name.startsWith('media/') && /^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(base)) {
       await r2.putBuffer(storage, 'uploads/' + base, data, 'application/octet-stream');
     }
   }
