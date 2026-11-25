@@ -105,7 +105,9 @@ router.post('/admin/backups', requirePermission('backups.create'), asyncRoute(as
     sizeBytes: result.sizeBytes, checksum: result.checksum, tableCount: result.tableCount, totalRows: result.totalRows, mediaFiles: result.mediaFiles,
   });
   let drive = null;
-  try { drive = await engine.uploadToGoogleDrive(result.path, result.filename); } catch (error) { console.error('[Backup] Google Drive upload failed:', error.message); }
+  if (result.path) {
+    try { drive = await engine.uploadToGoogleDrive(result.path, result.filename); } catch (error) { console.error('[Backup] Google Drive upload failed:', error.message); }
+  }
   res.status(201).json({
     message: 'Backup created and checksum verified.',
     backup: {
