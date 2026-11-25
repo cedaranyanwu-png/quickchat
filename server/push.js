@@ -148,12 +148,12 @@ async function subscriptionCount(userId) {
 }
 
 async function sendPushToUser(userId, payload = {}) {
-  if (!ready) return { sent: 0, skipped: true };
+  if (!ready) return { sent: 0, failed: 0, skipped: true, devices: 0 };
   const subscriptions = await db.query(
     'SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?',
     [userId],
   );
-  if (!subscriptions.length) return { sent: 0, skipped: false };
+  if (!subscriptions.length) return { sent: 0, failed: 0, skipped: true, devices: 0 };
 
   const body = JSON.stringify({
     title: String(payload.title || 'QuickChat').slice(0, 120),
@@ -166,6 +166,7 @@ async function sendPushToUser(userId, payload = {}) {
   });
 
   let sent = 0;
+  let failed = 0;
   await Promise.all(subscriptions.map(async (subscription) => {
     try {
       await webpush.sendNotification(
@@ -179,12 +180,14 @@ async function sendPushToUser(userId, payload = {}) {
       // 404/410 mean the browser dropped the subscription; prune it.
       if (error?.statusCode === 404 || error?.statusCode === 410) {
         await db.delete('DELETE FROM push_subscriptions WHERE id = ?', [subscription.id]);
+        failed += 1;
         return;
       }
+      failed += 1;
       console.warn('[Push] Delivery failed:', error?.statusCode || '', error?.message || error);
     }
   }));
-  return { sent, skipped: false };
+  return { sent, failed, skipped: false, devices: subscriptions.length };
 }
 
 // Push delivery is a side effect: a failure must never fail the request that
