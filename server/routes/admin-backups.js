@@ -31,7 +31,7 @@ router.get('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute
 router.post('/admin/r2-buckets/import-environment', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const config = r2.configFromEnv('R2');
   if (!config) return res.status(400).json({ message: 'The current Railway R2 environment variables are incomplete.' });
-  await r2.listObjects(config, '');
+  await r2.listObjects(config, '__quickchat_connection_test__');
   const raw = await getSetting('r2_buckets', '');
   let saved = { buckets: [], activeId: null };
   try { if (raw) saved = JSON.parse(raw); } catch (_) {}
@@ -59,7 +59,7 @@ router.post('/admin/r2-buckets', requirePermission('settings.manage'), asyncRout
     return res.status(400).json({ message: 'Enter a name, HTTPS endpoint, bucket name, Access Key ID and Secret Access Key.' });
   }
   const config = { endpoint, bucket, region, accessKey, secretKey };
-  await r2.listObjects(config, ''); // Verify credentials and bucket access before saving.
+  await r2.listObjects(config, '__quickchat_connection_test__'); // Verify credentials and bucket access before saving.
   const raw = await getSetting('r2_buckets', '');
   let saved = { buckets: [], activeId: null };
   try { if (raw) saved = JSON.parse(raw); } catch (_) {}
@@ -86,7 +86,7 @@ router.post('/admin/r2-buckets/:id/activate', requirePermission('settings.manage
   try { if (raw) saved = JSON.parse(raw); } catch (_) {}
   const selected = (saved.buckets || []).find((item) => item.id === req.params.id);
   if (!selected || !selected.accessKey || !selected.secretKey) return res.status(404).json({ message: 'R2 bucket configuration not found.' });
-  await r2.listObjects(selected, '');
+  await r2.listObjects(selected, '__quickchat_connection_test__');
   saved.activeId = selected.id;
   await setSetting('r2_buckets', JSON.stringify(saved), { secret: true, updatedBy: req.user.id });
   await audit(req, 'storage.r2_bucket_activated', 'storage_bucket', selected.id, 'Active R2 storage bucket changed', null, { name: selected.name, bucket: selected.bucket });
