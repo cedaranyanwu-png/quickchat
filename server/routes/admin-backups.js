@@ -30,7 +30,7 @@ router.get('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute
 
 router.post('/admin/r2-buckets', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
   const name = String(req.body?.name || '').trim().slice(0, 80);
-  const endpoint = String(req.body?.endpoint || '').trim().replace(/\\/$/, '');
+  const endpoint = String(req.body?.endpoint || '').trim().replace(/\/$/, '');
   const bucket = String(req.body?.bucket || '').trim();
   const region = String(req.body?.region || 'auto').trim();
   const accessKey = String(req.body?.accessKey || '').trim();
