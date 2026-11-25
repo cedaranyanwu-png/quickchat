@@ -148,6 +148,7 @@ router.post('/admin/backups/:filename/restore', requirePermission('backups.creat
   const filename = String(req.params.filename || '');
   const fullPath = engine.getBackupPath(filename);
   if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
+  if (!req.body?.confirm) return res.status(400).json({ message: 'Restore confirmation is required.' });
   let stat = await fsp.stat(fullPath).catch(() => null);
   let restorePath = fullPath;
   if (!stat?.isFile()) {
@@ -156,7 +157,6 @@ router.post('/admin/backups/:filename/restore', requirePermission('backups.creat
     restorePath = path.join(os.tmpdir(), 'quickchat-r2-restore-' + Date.now() + '-' + Math.random().toString(16).slice(2) + '.zip');
     await fsp.writeFile(restorePath, data, { mode: 0o600 });
   }
-  if (!req.body?.confirm) return res.status(400).json({ message: 'Restore confirmation is required.' });
   const result = await engine.restoreBackup(restorePath, { restoredBy: req.user.id, reason: String(req.body?.reason || 'Administrator restore').slice(0, 300) });
   if (restorePath !== fullPath) await fsp.unlink(restorePath).catch(() => {});
   await audit(req, 'backup.restored', 'backup', filename, result.reason, null, { checksum: result.checksum, restoredRows: result.restoredRows, restoredTables: result.restoredTables });
