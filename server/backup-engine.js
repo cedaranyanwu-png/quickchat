@@ -271,6 +271,7 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
   if (running) { const error = new Error('A backup operation is already running.'); error.status = 409; throw error; }
   running = true;
   try {
+    const restoreStorageConfig = await backupStorageConfig();
     const archive = await fsp.readFile(archivePath);
     const checksum = crypto.createHash('sha256').update(archive).digest('hex');
     const entries = parseZip(archive);
@@ -296,7 +297,7 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
           restoredRows += 1;
         }
       }
-      await restoreMedia(entries);
+      await restoreMedia(entries, restoreStorageConfig);
       return { checksum, restoredRows, restoredTables: restoreTables.length, skippedTables, mediaFiles: manifest.mediaFiles || 0, reason, restoredBy };
     } finally {
       if (db.type === 'sqlite') await db.query('PRAGMA foreign_keys = ON');
@@ -306,8 +307,8 @@ async function restoreBackup(archivePath, { reason = 'Administrator restore', re
   } finally { running = false; }
 }
 
-async function restoreMedia(entries) {
-  const storage = await backupStorageConfig();
+async function restoreMedia(entries, configuredStorage = null) {
+  const storage = configuredStorage || await backupStorageConfig();
   if (!storage) throw new Error('Configure an active R2 bucket before restoring backup media.');
   for (const [name, data] of entries) {
     const base = path.basename(name);
