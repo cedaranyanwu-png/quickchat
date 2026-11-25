@@ -66,6 +66,12 @@ async function getObject(config, key, range) {
   if (range) headers.range = range;
   return fetch(url, { method: 'GET', headers });
 }
+async function headObject(config, key) {
+  const url = objectUrl(config, key);
+  const response = await fetch(url, { method: 'HEAD', headers: signedHeaders(config, 'HEAD', url, emptyHash()) });
+  if (!response.ok && response.status !== 404) throw new Error('R2 object check failed (' + response.status + ').');
+  return response.status !== 404;
+}
 async function deleteObject(config, key) {
   const url = objectUrl(config, key);
   const response = await fetch(url, { method: 'DELETE', headers: signedHeaders(config, 'DELETE', url, emptyHash()) });
@@ -139,4 +145,4 @@ async function sha256File(filePath) {
 async function streamToBuffer(response) { return response.ok ? Buffer.from(await response.arrayBuffer()) : null; }
 function streamToNode(response) { return response.body ? Readable.fromWeb(response.body) : null; }
 
-module.exports = { configFromEnv, getActiveConfig, getAllConfigs, objectUrl, putFile, putBuffer, getObject, deleteObject, listObjects, streamToBuffer, streamToNode };
+module.exports = { configFromEnv, getActiveConfig, getAllConfigs, objectUrl, putFile, putBuffer, getObject, headObject, deleteObject, listObjects, streamToBuffer, streamToNode };
