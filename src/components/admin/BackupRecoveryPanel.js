@@ -37,7 +37,7 @@ export default function BackupRecoveryPanel({ can }) {
     setBusy(true); setError(''); setNotice('');
     try {
       const r = await adminRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual administrator R2 backup' } });
-      setNotice(`Backup created and uploaded to R2: ${r.backup?.storage?.bucket || 'active bucket'} / backup/ (${(Number(r.backup?.sizeBytes || 0) / 1048576).toFixed(2)} MB).`);
+      setNotice(`Backup created and uploaded to R2: ${r.backup?.storage?.bucket || 'active bucket'} / backups/ (${(Number(r.backup?.sizeBytes || 0) / 1048576).toFixed(2)} MB).`);
       await load();
     } catch (e) { setError(e.message || 'R2 database backup failed.'); }
     finally { setBusy(false); }
