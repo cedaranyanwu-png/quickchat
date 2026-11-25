@@ -7,6 +7,7 @@ const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
 const { getTrafficOverview } = require('../traffic-security');
 const { fetchFeed, validateFeedUrl, syncSource } = require('../services/rss-service');
+const googleSearchConsole = require('../services/google-search-console');
 
 const router = express.Router();
 const idColumn = db.type === 'postgres'
@@ -1137,6 +1138,25 @@ router.post('/admin/admins/:id/reactivate', requirePermission('admins.manage'), 
   }
   await audit(req, 'admin.reactivated', 'user', userId, 'Administrative access reactivated', null, roleKeys);
   res.json({ message: 'Administrative access reactivated.' });
+}));
+
+
+router.get('/admin/google-search-console/status', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  res.json(await googleSearchConsole.getStatus());
+}));
+
+router.get('/admin/google-search-console/sitemaps', requirePermission('settings.manage'), asyncRoute(async (_req, res) => {
+  const sitemaps = await googleSearchConsole.listSitemaps();
+  res.json({ sitemaps });
+}));
+
+router.post('/admin/google-search-console/submit-sitemap', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const result = await googleSearchConsole.submitSitemap();
+  await audit(req, 'seo.google_sitemap_submitted', 'sitemap', result.sitemapUrl, 'Google Search Console sitemap submission requested', null, {
+    propertyUrl: result.propertyUrl,
+    sitemapUrl: result.sitemapUrl,
+  });
+  res.json(result);
 }));
 
 module.exports = { router, initializeAdminTables, getPermissions, requirePermission, audit };
