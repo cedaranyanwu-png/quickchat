@@ -57,11 +57,11 @@ function signedHeaders(config, method, url, payloadHash, contentType = '') {
   const headers = { host: url.host, 'x-amz-content-sha256': payloadHash, 'x-amz-date': amzDate };
   if (contentType) headers['content-type'] = contentType;
   const names = Object.keys(headers).sort();
-  const canonicalHeaders = names.map((name) => name + ':' + headers[name].trim() + '\\n').join('');
+  const canonicalHeaders = names.map((name) => name + ':' + headers[name].trim() + '\n').join('');
   const signedNames = names.join(';');
   const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedNames, payloadHash].join('\n');
   const scope = date + '/' + config.region + '/s3/aws4_request';
-  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\\n');
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
   const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region)).update(stringToSign).digest('hex');
   return { ...headers, Authorization: 'AWS4-HMAC-SHA256 Credential=' + config.accessKey + '/' + scope + ', SignedHeaders=' + signedNames + ', Signature=' + signature };
 }
