@@ -72,7 +72,7 @@ app.use(express.json({ limit: '1mb' }));
 // Security telemetry runs before authentication so public registration/login traffic is covered too.
 app.use('/api', botDetector());
 app.use('/api', trafficRouter());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', immutable: true }));
+// Media is served through the R2-first authenticated metadata lookup below.
 // Serve status/post media from persistent object storage, with legacy local-file fallback.
 app.get('/uploads/:filename', mediaRoutes.servePublicMedia);
 
