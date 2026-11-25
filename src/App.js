@@ -46,7 +46,6 @@ import Admin from './pages/Admin';
 import Menu from './pages/Menu';
 import AccountBooster from './pages/AccountBooster';
 import First100 from './pages/First100';
-import CreatorStudio from './pages/CreatorStudio';
 import CreatorProgram from './pages/CreatorProgram';
 import About from './pages/About';
 import Investors from './pages/Investors';
