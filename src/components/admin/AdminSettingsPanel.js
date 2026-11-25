@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { adminRequest } from '../../api';
+import GoogleSearchConsolePanel from './GoogleSearchConsolePanel';
 
 export default function AdminSettingsPanel() {
   const [form, setForm] = useState({ boost_synthetic_test_mode: false, verification_points: 2000, verification_reward_points: 2000, flw_env: 'live', flw_client_id: '', flw_client_secret: '', flw_encryption_key: '', flw_webhook_secret: '', flw_webhook_url: 'https://quickchat-production-d5e5.up.railway.app/api/webhooks/flutterwave', public_app_url: 'https://quickchat-production-d5e5.up.railway.app', google_drive_enabled: false, google_drive_client_id: '', google_drive_client_secret: '', google_drive_refresh_token: '', google_drive_folder_id: '', gemini_enabled: false, gemini_api_key: '', gemini_model: 'gemini-3.8-flash', email_provider_mode: 'brevo', brevo_api_key: '', resend_api_key: '', smtp_user: '', smtp_password: '', smtp_from: '', smtp_host: '', smtp_port: '587', smtp_secure: false });
@@ -64,6 +65,7 @@ export default function AdminSettingsPanel() {
       </label>
       <p className="text-[11px] leading-5 text-slate-500">Only add public pages. Do not add admin, settings, private messages, API endpoints or other authenticated URLs.</p>
     </section>
+    <GoogleSearchConsolePanel />
     <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-5 space-y-4">
       <div>
         <h3 className="font-extrabold text-slate-900">Google Search Console · HTML verification file</h3>
