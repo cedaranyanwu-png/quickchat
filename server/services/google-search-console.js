@@ -1,7 +1,10 @@
 const { JWT } = require('google-auth-library');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const SEARCH_CONSOLE_SCOPE = 'https://www.googleapis.com/auth/webmasters';
 const API_BASE = 'https://searchconsole.googleapis.com/webmasters/v3';
+const INSPECTION_API_BASE = 'https://searchconsole.googleapis.com/v1/urlInspection';
 
 function getConfiguration() {
   const rawCredentials = String(process.env.GOOGLE_SEARCH_CONSOLE_SERVICE_ACCOUNT_JSON || '').trim();
@@ -57,7 +60,7 @@ function getSafeGoogleError(error) {
   return googleMessage || error.message || 'Google Search Console request failed.';
 }
 
-async function requestGoogle(method, pathname) {
+async function requestGoogle(method, pathname, data = undefined, baseUrl = API_BASE) {
   const { credentials } = getConfiguration();
   const client = new JWT({
     email: credentials.client_email,
@@ -66,9 +69,10 @@ async function requestGoogle(method, pathname) {
   });
   try {
     const response = await client.request({
-      url: API_BASE + pathname,
+      url: baseUrl + pathname,
       method,
       timeout: 20000,
+      ...(data !== undefined ? { data } : {}),
     });
     return response.data || {};
   } catch (error) {
@@ -127,6 +131,122 @@ async function listSitemaps() {
   return Array.isArray(data.sitemap) ? data.sitemap : [];
 }
 
+async function getSearchAnalytics(days = 28) {
+  const { siteUrl } = getConfiguration();
+  const safeDays = Math.max(1, Math.min(90, Number(days) || 28));
+  const end = new Date();
+  end.setUTCDate(end.getUTCDate() - 1);
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - safeDays + 1);
+  const iso = (date) => date.toISOString().slice(0, 10);
+
+  const query = async (dimensions, rowLimit = 10) => requestGoogle(
+    'POST',
+    '/sites/' + encodePath(siteUrl) + '/searchAnalytics/query',
+    { startDate: iso(start), endDate: iso(end), dimensions, rowLimit, dataState: 'final' },
+  );
+
+  const [totals, pages] = await Promise.all([
+    query([], 1),
+    query(['page'], 50),
+  ]);
+  const totalRow = Array.isArray(totals.rows) ? totals.rows[0] : null;
+  return {
+    startDate: iso(start),
+    endDate: iso(end),
+    totals: {
+      clicks: Number(totalRow?.clicks || 0),
+      impressions: Number(totalRow?.impressions || 0),
+      ctr: Number(totalRow?.ctr || 0),
+      position: Number(totalRow?.position || 0),
+    },
+    pages: (Array.isArray(pages.rows) ? pages.rows : []).map((row) => ({
+      page: row.keys?.[0] || '',
+      clicks: Number(row.clicks || 0),
+      impressions: Number(row.impressions || 0),
+      ctr: Number(row.ctr || 0),
+      position: Number(row.position || 0),
+    })),
+  };
+}
+
+async function fetchSitemapUrls(sitemapUrl, maxUrls = 25) {
+  const urls = [];
+  const seenSitemaps = new Set();
+  const queue = [sitemapUrl];
+
+  while (queue.length && urls.length < maxUrls) {
+    const current = queue.shift();
+    if (!current || seenSitemaps.has(current)) continue;
+    seenSitemaps.add(current);
+    const response = await axios.get(current, { timeout: 15000, responseType: 'text' });
+    const $ = cheerio.load(response.data, { xmlMode: true });
+    const children = $('sitemapindex > sitemap > loc').map((_, el) => $(el).text().trim()).get();
+    if (children.length) {
+      queue.push(...children.slice(0, 10));
+      continue;
+    }
+    $('urlset > url > loc').each((_, el) => {
+      const url = $(el).text().trim();
+      if (url && !urls.includes(url) && urls.length < maxUrls) urls.push(url);
+    });
+  }
+  return urls;
+}
+
+async function inspectUrls(limit = 25) {
+  const { siteUrl, sitemapUrl } = getConfiguration();
+  const urls = await fetchSitemapUrls(sitemapUrl, Math.max(1, Math.min(50, Number(limit) || 25)));
+  const results = [];
+  for (const inspectionUrl of urls) {
+    try {
+      const data = await requestGoogle(
+        'POST',
+        '/index:inspect',
+        { inspectionUrl, siteUrl },
+        INSPECTION_API_BASE,
+      );
+      const result = data.inspectionResult || {};
+      const status = result.indexStatusResult || {};
+      results.push({
+        url: inspectionUrl,
+        indexed: status.verdict === 'PASS',
+        verdict: status.verdict || 'UNKNOWN',
+        coverageState: status.coverageState || 'Not reported',
+        indexingState: status.indexingState || 'Not reported',
+        lastCrawlTime: status.lastCrawlTime || null,
+        googleCanonical: status.googleCanonical || '',
+        userCanonical: status.userCanonical || '',
+      });
+    } catch (error) {
+      results.push({
+        url: inspectionUrl,
+        indexed: false,
+        verdict: 'ERROR',
+        coverageState: getSafeGoogleError(error),
+        indexingState: 'Not inspected',
+        lastCrawlTime: null,
+        googleCanonical: '',
+        userCanonical: '',
+      });
+    }
+  }
+  return { checked: results.length, indexed: results.filter((item) => item.indexed).length, urls: results };
+}
+
+async function getIndexingOverview() {
+  const sitemaps = await listSitemaps();
+  const totals = sitemaps.reduce((acc, sitemap) => {
+    const contents = Array.isArray(sitemap.contents) ? sitemap.contents : [];
+    for (const content of contents) {
+      acc.submitted += Number(content.submitted || 0);
+      acc.indexed += Number(content.indexed || 0);
+    }
+    return acc;
+  }, { submitted: 0, indexed: 0 });
+  return { sitemaps, totals };
+}
+
 async function submitSitemap() {
   const { siteUrl, sitemapUrl } = getConfiguration();
   const parsedSitemap = new URL(sitemapUrl);
@@ -147,4 +267,4 @@ async function submitSitemap() {
   };
 }
 
-module.exports = { getStatus, listSitemaps, submitSitemap };
+module.exports = { getStatus, listSitemaps, submitSitemap, getSearchAnalytics, inspectUrls, getIndexingOverview };
