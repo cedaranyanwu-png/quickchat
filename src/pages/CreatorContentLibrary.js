@@ -34,7 +34,7 @@ export default function CreatorContentLibrary() {
       const match = Object.entries(nextSpaces).find(([, rows]) => rows.some((space) => String(space.platformId) === String(requestedCommunityId)));
       if (match) setForm((current) => ({ ...current, destination: match[0] === 'pages' ? 'page' : match[0] === 'channels' ? 'channel' : 'community', communityId: requestedCommunityId }));
     }
-  }, []);
+  }, [requestedCommunityId]);
   useEffect(() => { load().catch((e) => setError(e.message)); }, [load]);
   useEffect(() => {
     if (!requestedCommunityId || requestedDestination === 'profile') return;
