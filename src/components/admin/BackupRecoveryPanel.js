@@ -33,7 +33,7 @@ export default function BackupRecoveryPanel({ can }) {
   useEffect(() => { load(); }, []);
 
   const create = async () => {
-    if (!window.confirm('Create a full database and media backup and store the archive in the active R2 bucket under backup/?')) return;
+    if (!window.confirm('Create a full database and media backup and store the archive in the active R2 bucket under backups/?')) return;
     setBusy(true); setError(''); setNotice('');
     try {
       const r = await adminRequest('/admin/backups', { method: 'POST', body: { reason: 'Manual administrator R2 backup' } });
@@ -146,7 +146,7 @@ export default function BackupRecoveryPanel({ can }) {
     </div>}
 
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">R2 database backups</h3><p className="mt-1 text-xs text-slate-500">Archives are saved under backup/ in the active bucket. Media referenced by the database is included from uploads/.</p></div>
+      <div className="border-b border-slate-100 px-5 py-4"><h3 className="font-extrabold text-slate-900">R2 database backups</h3><p className="mt-1 text-xs text-slate-500">Archives are saved under backups/ in the active bucket. Media referenced by the database is included from uploads/.</p></div>
       <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left text-sm"><thead className="bg-slate-50 text-[10px] font-extrabold uppercase tracking-wider text-slate-500"><tr><th className="px-5 py-3">Backup archive</th><th className="px-4 py-3">Created</th><th className="px-4 py-3">Size</th><th className="px-4 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-slate-100">{backups.map(b => <tr key={b.id}><td className="px-5 py-4 font-bold text-slate-800">{b.filename}<div className="mt-1 text-[10px] font-semibold uppercase text-emerald-700">{b.storage || 'legacy local'} storage</div></td><td className="px-4 py-4 text-xs text-slate-500">{b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'}</td><td className="px-4 py-4 text-xs">{b.sizeBytes ? (b.sizeBytes / 1048576).toFixed(2) + ' MB' : '—'}</td><td className="px-4 py-4 text-right"><div className="flex justify-end gap-2"><button disabled={busy} onClick={() => download(b)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold disabled:opacity-50">Download</button>{can('backups.create') && <button disabled={busy} onClick={() => restore(b)} className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-bold text-amber-800 disabled:opacity-50">Recover backed up data</button>}{can('backups.delete') && <button disabled={busy} onClick={() => remove(b)} className="rounded-lg bg-rose-50 px-3 py-2 text-[10px] font-bold text-rose-700 disabled:opacity-50">Delete</button>}</div></td></tr>)}</tbody></table></div>
       {!backups.length && <p className="p-10 text-center text-sm text-slate-400">No R2 backups yet. Create the first database backup now.</p>}
     </div>
