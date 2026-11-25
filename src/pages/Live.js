@@ -6,14 +6,6 @@ import VerifiedBadge from '../components/VerifiedBadge';
 import LiveStudio from '../components/LiveStudio';
 import LiveWatch from '../components/LiveWatch';
 
-const LABELS = {
-  welcome: 'Welcome bonus',
-  purchase: 'Points top-up',
-  gift_sent: 'Gift sent',
-  gift_received: 'Gift received',
-  gift_refund: 'Gift refunded',
-};
-
 function formatDuration(seconds) {
   const value = Math.max(0, Number(seconds) || 0);
   const minutes = Math.floor(value / 60);
@@ -39,7 +31,7 @@ function LiveHub() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [notice] = useState('');
   const [studioOpen, setStudioOpen] = useState(false);
   const [studioTitle, setStudioTitle] = useState('');
   const [askTitle, setAskTitle] = useState(false);
