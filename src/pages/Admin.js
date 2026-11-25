@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { API_BASE_URL, adminRequest } from '../api';
+import { adminRequest } from '../api';
 import ModerationPanel from '../components/admin/ModerationPanel';
 import AdminSettingsPanel from '../components/admin/AdminSettingsPanel';
 import BackupRecoveryPanel from '../components/admin/BackupRecoveryPanel';
