@@ -149,16 +149,20 @@ async function createBackup({ createdBy = null, reason = 'Manual administrator b
 
     let mediaFiles = 0;
     let mediaBytes = 0;
-    const storage = await backupStorageConfig();
+    const storageConfigs = await r2.getAllConfigs();
+    const storage = storageConfigs[0];
     if (!storage) throw new Error('Configure an active R2 bucket before creating a database backup.');
     const mediaRows = await db.query('SELECT filename, mime_type FROM media_uploads ORDER BY id');
     for (const media of mediaRows) {
       const filename = String(media.filename || '');
       if (!/^[a-f0-9-]{36}\.(jpg|png|gif|webp|mp4|webm|mov|ogg|m4a|mp3|wav)$/i.test(filename)) continue;
       let data = null;
-      const remote = await r2.getObject(storage, 'uploads/' + filename);
-      if (remote.ok) data = Buffer.from(await remote.arrayBuffer());
-      else data = await fsp.readFile(path.join(mediaDirectory, filename)).catch(() => null);
+      for (const mediaStorage of storageConfigs) {
+        const remote = await r2.getObject(mediaStorage, 'uploads/' + filename);
+        if (remote.ok) { data = Buffer.from(await remote.arrayBuffer()); break; }
+        if (remote.status !== 404) throw new Error('Unable to read media from R2 bucket ' + mediaStorage.bucket + ' (HTTP ' + remote.status + ').');
+      }
+      if (!data) data = await fsp.readFile(path.join(mediaDirectory, filename)).catch(() => null);
       if (!data) throw new Error('A media file is missing from R2 and local storage: ' + filename);
       entries.push({ name: 'media/' + filename, data });
       mediaFiles += 1;
