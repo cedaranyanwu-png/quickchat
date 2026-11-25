@@ -83,7 +83,7 @@ router.post('/admin/backups', requirePermission('backups.create'), asyncRoute(as
     backup: {
       id: result.id, filename: result.filename, sizeBytes: result.sizeBytes,
       checksum: result.checksum, totalRows: result.totalRows, tableCount: result.tableCount,
-      mediaFiles: result.mediaFiles, mediaBytes: result.mediaBytes, createdAt: result.createdAt, googleDrive: drive,
+      mediaFiles: result.mediaFiles, mediaBytes: result.mediaBytes, createdAt: result.createdAt, storage: result.r2, googleDrive: drive,
     },
   });
 }));
@@ -151,11 +151,10 @@ router.delete('/admin/backups/:filename', requirePermission('backups.delete'), a
   const fullPath = engine.getBackupPath(req.params.filename);
   if (!fullPath) return res.status(400).json({ message: 'Invalid backup filename.' });
   const stat = await fsp.stat(fullPath).catch(() => null);
-  if (!stat?.isFile()) return res.status(404).json({ message: 'Backup not found.' });
   if (stat?.isFile()) await fsp.unlink(fullPath).catch(() => {});
-  await engine.deleteBackupFromR2(req.params.filename).catch(() => {});
-  await audit(req, 'backup.deleted', 'backup', req.params.filename, 'Administrator deleted a backup archive', { sizeBytes: stat.size }, null);
-  res.json({ message: 'Backup deleted.' });
+  await engine.deleteBackupFromR2(req.params.filename);
+  await audit(req, 'backup.deleted', 'backup', req.params.filename, 'Administrator deleted a backup archive', { sizeBytes: stat?.size || null }, null);
+  res.json({ message: 'Backup deleted from R2.' });
 }));
 
 module.exports = router;
