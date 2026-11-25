@@ -33,7 +33,8 @@ function signedHeaders(config, method, url, payloadHash, contentType = '') {
   const names = Object.keys(headers).sort();
   const canonicalHeaders = names.map((name) => name + ':' + headers[name].trim() + '\n').join('');
   const signedNames = names.join(';');
-  const canonicalRequest = [method, url.pathname, '', canonicalHeaders, signedNames, payloadHash].join('\n');
+  const canonicalQuery = [...url.searchParams.entries()].map(([key, value]) => [encodeURIComponent(key), encodeURIComponent(value)]).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1])).map(([key, value]) => key + '=' + value).join('&');
+  const canonicalRequest = [method, url.pathname, canonicalQuery, canonicalHeaders, signedNames, payloadHash].join('\n');
   const scope = date + '/' + config.region + '/s3/aws4_request';
   const stringToSign = ['AWS4-HMAC-SHA256', amzDate, scope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n');
   const signature = crypto.createHmac('sha256', signingKey(config.secretKey, date, config.region)).update(stringToSign).digest('hex');
