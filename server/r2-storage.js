@@ -93,22 +93,31 @@ async function listObjects(config, prefix = '') {
   return objects;
 }
 
-async function getActiveConfig() {
+async function getAllConfigs() {
+  const configs = [];
   try {
     const { getSetting } = require('./platform-settings');
     const raw = await getSetting('r2_buckets', '');
     if (raw) {
       const saved = JSON.parse(raw);
-      const active = Array.isArray(saved.buckets) ? saved.buckets.find((item) => item.id === saved.activeId && item.enabled !== false) : null;
-      if (active && [active.endpoint, active.bucket, active.accessKey, active.secretKey].every(Boolean)) {
-        return { endpoint: String(active.endpoint).replace(/\/$/, ''), bucket: active.bucket, region: active.region || 'auto', accessKey: active.accessKey, secretKey: active.secretKey, id: active.id, name: active.name || active.bucket };
-      }
+      const buckets = Array.isArray(saved.buckets) ? saved.buckets.filter((item) => item.enabled !== false && [item.endpoint, item.bucket, item.accessKey, item.secretKey].every(Boolean)) : [];
+      buckets.sort((a, b) => (a.id === saved.activeId ? -1 : b.id === saved.activeId ? 1 : 0));
+      for (const item of buckets) configs.push({ endpoint: String(item.endpoint).replace(/\/$/, ''), bucket: item.bucket, region: item.region || 'auto', accessKey: item.accessKey, secretKey: item.secretKey, id: item.id, name: item.name || item.bucket });
     }
   } catch (error) {
     if (error instanceof SyntaxError) throw new Error('Saved R2 bucket configuration is invalid JSON.');
     throw error;
   }
-  return configFromEnv('R2');
+  if (!configs.length) {
+    const fallback = configFromEnv('R2');
+    if (fallback) configs.push({ ...fallback, id: 'railway-env', name: fallback.bucket });
+  }
+  return configs;
+}
+
+async function getActiveConfig() {
+  const configs = await getAllConfigs();
+  return configs[0] || null;
 }
 
 function decodeXml(value) { return value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'"); }
@@ -120,4 +129,4 @@ async function sha256File(filePath) {
 async function streamToBuffer(response) { return response.ok ? Buffer.from(await response.arrayBuffer()) : null; }
 function streamToNode(response) { return response.body ? Readable.fromWeb(response.body) : null; }
 
-module.exports = { configFromEnv, getActiveConfig, objectUrl, putFile, putBuffer, getObject, deleteObject, listObjects, streamToBuffer, streamToNode };
+module.exports = { configFromEnv, getActiveConfig, getAllConfigs, objectUrl, putFile, putBuffer, getObject, deleteObject, listObjects, streamToBuffer, streamToNode };
