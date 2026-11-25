@@ -83,9 +83,9 @@ async function listObjects(config, prefix = '') {
     const response = await fetch(url, { method: 'GET', headers: signedHeaders(config, 'GET', url, emptyHash()) });
     if (!response.ok) throw new Error('R2 list failed (' + response.status + '): ' + (await response.text()).slice(0, 300));
     const xml = await response.text();
-    for (const match of xml.matchAll(/<Key>([^<]+)<\\/Key>/g)) objects.push({ key: decodeXml(match[1]) });
-    const truncated = /<IsTruncated>true<\\/IsTruncated>/i.test(xml);
-    const next = xml.match(/<NextContinuationToken>([^<]+)<\\/NextContinuationToken>/i);
+    for (const match of xml.matchAll(/<Key>([^<]+)<\/Key>/g)) objects.push({ key: decodeXml(match[1]) });
+    const truncated = /<IsTruncated>true<\/IsTruncated>/i.test(xml);
+    const next = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/i);
     token = truncated && next ? decodeXml(next[1]) : '';
     if (truncated && !token) throw new Error('R2 returned a truncated listing without a continuation token.');
   } while (token);
@@ -100,7 +100,7 @@ async function getActiveConfig() {
       const saved = JSON.parse(raw);
       const active = Array.isArray(saved.buckets) ? saved.buckets.find((item) => item.id === saved.activeId && item.enabled !== false) : null;
       if (active && [active.endpoint, active.bucket, active.accessKey, active.secretKey].every(Boolean)) {
-        return { endpoint: String(active.endpoint).replace(/\\/$/, ''), bucket: active.bucket, region: active.region || 'auto', accessKey: active.accessKey, secretKey: active.secretKey, id: active.id, name: active.name || active.bucket };
+        return { endpoint: String(active.endpoint).replace(/\/$/, ''), bucket: active.bucket, region: active.region || 'auto', accessKey: active.accessKey, secretKey: active.secretKey, id: active.id, name: active.name || active.bucket };
       }
     }
   } catch (error) {
