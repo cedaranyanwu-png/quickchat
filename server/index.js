@@ -463,6 +463,7 @@ function sendStructuredPage(req, res, metadata, pagePath, next) {
   fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
     if (error) return next(error);
     const page = html.replace(/<title>[^<]*<\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
+      .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
       .replace('</head>', '  ' + tags + '\n</head>');
     res.type('html').send(page);
   });
@@ -504,6 +505,7 @@ function sendSharePage(req, res, metadata, sharePath, next) {
     if (error) return next(error);
     const page = html
       .replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`)
+      .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
       .replace('</head>', `  ${tags}\n  ${metadata.noIndex ? '<meta name="robots" content="noindex, nofollow" />' : ''}\n</head>`);
     res.type('html').send(page);
   });
