@@ -93,6 +93,24 @@ export default function GoogleSearchConsolePanel() {
       <div className="rounded-xl bg-white p-3 text-xs"><div className="font-bold text-slate-700">QuickChat sitemap</div><div className="mt-1 break-all text-slate-600">{status.sitemapUrl}</div></div>
     </div>}
 
+    {status?.diagnostics && <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 text-xs">
+      <h4 className="font-extrabold text-slate-900">Google connection diagnostics</h4>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div><div className="font-bold text-slate-500">Configured property in QuickChat</div><div className="mt-1 break-all rounded-lg bg-slate-50 p-2 text-slate-800">{status.diagnostics.configuredProperty || status.propertyUrl || 'Not configured'}</div></div>
+        <div><div className="font-bold text-slate-500">Property returned directly by Google</div><div className="mt-1 break-all rounded-lg bg-slate-50 p-2 text-slate-800">{status.googleReturnedProperty || status.diagnostics.googleReturnedProperty || 'Google did not return a property identifier'}</div></div>
+        <div><div className="font-bold text-slate-500">Credentials</div><div className="mt-1 text-slate-700">{status.diagnostics.credentials || 'Unknown'}</div></div>
+        <div><div className="font-bold text-slate-500">Search Console API</div><div className="mt-1 text-slate-700">{status.diagnostics.api || 'Unknown'}</div></div>
+        <div><div className="font-bold text-slate-500">Exact property match</div><div className="mt-1 text-slate-700">{status.diagnostics.propertyFound ? 'Yes' : 'No'}</div></div>
+        <div><div className="font-bold text-slate-500">Permission level</div><div className="mt-1 text-slate-700">{status.diagnostics.permissionLevel || status.permissionLevel || 'Not returned'}</div></div>
+      </div>
+      {status.googleProperties?.length > 0 && <div className="space-y-2">
+        <div className="font-bold text-slate-700">All property identifiers Google returns for this service account</div>
+        <div className="overflow-x-auto rounded-lg border border-slate-200"><table className="min-w-full text-left"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Exact Google property identifier</th><th className="px-3 py-2">Permission</th><th className="px-3 py-2">Action</th></tr></thead><tbody>
+          {status.googleProperties.map((item) => <tr key={item.siteUrl} className="border-t border-slate-100"><td className="break-all px-3 py-2 font-medium text-slate-800">{item.siteUrl}</td><td className="whitespace-nowrap px-3 py-2">{item.permissionLevel}</td><td className="px-3 py-2"><button type="button" onClick={() => { navigator.clipboard?.writeText(item.siteUrl); }} className="rounded-lg border border-slate-200 px-2 py-1 font-bold text-blue-700">Copy property</button></td></tr>)}
+        </tbody></table></div>
+      </div>}
+      {status.diagnostics.googleError && <div className="rounded-lg bg-rose-50 p-3 text-rose-700"><span className="font-bold">Google API error: </span>{status.diagnostics.googleError}</div>}
+    </div>}
     {status?.message && <p className="text-xs leading-5 text-slate-600">{status.message}</p>}
     {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</p>}
     {message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{message}</p>}
