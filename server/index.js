@@ -619,6 +619,7 @@ app.get('/profile/:username', async (req, res, next) => {
       res.type('html').send(
         html
           .replace(/<title>[^<]*<\/title>/i, `<title>${escape(title)}</title>`)
+          .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
           .replace('</head>', `  ${tags}\n</head>`),
       );
     });
