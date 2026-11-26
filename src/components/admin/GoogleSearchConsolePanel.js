@@ -123,8 +123,8 @@ export default function GoogleSearchConsolePanel() {
 
     {indexing?.totals && <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">URLs submitted</div><div className="mt-1 text-2xl font-black text-slate-900">{number(indexing.totals.submitted)}</div><div className="mt-1 text-[11px] text-slate-500">Reported by Google from submitted sitemaps</div></div>
-      <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">URLs indexed</div><div className="mt-1 text-2xl font-black text-emerald-700">{number(indexing.totals.indexed)}</div><div className="mt-1 text-[11px] text-slate-500">Indexed URLs reported in sitemap data</div></div>
-      <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Index rate</div><div className="mt-1 text-2xl font-black text-blue-700">{indexing.totals.submitted ? percent(indexing.totals.indexed / indexing.totals.submitted) : '0.00%'}</div><div className="mt-1 text-[11px] text-slate-500">Indexed ÷ submitted</div></div>
+      <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Sitemap-indexed URLs</div><div className="mt-1 text-2xl font-black text-slate-900">{number(indexing.totals.indexed)}</div><div className="mt-1 text-[11px] text-slate-500">Google sitemap report only; not the full index count</div></div>
+      <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Sitemap index rate</div><div className="mt-1 text-2xl font-black text-slate-700">{indexing.totals.submitted ? percent(indexing.totals.indexed / indexing.totals.submitted) : '0.00%'}</div><div className="mt-1 text-[11px] text-slate-500">Google sitemap statistics only</div></div>
       <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Sitemaps</div><div className="mt-1 text-2xl font-black text-slate-900">{number(sitemaps.length)}</div><div className="mt-1 text-[11px] text-slate-500">Known by Google</div></div>
     </div>}
 
@@ -150,12 +150,12 @@ export default function GoogleSearchConsolePanel() {
     </div>}
 
     {inspections && <div className="space-y-3">
-      <div><h4 className="text-sm font-extrabold text-slate-900">Page-level Google indexing checks</h4><p className="mt-1 text-[11px] text-slate-500">QuickChat inspected {inspections.checked} sitemap URLs. {inspections.indexed} returned Google's indexed verdict. This is a sampled inspection, not Google's complete index.</p></div>
+      <div><h4 className="text-sm font-extrabold text-slate-900">URL Inspection results · independent of sitemap totals</h4><p className="mt-1 text-[11px] text-slate-500">Google URL Inspection checked {inspections.checked} sitemap URLs; {inspections.indexed} returned an indexed verdict. These confirmed results are a sample and must not be added to or replaced by the sitemap statistics above.</p></div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">URL</th><th className="px-3 py-2">Google verdict</th><th className="px-3 py-2">Coverage</th><th className="px-3 py-2">Last crawl</th></tr></thead><tbody>
         {inspections.urls.map((item) => <tr key={item.url} className="border-t border-slate-100"><td className="max-w-sm break-all px-3 py-2 font-medium text-slate-700">{item.url}</td><td className={`px-3 py-2 font-bold ${item.indexed ? 'text-emerald-700' : item.verdict === 'ERROR' ? 'text-rose-700' : 'text-amber-700'}`}>{item.indexed ? 'Indexed' : item.verdict === 'ERROR' ? 'Inspection error' : item.verdict}</td><td className="max-w-xs px-3 py-2">{item.coverageState}</td><td className="whitespace-nowrap px-3 py-2">{formatDate(item.lastCrawlTime)}</td></tr>)}
       </tbody></table></div>
     </div>}
 
-    <p className="text-[11px] leading-5 text-slate-500">The sitemap indexed total comes from Google's sitemap data. Search Console does not provide a single API endpoint that exports Google's entire Index Coverage report, so the page-level checker uses Google's URL Inspection API on a limited sample. Search performance shows pages that have actually appeared in Google Search.</p>
+    <p className="text-[11px] leading-5 text-slate-500">Important: Google's sitemap report and URL Inspection API are different data sources. A sitemap can show 0 indexed while individual URL inspections confirm indexed pages. Treat the sitemap figures as sitemap-processing statistics and the inspection results as a limited URL sample. Search performance reports pages that have actually appeared in Google Search.</p>
   </section>;
 }
