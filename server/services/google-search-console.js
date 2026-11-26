@@ -50,14 +50,21 @@ function getConfiguration() {
 }
 
 function getSafeGoogleError(error) {
-  const status = Number(error?.response?.status || error?.code || 0);
-  const googleMessage = String(error?.response?.data?.error?.message || '').trim();
-  if (status === 401) return 'Google rejected the service-account credentials. Create a new key and check the Railway variable.';
-  if (status === 403) return 'Google denied access. Confirm that the service-account email is an owner of this exact Search Console property and that the Search Console API is enabled.';
-  if (status === 404) return 'Google could not find this Search Console property or sitemap. Check the exact property URL and sitemap URL.';
-  if (status === 400) return googleMessage || 'Google rejected the request. Check the Search Console property and sitemap URL.';
+  const googleError = error?.response?.data?.error || {};
+  const status = Number(error?.googleHttpStatus || error?.response?.status || error?.code || 0);
+  const googleMessage = String(error?.googleMessage || googleError.message || '').trim();
+  const googleReason = String(error?.googleReason || googleError.errors?.[0]?.reason || googleError.status || '').trim();
+  const detail = [googleReason, googleMessage].filter(Boolean).join(': ');
+
+  if (status === 401) return detail || 'Google rejected the service-account credentials. Check the Railway service-account JSON variable and key validity.';
+  if (status === 403) {
+    return 'Google Search Console returned 403' + (detail ? ' (' + detail + ')' : '.') +
+      ' Confirm that this service account has access to the exact property configured in GOOGLE_SEARCH_CONSOLE_SITE_URL, that every inspected URL belongs to that property, and that the Search Console API is enabled in the same Google Cloud project as the service-account key.';
+  }
+  if (status === 404) return detail || 'Google could not find this Search Console property or sitemap. Check the exact property identifier and sitemap URL.';
+  if (status === 400) return detail || 'Google rejected the request. Check the Search Console property identifier and inspected URL.';
   if (status === 503) return error.message;
-  return googleMessage || error.message || 'Google Search Console request failed.';
+  return detail || error.message || 'Google Search Console request failed.';
 }
 
 async function requestGoogle(method, pathname, data = undefined, baseUrl = API_BASE) {
@@ -76,8 +83,12 @@ async function requestGoogle(method, pathname, data = undefined, baseUrl = API_B
     });
     return response.data || {};
   } catch (error) {
+    const googleError = error?.response?.data?.error || {};
     const safe = new Error(getSafeGoogleError(error));
-    safe.status = Number(error?.response?.status) >= 400 && Number(error?.response?.status) < 500 ? 400 : 502;
+    safe.googleHttpStatus = Number(error?.response?.status || 0) || null;
+    safe.googleMessage = String(googleError.message || '').trim();
+    safe.googleReason = String(googleError.errors?.[0]?.reason || googleError.status || '').trim();
+    safe.status = safe.googleHttpStatus >= 400 && safe.googleHttpStatus < 500 ? 400 : 502;
     throw safe;
   }
 }
@@ -103,7 +114,9 @@ async function getStatus() {
   try {
     const data = await requestGoogle('GET', '/sites');
     const sites = Array.isArray(data.siteEntry) ? data.siteEntry : [];
-    const property = sites.find((site) => String(site.siteUrl || '').replace(/[/]$/, '') === config.siteUrl.replace(/[/]$/, '') || site.siteUrl === config.siteUrl);
+    // Search Console property identifiers are opaque identifiers; require an exact match.
+    // URL-prefix properties include their trailing slash, while domain properties use sc-domain:.
+    const property = sites.find((site) => site.siteUrl === config.siteUrl);
     return {
       configured: true,
       connected: Boolean(property),
