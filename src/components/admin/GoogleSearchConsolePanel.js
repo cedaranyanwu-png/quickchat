@@ -83,7 +83,7 @@ export default function GoogleSearchConsolePanel() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [saveCachedDashboard]);
 
   useEffect(() => {
     loadCachedDashboard();
