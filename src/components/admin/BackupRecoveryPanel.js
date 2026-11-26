@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { API_BASE_URL, adminRequest } from '../../api';
 
 const initialBucket = { name: '', endpoint: 'https://62809542fc864ad1186326309f104278.r2.cloudflarestorage.com', bucket: '', region: 'auto', accessKey: '', secretKey: '' };
@@ -16,7 +16,7 @@ export default function BackupRecoveryPanel({ can }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [local, remote, storage] = await Promise.all([
         adminRequest('/admin/backups'),
@@ -29,8 +29,8 @@ export default function BackupRecoveryPanel({ can }) {
       setBuckets(storage.buckets || []);
       setActiveId(storage.activeId || null);
     } catch (e) { setError(e.message || 'Unable to load backup storage.'); }
-  };
-  useEffect(() => { load(); }, []);
+  }, [can]);
+  useEffect(() => { load(); }, [load]);
 
   const create = async () => {
     if (!window.confirm('Create a database-only backup and store it in the active R2 bucket under backups/?')) return;
