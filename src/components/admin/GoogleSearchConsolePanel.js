@@ -55,7 +55,7 @@ export default function GoogleSearchConsolePanel() {
     setInspecting(true);
     setError('');
     try {
-      const result = await adminRequest('/admin/google-search-console/inspect-pages', { method: 'POST', body: { limit: 25 } });
+      const result = await adminRequest('/admin/google-search-console/inspect-pages', { method: 'POST', body: { limit: 160 } });
       setInspections(result);
     } catch (err) {
       setError(err.message || 'Unable to inspect sitemap pages.');
@@ -150,6 +150,19 @@ export default function GoogleSearchConsolePanel() {
     </div>}
 
     {inspections && <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Sitemap URLs checked</div><div className="mt-1 text-2xl font-black text-slate-900">{number(inspections.checked)}</div><div className="mt-1 text-[11px] text-slate-500">URLs inspected from the current sitemap</div></div>
+        <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Indexed in inspection</div><div className="mt-1 text-2xl font-black text-emerald-700">{number(inspections.indexed)}</div><div className="mt-1 text-[11px] text-slate-500">Google URL Inspection verdict = PASS</div></div>
+        <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Not indexed in inspection</div><div className="mt-1 text-2xl font-black text-amber-700">{number(inspections.notIndexed)}</div><div className="mt-1 text-[11px] text-slate-500">Includes discovered/crawled, redirects and other non-PASS states</div></div>
+        <div className="rounded-xl bg-white p-4"><div className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Inspection errors</div><div className="mt-1 text-2xl font-black text-rose-700">{number(inspections.errors)}</div><div className="mt-1 text-[11px] text-slate-500">Requests Google could not inspect</div></div>
+      </div>
+      {Object.keys(inspections.coverage || {}).length > 0 && <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <h5 className="text-xs font-extrabold text-slate-900">Google coverage states in this sitemap sample</h5>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {Object.entries(inspections.coverage).map(([state, count]) => <div key={state} className="rounded-lg bg-slate-50 p-3 text-xs"><div className="font-bold text-slate-700">{state}</div><div className="mt-1 text-lg font-black text-slate-900">{number(count)}</div></div>)}
+        </div>
+      </div>}
+      <div><h4 className="text-sm font-extrabold text-slate-900">URL Inspection results · independent of sitemap totals</h4><p className="mt-1 text-[11px] text-slate-500">Google URL Inspection checked {inspections.checked} sitemap URLs; {inspections.indexed} returned an indexed verdict. These are live inspection results for the URLs in the sitemap and are separate from Google's sitemap summary and the Search Console Page indexing report.</p></div>
       <div><h4 className="text-sm font-extrabold text-slate-900">URL Inspection results · independent of sitemap totals</h4><p className="mt-1 text-[11px] text-slate-500">Google URL Inspection checked {inspections.checked} sitemap URLs; {inspections.indexed} returned an indexed verdict. These confirmed results are a sample and must not be added to or replaced by the sitemap statistics above.</p></div>
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white"><table className="min-w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">URL</th><th className="px-3 py-2">Google verdict</th><th className="px-3 py-2">Coverage</th><th className="px-3 py-2">Last crawl</th></tr></thead><tbody>
         {inspections.urls.map((item) => <tr key={item.url} className="border-t border-slate-100"><td className="max-w-sm break-all px-3 py-2 font-medium text-slate-700">{item.url}</td><td className={`px-3 py-2 font-bold ${item.indexed ? 'text-emerald-700' : item.verdict === 'ERROR' ? 'text-rose-700' : 'text-amber-700'}`}>{item.indexed ? 'Indexed' : item.verdict === 'ERROR' ? 'Inspection error' : item.verdict}</td><td className="max-w-xs px-3 py-2">{item.coverageState}</td><td className="whitespace-nowrap px-3 py-2">{formatDate(item.lastCrawlTime)}</td></tr>)}
