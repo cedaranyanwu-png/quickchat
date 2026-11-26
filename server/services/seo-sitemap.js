@@ -98,13 +98,19 @@ function addEntry(entries, seen, entry) {
   entries.push({ ...entry, loc: path });
 }
 
+// Only publish profile URLs that can represent a public username route.
+// Email addresses and malformed identifiers must never become crawl targets.
+function isIndexableUsername(value) {
+  const username = String(value || '').replace(/^@/, '');
+  return /^[a-zA-Z0-9._-]{3,30}$/.test(username) && !username.includes('..');
+}
+
 async function collectEntries() {
   const entries = [];
   const seen = new Set();
 
   addEntry(entries, seen, { loc: '/', priority: '1.0', changefreq: 'daily' });
   addEntry(entries, seen, { loc: '/explore', priority: '0.8', changefreq: 'daily' });
-  addEntry(entries, seen, { loc: '/communities', priority: '0.7', changefreq: 'daily' });
   addEntry(entries, seen, { loc: '/creator-program', priority: '0.7', changefreq: 'weekly' });
   addEntry(entries, seen, { loc: '/about', priority: '0.8', changefreq: 'monthly' });
 
@@ -117,6 +123,7 @@ async function collectEntries() {
       ORDER BY id ASC`,
   );
   for (const user of users) {
+    if (!isIndexableUsername(user.username)) continue;
     addEntry(entries, seen, {
       loc: '/profile/' + encodeURIComponent(String(user.username).replace(/^@/, '')),
       lastmod: user.lastmod,
