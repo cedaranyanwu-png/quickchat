@@ -295,9 +295,12 @@ async function fetchSitemapUrls(sitemapUrl, maxUrls = 25) {
 
 async function inspectUrls(limit = 25) {
   const { siteUrl, sitemapUrl } = getConfiguration();
-  const urls = await fetchSitemapUrls(sitemapUrl, Math.max(1, Math.min(50, Number(limit) || 25)));
+  const safeLimit = Math.max(1, Math.min(250, Number(limit) || 25));
+  const urls = await fetchSitemapUrls(sitemapUrl, safeLimit);
   const results = [];
-  for (const inspectionUrl of urls) {
+  const concurrency = 5;
+
+  async function inspectOne(inspectionUrl) {
     try {
       const data = await requestGoogle(
         'POST',
@@ -307,7 +310,7 @@ async function inspectUrls(limit = 25) {
       );
       const result = data.inspectionResult || {};
       const status = result.indexStatusResult || {};
-      results.push({
+      return {
         url: inspectionUrl,
         indexed: status.verdict === 'PASS',
         verdict: status.verdict || 'UNKNOWN',
@@ -316,9 +319,9 @@ async function inspectUrls(limit = 25) {
         lastCrawlTime: status.lastCrawlTime || null,
         googleCanonical: status.googleCanonical || '',
         userCanonical: status.userCanonical || '',
-      });
+      };
     } catch (error) {
-      results.push({
+      return {
         url: inspectionUrl,
         indexed: false,
         verdict: 'ERROR',
@@ -327,10 +330,32 @@ async function inspectUrls(limit = 25) {
         lastCrawlTime: null,
         googleCanonical: '',
         userCanonical: '',
-      });
+      };
     }
   }
-  return { checked: results.length, indexed: results.filter((item) => item.indexed).length, urls: results };
+
+  for (let i = 0; i < urls.length; i += concurrency) {
+    const batch = urls.slice(i, i + concurrency);
+    results.push(...await Promise.all(batch.map(inspectOne)));
+  }
+
+  const counts = results.reduce((acc, item) => {
+    if (item.indexed) acc.indexed += 1;
+    else if (item.verdict === 'ERROR') acc.errors += 1;
+    else acc.notIndexed += 1;
+    const key = item.coverageState || 'Not reported';
+    acc.coverage[key] = (acc.coverage[key] || 0) + 1;
+    return acc;
+  }, { indexed: 0, notIndexed: 0, errors: 0, coverage: {} });
+
+  return {
+    checked: results.length,
+    indexed: counts.indexed,
+    notIndexed: counts.notIndexed,
+    errors: counts.errors,
+    coverage: counts.coverage,
+    urls: results,
+  };
 }
 
 async function getIndexingOverview() {
