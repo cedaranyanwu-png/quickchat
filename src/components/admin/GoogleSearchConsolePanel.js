@@ -22,25 +22,61 @@ export default function GoogleSearchConsolePanel() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
+  const CACHE_KEY = 'quickchat_google_search_console_dashboard_v1';
+
+  const loadCachedDashboard = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const cached = JSON.parse(raw);
+      if (cached.status) setStatus(cached.status);
+      if (Array.isArray(cached.sitemaps)) setSitemaps(cached.sitemaps);
+      if (cached.indexing) setIndexing(cached.indexing);
+      if (cached.analytics) setAnalytics(cached.analytics);
+      if (cached.inspections) setInspections(cached.inspections);
+    } catch (_error) {
+      // Ignore corrupt browser cache; live Google data remains authoritative.
+    }
+  }, []);
+
+  const saveCachedDashboard = useCallback((patch) => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      const current = raw ? JSON.parse(raw) : {};
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        ...current,
+        ...patch,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (_error) {
+      // Do not let browser storage problems break the Google Search Console panel.
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const result = await adminRequest('/admin/google-search-console/status');
       setStatus(result);
+      saveCachedDashboard({ status: result });
       if (result.connected) {
         const [sitemapResult, indexingResult, analyticsResult] = await Promise.all([
           adminRequest('/admin/google-search-console/sitemaps'),
           adminRequest('/admin/google-search-console/indexing'),
           adminRequest('/admin/google-search-console/analytics?days=28'),
         ]);
-        setSitemaps(sitemapResult.sitemaps || []);
+        const nextSitemaps = sitemapResult.sitemaps || [];
+        setSitemaps(nextSitemaps);
         setIndexing(indexingResult);
         setAnalytics(analyticsResult);
+        saveCachedDashboard({
+          sitemaps: nextSitemaps,
+          indexing: indexingResult,
+          analytics: analyticsResult,
+        });
       } else {
-        setSitemaps([]);
-        setIndexing(null);
-        setAnalytics(null);
+        // Keep the last successful Google data visible if a later connection check is temporarily unavailable.
       }
     } catch (err) {
       setError(err.message || 'Unable to check Google Search Console.');
@@ -49,7 +85,10 @@ export default function GoogleSearchConsolePanel() {
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    loadCachedDashboard();
+    refresh();
+  }, [loadCachedDashboard, refresh]);
 
   const inspectPages = async () => {
     setInspecting(true);
@@ -57,6 +96,7 @@ export default function GoogleSearchConsolePanel() {
     try {
       const result = await adminRequest('/admin/google-search-console/inspect-pages', { method: 'POST', body: { limit: 160 } });
       setInspections(result);
+      saveCachedDashboard({ inspections: result });
     } catch (err) {
       setError(err.message || 'Unable to inspect sitemap pages.');
     } finally {
@@ -114,6 +154,15 @@ export default function GoogleSearchConsolePanel() {
     {status?.message && <p className="text-xs leading-5 text-slate-600">{status.message}</p>}
     {error && <p className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700">{error}</p>}
     {message && <p className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">{message}</p>}
+
+    <div className="flex flex-wrap items-center gap-2">
+      {(() => {
+        try {
+          const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+          return cached.savedAt ? <span className="text-[11px] text-slate-500">Last saved: {formatDate(cached.savedAt)}</span> : null;
+        } catch (_error) { return null; }
+      })()}
+    </div>
 
     <div className="flex flex-wrap gap-2">
       <button type="button" onClick={refresh} disabled={loading} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 disabled:opacity-50">Refresh Google data</button>
