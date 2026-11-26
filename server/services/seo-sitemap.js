@@ -102,7 +102,7 @@ function addEntry(entries, seen, entry) {
 // Email addresses and malformed identifiers must never become crawl targets.
 function isIndexableUsername(value) {
   const username = String(value || '').replace(/^@/, '');
-  return /^[a-zA-Z0-9._-]{3,30}$/.test(username) && !username.includes('..');
+  return /^[a-zA-Z0-9._-]{1,60}$/.test(username) && !username.includes('..');
 }
 
 async function collectEntries() {
