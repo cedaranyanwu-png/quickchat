@@ -111,33 +111,97 @@ async function getStatus() {
     };
   }
 
+  const diagnostics = {
+    credentials: 'valid',
+    api: 'unknown',
+    configuredProperty: config.siteUrl,
+    propertyFound: false,
+    permissionLevel: null,
+  };
+
   try {
-    const data = await requestGoogle('GET', '/sites');
-    const sites = Array.isArray(data.siteEntry) ? data.siteEntry : [];
-    // Search Console property identifiers are opaque identifiers; require an exact match.
-    // URL-prefix properties include their trailing slash, while domain properties use sc-domain:.
-    const property = sites.find((site) => site.siteUrl === config.siteUrl);
-    return {
-      configured: true,
-      connected: Boolean(property),
-      propertyUrl: config.siteUrl,
-      sitemapUrl: config.sitemapUrl,
-      permissionLevel: property?.permissionLevel || null,
-      message: property
-        ? 'Google Search Console access is working for this property.'
-        : 'Credentials work, but this service account cannot access the configured property. Add its email as an owner of the exact property.',
-    };
-  } catch (error) {
+    // Ask Google for the exact property identifier first. Google defines
+    // siteUrl as the Search Console property identifier, including the
+    // trailing slash for URL-prefix properties.
+    const property = await requestGoogle(
+      'GET',
+      '/sites/' + encodePath(config.siteUrl),
+    );
+
+    diagnostics.api = 'accessible';
+    diagnostics.propertyFound = property.siteUrl === config.siteUrl;
+    diagnostics.permissionLevel = property.permissionLevel || null;
+
+    if (diagnostics.propertyFound) {
+      return {
+        configured: true,
+        connected: true,
+        propertyUrl: config.siteUrl,
+        sitemapUrl: config.sitemapUrl,
+        permissionLevel: diagnostics.permissionLevel,
+        diagnostics,
+        message: 'Google Search Console access is working for this exact property.',
+      };
+    }
+
     return {
       configured: true,
       connected: false,
       propertyUrl: config.siteUrl,
       sitemapUrl: config.sitemapUrl,
-      message: getSafeGoogleError(error),
+      permissionLevel: diagnostics.permissionLevel,
+      diagnostics,
+      message: 'Google returned a different property identifier than the one configured in QuickChat. Use the exact Search Console property URL, including the trailing slash.',
     };
+  } catch (error) {
+    // If the exact-property request fails, list the accessible properties.
+    // This separates an account-wide authorization failure from a property
+    // mismatch and gives the Admin UI actionable diagnostics.
+    try {
+      const data = await requestGoogle('GET', '/sites');
+      diagnostics.api = 'accessible';
+      const sites = Array.isArray(data.siteEntry) ? data.siteEntry : [];
+      const property = sites.find((site) => site.siteUrl === config.siteUrl);
+
+      if (property) {
+        diagnostics.propertyFound = true;
+        diagnostics.permissionLevel = property.permissionLevel || null;
+        return {
+          configured: true,
+          connected: true,
+          propertyUrl: config.siteUrl,
+          sitemapUrl: config.sitemapUrl,
+          permissionLevel: diagnostics.permissionLevel,
+          diagnostics,
+          message: 'Google Search Console access is working for this exact property.',
+        };
+      }
+
+      return {
+        configured: true,
+        connected: false,
+        propertyUrl: config.siteUrl,
+        sitemapUrl: config.sitemapUrl,
+        permissionLevel: null,
+        diagnostics,
+        message: 'Credentials can access Search Console, but Google does not return the exact configured property to this service account. Add the service account as an owner of the exact URL-prefix property, or correct GOOGLE_SEARCH_CONSOLE_SITE_URL.',
+      };
+    } catch (listError) {
+      return {
+        configured: true,
+        connected: false,
+        propertyUrl: config.siteUrl,
+        sitemapUrl: config.sitemapUrl,
+        permissionLevel: null,
+        diagnostics: {
+          ...diagnostics,
+          api: 'denied',
+        },
+        message: getSafeGoogleError(listError),
+      };
+    }
   }
 }
-
 async function listSitemaps() {
   const { siteUrl } = getConfiguration();
   const data = await requestGoogle('GET', '/sites/' + encodePath(siteUrl) + '/sitemaps');
