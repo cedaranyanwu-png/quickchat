@@ -8,7 +8,19 @@ const INSPECTION_API_BASE = 'https://searchconsole.googleapis.com/v1/urlInspecti
 
 function getConfiguration() {
   const rawCredentials = String(process.env.GOOGLE_SEARCH_CONSOLE_SERVICE_ACCOUNT_JSON || '').trim();
-  const siteUrl = String(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || '').trim();
+  const configuredSiteUrl = String(process.env.GOOGLE_SEARCH_CONSOLE_SITE_URL || '').trim();
+  // URL-prefix properties at the origin root are canonicalized by Google with
+  // a trailing slash. Normalize once so every Search Console endpoint uses
+  // the exact same property identifier.
+  let siteUrl = configuredSiteUrl;
+  try {
+    const parsedSiteUrl = new URL(configuredSiteUrl);
+    if (parsedSiteUrl.pathname === '/' && !parsedSiteUrl.search && !parsedSiteUrl.hash) {
+      siteUrl = parsedSiteUrl.origin + '/';
+    }
+  } catch (_error) {
+    // Keep the raw value so the existing configuration diagnostics can report it.
+  }
   const publicAppUrl = String(process.env.PUBLIC_APP_URL || '').trim().replace(/[/]$/, '');
 
   if (!rawCredentials) {
