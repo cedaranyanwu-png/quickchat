@@ -129,6 +129,7 @@ async function getStatus() {
     );
 
     diagnostics.api = 'accessible';
+    diagnostics.googleReturnedProperty = property.siteUrl || null;
     diagnostics.propertyFound = property.siteUrl === config.siteUrl;
     diagnostics.permissionLevel = property.permissionLevel || null;
 
@@ -162,6 +163,10 @@ async function getStatus() {
       diagnostics.api = 'accessible';
       const sites = Array.isArray(data.siteEntry) ? data.siteEntry : [];
       const property = sites.find((site) => site.siteUrl === config.siteUrl);
+      const googleProperties = sites.map((site) => ({
+        siteUrl: String(site.siteUrl || ''),
+        permissionLevel: String(site.permissionLevel || 'unknown'),
+      }));
 
       if (property) {
         diagnostics.propertyFound = true;
@@ -173,6 +178,8 @@ async function getStatus() {
           sitemapUrl: config.sitemapUrl,
           permissionLevel: diagnostics.permissionLevel,
           diagnostics,
+          googleReturnedProperty: property.siteUrl || null,
+          googleProperties,
           message: 'Google Search Console access is working for this exact property.',
         };
       }
@@ -184,7 +191,9 @@ async function getStatus() {
         sitemapUrl: config.sitemapUrl,
         permissionLevel: null,
         diagnostics,
-        message: 'Credentials can access Search Console, but Google does not return the exact configured property to this service account. Add the service account as an owner of the exact URL-prefix property, or correct GOOGLE_SEARCH_CONSOLE_SITE_URL.',
+        googleReturnedProperty: null,
+        googleProperties,
+        message: 'Google Search Console is accessible. The property list below shows the exact identifiers Google returns for this service account. Select the matching property and use its identifier in GOOGLE_SEARCH_CONSOLE_SITE_URL.',
       };
     } catch (listError) {
       return {
@@ -196,6 +205,7 @@ async function getStatus() {
         diagnostics: {
           ...diagnostics,
           api: 'denied',
+          googleError: getSafeGoogleError(listError),
         },
         message: getSafeGoogleError(listError),
       };
