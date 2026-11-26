@@ -17,7 +17,6 @@ export default function GoogleSearchConsolePanel() {
   const [analytics, setAnalytics] = useState(null);
   const [inspections, setInspections] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
