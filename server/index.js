@@ -409,6 +409,61 @@ app.get('/about', (req, res, next) => {
   sendStructuredPage(req, res, { title: 'About QuickChat', description, jsonLd }, '/about', next);
 });
 
+// A crawlable public directory gives search engines ordinary HTML links to member profiles.
+app.get('/people', async (req, res, next) => {
+  try {
+    const users = await db.query(
+      `SELECT fullname, username, bio, avatar_url, picture, verified
+         FROM users
+        WHERE COALESCE(username, '') <> ''
+          AND COALESCE(is_synthetic, 0) = 0
+          AND username NOT LIKE 'qc-admin-actor-%'
+        ORDER BY COALESCE(verified, 0) DESC, id DESC
+        LIMIT 250`,
+    );
+    const origin = getPublicOrigin(req);
+    const cards = users.filter((user) => /^[a-zA-Z0-9._-]{1,60}$/.test(String(user.username || '').replace(/^@/, '')))
+      .map((user) => {
+        const username = String(user.username).replace(/^@/, '');
+        const name = String(user.fullname || username);
+        const avatar = user.avatar_url || user.picture;
+        return '<li>' +
+          (avatar ? '<img src="' + escapeHtml(absolutePublicUrl(origin, avatar)) + '" alt="" loading="lazy" width="48" height="48" />' : '') +
+          '<div><a href="/profile/' + encodeURIComponent(username) + '">' + escapeHtml(name) + '</a>' +
+          '<p>@' + escapeHtml(username) + (user.verified ? ' · Verified on QuickChat' : '') + '</p>' +
+          (user.bio ? '<p>' + escapeHtml(String(user.bio).replace(/\s+/g, ' ').slice(0, 180)) + '</p>' : '') +
+          '</div></li>';
+      }).join('');
+    const description = 'Discover public member profiles on QuickChat. Find people, creators and communities to follow.';
+    const bodyHtml = '<main class="quickchat-people-directory"><h1>Discover people on QuickChat</h1>' +
+      '<p>' + escapeHtml(description) + '</p><ul>' + (cards || '<li>Public member profiles will appear here.</li>') + '</ul></main>';
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'CollectionPage',
+      name: 'People on QuickChat',
+      description,
+      url: origin + '/people',
+      isPartOf: { '@type': 'WebSite', name: 'QuickChat', url: origin + '/' },
+      mainEntity: {
+        '@type': 'ItemList',
+        itemListElement: users.filter((user) => /^[a-zA-Z0-9._-]{1,60}$/.test(String(user.username || '').replace(/^@/, '')))
+          .map((user, index) => ({
+            '@type': 'ListItem',
+            position: index + 1,
+            url: origin + '/profile/' + encodeURIComponent(String(user.username || '').replace(/^@/, '')),
+            name: String(user.fullname || user.username || 'QuickChat member'),
+          })),
+      },
+    };
+    return sendStructuredPage(req, res, {
+      title: 'Discover People on QuickChat',
+      description,
+      jsonLd,
+      bodyHtml,
+    }, '/people', next);
+  } catch (error) { next(error); }
+});
+
 // Social crawlers do not execute the React app, so share URLs need their metadata
 // in the initial HTML response (not just in SharePreview after it loads).
 app.get('/share/post/:postId', async (req, res, next) => {
@@ -471,7 +526,25 @@ app.get('/share/post/:postId', async (req, res, next) => {
       } : undefined,
       isAccessibleForFree: true,
     } : undefined;
-    return sendSharePage(req, res, { title, description, image, type: 'article', jsonLd, noIndex: !publicPost }, '/share/post/' + postId, next);
+    const mediaHtml = post.media?.map((item) => {
+      if (item.type === 'image' && item.url) {
+        return '<img src="' + escapeHtml(absolutePublicUrl(origin, item.url)) + '" alt="Post image by ' + escapeHtml(post.name || 'QuickChat member') + '" loading="lazy" />';
+      }
+      if (item.type === 'video' && item.url) {
+        return '<video controls preload="metadata"' + (item.thumbnailUrl ? ' poster="' + escapeHtml(absolutePublicUrl(origin, item.thumbnailUrl)) + '"' : '') + '><source src="' + escapeHtml(absolutePublicUrl(origin, item.url)) + '" /></video>';
+      }
+      return '';
+    }).filter(Boolean).join('') || '';
+    const authorUrl = post.username ? '/profile/' + encodeURIComponent(String(post.username).replace(/^@/, '')) : '';
+    const published = post.createdAt && Number.isFinite(new Date(post.createdAt).getTime()) ? new Date(post.createdAt).toISOString() : '';
+    const bodyHtml = '<main class="quickchat-public-post"><article><h1>' + escapeHtml(title) + '</h1>' +
+      (authorUrl ? '<p>Posted by <a href="' + escapeHtml(authorUrl) + '">' + escapeHtml(post.name || 'QuickChat member') + '</a> on QuickChat</p>' : '') +
+      (published ? '<time datetime="' + escapeHtml(published) + '">' + escapeHtml(new Date(published).toLocaleDateString('en')) + '</time>' : '') +
+      '<p>' + escapeHtml(post.text || description) + '</p>' + mediaHtml +
+      '<p><a href="/">Join the conversation on QuickChat</a></p></article></main>';
+    return sendSharePage(req, res, {
+      title, description, image, type: 'article', jsonLd, noIndex: !publicPost, bodyHtml,
+    }, '/share/post/' + postId, next);
   } catch (error) {
     return next(error);
   }
@@ -501,12 +574,18 @@ app.get('/share/video/:videoId', async (req, res, next) => {
       url: canonical,
       publisher: { '@type': 'Organization', name: 'QuickChat', url: origin },
     };
+    const bodyHtml = '<main class="quickchat-public-video"><article><h1>' + escapeHtml(video.title || 'QuickChat video') + '</h1>' +
+      '<p>' + escapeHtml(description) + '</p>' +
+      (video.thumbnail_url ? '<img src="' + escapeHtml(absolutePublicUrl(origin, video.thumbnail_url)) + '" alt="' + escapeHtml(video.title || 'QuickChat video') + '" loading="lazy" />' : '') +
+      (video.video_url ? '<video controls preload="metadata"' + (video.thumbnail_url ? ' poster="' + escapeHtml(absolutePublicUrl(origin, video.thumbnail_url)) + '"' : '') + '><source src="' + escapeHtml(absolutePublicUrl(origin, video.video_url)) + '" /></video>' : '') +
+      '<p><a href="/">Discover more on QuickChat</a></p></article></main>';
     return sendSharePage(req, res, {
       title: (video.title || 'Video') + ' | QuickChat',
       description,
       image: video.thumbnail_url || '',
       type: 'video.other',
       jsonLd,
+      bodyHtml,
     }, '/share/video/' + videoId, next);
   } catch (error) {
     return next(error);
@@ -606,7 +685,8 @@ function sendSharePage(req, res, metadata, sharePath, next) {
     const page = html
       .replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(metadata.title)}</title>`)
       .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
-      .replace('</head>', `  ${tags}\n  ${metadata.noIndex ? '<meta name="robots" content="noindex, nofollow" />' : ''}\n</head>`);
+      .replace('</head>', `  ${tags}\n  ${metadata.noIndex ? '<meta name="robots" content="noindex, nofollow" />' : ''}\n</head>`)
+      .replace('<div id="root"></div>', '<div id="root">' + (metadata.bodyHtml || '') + '</div>');
     res.type('html').send(page);
   });
 }
@@ -747,6 +827,7 @@ app.get('/', (req, res, next) => {
       description,
       image: '/favicon/android-chrome-512x512.png',
       jsonLd,
+      bodyHtml: '<nav aria-label="QuickChat public directory"><a href="/people">Discover people on QuickChat</a></nav>',
     },
     '/',
     next,
