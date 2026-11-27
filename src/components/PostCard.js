@@ -333,10 +333,10 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
     if (!currentMedia) return;
     if (currentMedia.type === 'video') {
       if (item.videoId) openVideo?.(item.videoId);
-      else openModal?.(currentMedia.url, 'video');
+      else openModal?.(currentMedia.url, 'video', item);
       return;
     }
-    openModal?.(currentMedia.url);
+    openModal?.(currentMedia.url, 'image', item);
   };
 
   const handlePostCardClick = (event) => {

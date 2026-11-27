@@ -10,6 +10,7 @@ import TopNav from './components/TopNav';
 import BottomNav from './components/BottomNav';
 import FAB from './components/FAB';
 import PostModal from './components/PostModal';
+import PostDetailModal from './components/PostDetailModal';
 
 // Pages
 import Home from './pages/Home';
@@ -89,9 +90,9 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (!presenceSessionId.current) {
     presenceSessionId.current = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const openModal = (src, type = 'image') => {
+  const openModal = (src, type = 'image', post = null) => {
     const resolvedSrc = resolveMediaUrl(src);
-    if (resolvedSrc) setModalImage({ src: resolvedSrc, type });
+    if (resolvedSrc) setModalImage({ src: resolvedSrc, type, post });
   };
   const closeModal = () => setModalImage(null);
   const openPostModal = () => setIsPostModalOpen(true);
@@ -252,12 +253,14 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         <ReportIssue isMessagesPage={isMessagesPage} />
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
-        {modalImage && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
-          <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
-          {modalImage.type === 'video'
-            ? <video src={modalImage.src} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black shadow-2xl" onClick={(event) => event.stopPropagation()} />
-            : <img src={modalImage.src} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />}
-        </div>}
+        {modalImage && (modalImage.post
+          ? <PostDetailModal post={modalImage.post} src={modalImage.src} type={modalImage.type} onClose={closeModal} />
+          : <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
+              <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
+              {modalImage.type === 'video'
+                ? <video src={modalImage.src} controls autoPlay playsInline className="max-h-full max-w-full rounded-lg bg-black shadow-2xl" onClick={(event) => event.stopPropagation()} />
+                : <img src={modalImage.src} alt="Full view" className="max-h-full max-w-full rounded-lg shadow-2xl" onClick={(event) => event.stopPropagation()} />}
+            </div>)}
 
       </div>
     </UnreadCountsProvider>
