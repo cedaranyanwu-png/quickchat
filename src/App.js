@@ -57,6 +57,7 @@ import GrowthProgramme from './pages/GrowthProgramme';
 import CreatorPortal from './pages/CreatorPortal';
 import CreatorContentLibrary from './pages/CreatorContentLibrary';
 import CreatorAnalytics from './pages/CreatorAnalytics';
+import CreatorCopyright from './pages/CreatorCopyright';
 import CreatorSpaceDashboard from './pages/CreatorSpaceDashboard';
 import BusinessPortal from './pages/BusinessPortal';
 import VideoModal from './components/VideoModal';
@@ -159,11 +160,12 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
 
   // Dedicated Creator and Business portals share the core identity and database.
   // They render independently from the normal member navigation.
-  if (['/creator', '/creator/content-library', '/creator/analytics', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/') || location.pathname.startsWith('/creator/spaces/')) {
+  if (['/creator', '/creator/content-library', '/creator/analytics', '/creator/copyright', '/business'].includes(location.pathname.replace(/\/+$/, '') || '/') || location.pathname.startsWith('/creator/spaces/')) {
     return <Routes>
       <Route path="/creator" element={<CreatorPortal onAuthenticated={onAuthenticated} />} />
         <Route path="/creator/content-library" element={isAuthenticated ? <CreatorContentLibrary /> : <CreatorPortal onAuthenticated={onAuthenticated} />} />
       <Route path="/creator/analytics" element={isAuthenticated ? <CreatorAnalytics /> : <CreatorPortal onAuthenticated={onAuthenticated} />} />
+      <Route path="/creator/copyright" element={isAuthenticated ? <CreatorCopyright /> : <CreatorPortal onAuthenticated={onAuthenticated} />} />
       <Route path="/creator/spaces/:communityId" element={isAuthenticated ? <CreatorSpaceDashboard /> : <CreatorPortal onAuthenticated={onAuthenticated} />} />
       <Route path="/business" element={<BusinessPortal />} />
       <Route path="*" element={<Navigate to="/creator" replace />} />
