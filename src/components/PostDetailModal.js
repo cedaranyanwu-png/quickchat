@@ -50,9 +50,11 @@ export default function PostDetailModal({ post, src, type = 'image', media = [],
           <i className="fa-solid fa-xmark" />
         </button>
         <section className="relative flex min-h-0 flex-1 items-center justify-center bg-black sm:w-[58%] sm:flex-none">
-          {isVideo
-            ? <video key={activeSrc} src={activeSrc} controls autoPlay playsInline className="max-h-full max-w-full object-contain" />
-            : <img key={activeSrc} src={activeSrc} alt={`Post media ${activeMediaIndex + 1}`} className="max-h-full max-w-full object-contain" />}
+          {activeMedia.embed
+            ? <iframe key={activeSrc} src={activeSrc} title="Embedded post media" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen className="aspect-video h-full w-full border-0 bg-black" />
+            : isVideo
+              ? <video key={activeSrc} src={activeSrc} controls autoPlay playsInline className="max-h-full max-w-full object-contain" />
+              : <img key={activeSrc} src={activeSrc} alt={`Post media ${activeMediaIndex + 1}`} className="max-h-full max-w-full object-contain" />}
           {media.length > 1 && <>
             <button type="button" aria-label="Previous media" disabled={activeMediaIndex === 0} onClick={() => setActiveMediaIndex((index) => Math.max(0, index - 1))} className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white disabled:opacity-30"><i className="fa-solid fa-chevron-left" /></button>
             <button type="button" aria-label="Next media" disabled={activeMediaIndex >= media.length - 1} onClick={() => setActiveMediaIndex((index) => Math.min(media.length - 1, index + 1))} className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white disabled:opacity-30"><i className="fa-solid fa-chevron-right" /></button>
