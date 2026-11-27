@@ -330,15 +330,20 @@ app.get('/profile/:username', async (req, res, next) => {
       '@graph': [
         {
           '@type': 'ProfilePage',
+          '@id': canonical + '#profile',
           name: name + ' | QuickChat',
           url: canonical,
+          isPartOf: { '@type': 'WebSite', name: 'QuickChat', url: origin + '/' },
           dateCreated: profile.created_at || profile.createdat || undefined,
           mainEntity: {
             '@type': 'Person',
+            '@id': canonical + '#person',
             name,
             alternateName: '@' + safeUsername,
+            identifier: safeUsername,
             description,
             url: canonical,
+            mainEntityOfPage: canonical,
             image: image ? absolute(image) : undefined,
             sameAs: profile.website ? [normalizePublicUrl(profile.website)].filter(Boolean) : undefined,
           },
@@ -542,20 +547,23 @@ function sendStructuredPage(req, res, metadata, pagePath, next) {
   const tags = [
     '<meta name="description" content="' + escapeHtml(metadata.description) + '" />',
     '<link rel="canonical" href="' + escapeHtml(canonicalUrl) + '" />',
-    '<meta property="og:type" content="website" />',
+    '<meta property="og:type" content="' + escapeHtml(metadata.type || 'website') + '" />',
     '<meta property="og:site_name" content="QuickChat" />',
     '<meta property="og:title" content="' + escapeHtml(metadata.title) + '" />',
     '<meta property="og:description" content="' + escapeHtml(metadata.description) + '" />',
     '<meta property="og:url" content="' + escapeHtml(canonicalUrl) + '" />',
     imageUrl && '<meta property="og:image" content="' + escapeHtml(imageUrl) + '" />',
     '<meta name="twitter:card" content="' + (imageUrl ? 'summary_large_image' : 'summary') + '" />',
+    '<meta name="twitter:title" content="' + escapeHtml(metadata.title) + '" />',
+    '<meta name="twitter:description" content="' + escapeHtml(metadata.description) + '" />',
+    imageUrl && '<meta name="twitter:image" content="' + escapeHtml(imageUrl) + '" />',
     metadata.jsonLd && '<script type="application/ld+json">' + safeJsonLd(metadata.jsonLd) + '</script>',
   ].filter(Boolean).join('\n  ');
   fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
     if (error) return next(error);
     const page = html.replace(/<title>[^<]*<\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
       .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
-      .replace('</head>', '  ' + tags + '\\n</head>')
+      .replace('</head>', '  ' + tags + '\n</head>')
       .replace('<div id="root"></div>', '<div id="root">' + (metadata.bodyHtml || '') + '</div>');
     res.type('html').send(page);
   });
@@ -702,6 +710,48 @@ app.use('/api', first100Routes.router);
 app.use('/api', creatorStudioRoutes.router);
 app.use('/api', copyrightRoutes.router);
 app.use('/api', (_req, res) => res.status(404).json({ message: 'API route not found.' }));
+
+// The homepage is rendered with request-host canonicals so Railway remains the
+// canonical host until QuickChat adopts a custom domain. This also gives Google
+// a stable, crawlable WebSite name and Organization identity on the root URL.
+app.get('/', (req, res, next) => {
+  const origin = getPublicOrigin(req);
+  const canonical = origin + '/';
+  const description = 'QuickChat is a social platform to connect with people, share photos and videos, discover communities, and chat with friends.';
+  const logo = origin + '/favicon/android-chrome-512x512.png';
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': canonical + '#website',
+        name: 'QuickChat',
+        alternateName: ['QuickChat Social'],
+        url: canonical,
+        description,
+      },
+      {
+        '@type': 'Organization',
+        '@id': canonical + '#organization',
+        name: 'QuickChat',
+        url: canonical,
+        logo: { '@type': 'ImageObject', url: logo },
+      },
+    ],
+  };
+  sendStructuredPage(
+    req,
+    res,
+    {
+      title: 'QuickChat — Everyone Is a Celebrity',
+      description,
+      image: '/favicon/android-chrome-512x512.png',
+      jsonLd,
+    },
+    '/',
+    next,
+  );
+});
 
 // Serve the production React bundle from this same origin as the API.
 app.use(express.static(frontendBuildPath));
