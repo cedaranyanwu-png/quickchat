@@ -284,7 +284,6 @@ app.get('/profile/:username', async (req, res, next) => {
         : null;
       return {
         id: post.id,
-        url: origin + '/share/post/' + encodeURIComponent(String(post.id)),
         text: postText(post),
         image: firstImage?.url ? absolute(firstImage.url) : '',
         createdAt: post.created_at || undefined,
@@ -292,10 +291,10 @@ app.get('/profile/:username', async (req, res, next) => {
     });
 
     const postCards = postItems.map((post) => [
-      '<article class="quickchat-seo-post">',
+      '<article class="quickchat-seo-post" id="post-' + escape(post.id) + '">',
       post.image ? '<img class="quickchat-seo-post-image" src="' + escape(post.image) + '" alt="' + escape(name) + ' on QuickChat" loading="lazy" />' : '',
       '<div><p>' + escape(post.text) + '</p>',
-      '<a href="' + escape(post.url) + '">View post on QuickChat</a></div>',
+      '<p class="quickchat-seo-post-author">Posted by <a href="/profile/' + encodeURIComponent(safeUsername) + '">' + escape(name) + '</a> on QuickChat</p></div>',
       '</article>',
     ].filter(Boolean).join('')).join('');
 
@@ -320,8 +319,17 @@ app.get('/profile/:username', async (req, res, next) => {
       itemListElement: postItems.map((post, index) => ({
         '@type': 'ListItem',
         position: index + 1,
-        url: post.url,
-        name: post.text,
+        item: {
+          '@type': 'SocialMediaPosting',
+          headline: post.text,
+          author: {
+            '@type': 'Person',
+            name,
+            url: canonical,
+          },
+          datePublished: post.createdAt,
+          image: post.image || undefined,
+        },
       })),
     } : undefined;
 
@@ -543,7 +551,7 @@ app.get('/share/post/:postId', async (req, res, next) => {
       '<p>' + escapeHtml(post.text || description) + '</p>' + mediaHtml +
       '<p><a href="/">Join the conversation on QuickChat</a></p></article></main>';
     return sendSharePage(req, res, {
-      title, description, image, type: 'article', jsonLd, noIndex: !publicPost, bodyHtml,
+      title, description, image, type: 'article', jsonLd, noIndex: true, bodyHtml,
     }, '/share/post/' + postId, next);
   } catch (error) {
     return next(error);
@@ -585,6 +593,7 @@ app.get('/share/video/:videoId', async (req, res, next) => {
       image: video.thumbnail_url || '',
       type: 'video.other',
       jsonLd,
+      noIndex: true,
       bodyHtml,
     }, '/share/video/' + videoId, next);
   } catch (error) {
