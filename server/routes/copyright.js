@@ -116,6 +116,7 @@ router.post('/creator/copyright/protect/:postId', asyncRoute(async (req, res) =>
   if (!Number.isSafeInteger(postId) || postId < 1) return res.status(400).json({ message: 'Invalid post ID.' });
   const post = await db.getOne('SELECT id, author_id, body, visibility FROM posts WHERE id = ?', [postId]);
   if (!post || Number(post.author_id) !== Number(req.user.id)) return res.status(404).json({ message: 'Only your own published posts can be protected.' });
+  if (clean(post.body).length < 20) return res.status(400).json({ message: 'This first release protects caption text. Add a meaningful caption before registering this post.' });
   const digest = fingerprint(post.body);
   await db.query(
     `INSERT INTO qc_copyright_assets (creator_id, post_id, fingerprint, original_text)
