@@ -552,8 +552,8 @@ function sendStructuredPage(req, res, metadata, pagePath, next) {
   ].filter(Boolean).join('\n  ');
   fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
     if (error) return next(error);
-    const page = html.replace(/<title>[^<]*<\\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
-      .replace(/<link\\s+rel=["']canonical["'][^>]*>\\s*/gi, '')
+    const page = html.replace(/<title>[^<]*<\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
+      .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
       .replace('</head>', '  ' + tags + '\\n</head>')
       .replace('<div id="root"></div>', '<div id="root">' + (metadata.bodyHtml || '') + '</div>');
     res.type('html').send(page);
