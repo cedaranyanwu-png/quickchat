@@ -51,7 +51,6 @@ async function initializeCopyrightTables() {
     note TEXT,
     created_at ${dateType} DEFAULT CURRENT_TIMESTAMP
   )`);
-  await db.query('CREATE INDEX IF NOT EXISTS idx_qc_copyright_creator ON qc_copyright_assets(creator_id)');
 }
 
 async function requireCreator(req, res) {
@@ -75,6 +74,15 @@ async function getJev() {
   return { client: jevClient, model };
 }
 let jevClientKey = '';
+
+router.get('/creator/copyright/available', asyncRoute(async (req, res) => {
+  if (!await requireCreator(req, res)) return;
+  const rows = await db.query(
+    'SELECT p.id, p.body, p.kind, p.created_at FROM posts p WHERE p.author_id = ? AND NOT EXISTS (SELECT 1 FROM qc_copyright_assets a WHERE a.post_id = p.id) ORDER BY p.created_at DESC LIMIT 100',
+    [req.user.id]
+  );
+  res.json({ items: rows.map((row) => ({ id: Number(row.id), text: row.body || '', kind: row.kind || 'text', createdAt: row.created_at })) });
+}));
 
 router.get('/creator/copyright', asyncRoute(async (req, res) => {
   if (!await requireCreator(req, res)) return;
@@ -167,13 +175,14 @@ router.post('/creator/copyright/scan/:assetId', asyncRoute(async (req, res) => {
   let created = 0;
   for (const match of matches) {
     const candidate = match.candidate;
-    const inserted = await db.query(
+    const prior = await db.getOne('SELECT id FROM qc_copyright_matches WHERE asset_id = ? AND matched_post_id = ?', [assetId, candidate.id]);
+    await db.query(
       `INSERT INTO qc_copyright_matches (asset_id, matched_post_id, matched_creator_id, confidence, assessment, model)
        VALUES (?, ?, ?, ?, ?, ?)
        ${db.type === 'mysql' ? 'ON DUPLICATE KEY UPDATE confidence = VALUES(confidence), assessment = VALUES(assessment), model = VALUES(model)' : 'ON CONFLICT(asset_id, matched_post_id) DO UPDATE SET confidence = EXCLUDED.confidence, assessment = EXCLUDED.assessment, model = EXCLUDED.model'}`,
       [assetId, candidate.id, candidate.author_id, match.confidence, match.assessment, model]
     );
-    if (inserted?.changes !== 0 || db.type === 'postgres') {
+    if (!prior) {
       await notifyUser({
         userId: req.user.id,
         type: 'copyright_alert',
