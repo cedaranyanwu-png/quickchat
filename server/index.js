@@ -232,9 +232,11 @@ form.addEventListener('submit',async(e)=>{e.preventDefault();button.disabled=tru
 app.get('/profile/:username', async (req, res, next) => {
   try {
     const username = String(req.params.username || '').trim().replace(/^@/, '');
-    if (!username || username.toLowerCase() === 'edit') return next();
+    if (!username || username.toLowerCase() === 'edit' || !/^[a-zA-Z0-9_.-]{1,60}$/.test(username)) return next();
+
     const profile = await db.getOne(
-      `SELECT id, fullname, username, bio, website, location, avatar_url, picture, cover_url, created_at, createdat, creator_account
+      `SELECT id, fullname, username, bio, website, location, avatar_url, picture, cover_url,
+              created_at, createdat, creator_account, verified
          FROM users
         WHERE LOWER(REPLACE(username, '@', '')) = LOWER(?)
           AND COALESCE(is_synthetic, 0) = 0
@@ -242,27 +244,115 @@ app.get('/profile/:username', async (req, res, next) => {
       [username],
     );
     if (!profile) return res.status(404).send('Profile not found.');
+
+    const publicPosts = await db.query(
+      `SELECT id, body, media, created_at
+         FROM posts
+        WHERE author_id = ? AND LOWER(COALESCE(visibility, 'public')) = 'public'
+        ORDER BY created_at DESC, id DESC
+        LIMIT 10`,
+      [profile.id],
+    ).catch(() => []);
+
     const origin = getPublicOrigin(req);
-    const canonical = origin + '/profile/' + encodeURIComponent(String(profile.username || username).replace(/^@/, ''));
-    const name = String(profile.fullname || profile.username || 'QuickChat member');
-    const description = String(profile.bio || (Number(profile.creator_account) ? name + ' is a creator on QuickChat.' : name + ' is on QuickChat.')).slice(0, 300);
-    const image = profile.avatar_url || profile.picture || '';
+    const safeUsername = String(profile.username || username).replace(/^@/, '');
+    const canonical = origin + '/profile/' + encodeURIComponent(safeUsername);
+    const name = String(profile.fullname || safeUsername || 'QuickChat member');
+    const description = String(
+      profile.bio ||
+      (Number(profile.creator_account) ? name + ' is a creator on QuickChat.' : name + ' is on QuickChat.')
+    ).replace(/\s+/g, ' ').slice(0, 300);
+    const image = profile.avatar_url || profile.picture || profile.cover_url || '';
+
+    const escape = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
+    const absolute = (value) => {
+      try { return new URL(String(value || ''), origin).toString(); } catch (_error) { return ''; }
+    };
+    const postText = (post) => String(post.body || 'See this public post on QuickChat.')
+      .replace(/\s+/g, ' ').trim().slice(0, 220);
+
+    const postItems = publicPosts.map((post) => {
+      let media = [];
+      try {
+        media = typeof post.media === 'string' ? JSON.parse(post.media || '[]') : (post.media || []);
+      } catch (_error) { media = []; }
+      const firstImage = Array.isArray(media)
+        ? media.find((item) => String(item?.type || '').toLowerCase() === 'image' && item?.url)
+        : null;
+      return {
+        id: post.id,
+        url: origin + '/share/post/' + encodeURIComponent(String(post.id)),
+        text: postText(post),
+        image: firstImage?.url ? absolute(firstImage.url) : '',
+        createdAt: post.created_at || undefined,
+      };
+    });
+
+    const postCards = postItems.map((post) => [
+      '<article class="quickchat-seo-post">',
+      post.image ? '<img class="quickchat-seo-post-image" src="' + escape(post.image) + '" alt="' + escape(name) + ' on QuickChat" loading="lazy" />' : '',
+      '<div><p>' + escape(post.text) + '</p>',
+      '<a href="' + escape(post.url) + '">View post on QuickChat</a></div>',
+      '</article>',
+    ].filter(Boolean).join('')).join('');
+
+    const publicProfileHtml = [
+      '<main class="quickchat-public-profile">',
+      image ? '<img class="quickchat-profile-avatar" src="' + escape(absolute(image)) + '" alt="' + escape(name) + ' on QuickChat" />' : '',
+      '<h1>' + escape(name) + '</h1>',
+      '<p class="quickchat-profile-username">@' + escape(safeUsername) + '</p>',
+      profile.verified ? '<p>Verified QuickChat account</p>' : '',
+      '<p>' + escape(description) + '</p>',
+      profile.location ? '<p>' + escape(profile.location) + '</p>' : '',
+      profile.website ? '<p><a href="' + escape(normalizePublicUrl(profile.website)) + '">' + escape(profile.website) + '</a></p>' : '',
+      '<p>' + escape(String(profile.followers || 0)) + ' followers · ' + escape(String(publicPosts.length)) + ' recent public posts</p>',
+      '<section><h2>Public posts by ' + escape(name) + '</h2>',
+      postCards || '<p>No public posts yet.</p>',
+      '</section></main>',
+    ].join('');
+
+    const itemList = postItems.length ? {
+      '@type': 'ItemList',
+      name: 'Public posts by ' + name,
+      itemListElement: postItems.map((post, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: post.url,
+        name: post.text,
+      })),
+    } : undefined;
+
     const jsonLd = {
       '@context': 'https://schema.org',
-      '@type': 'ProfilePage',
-      url: canonical,
-      dateCreated: profile.created_at || profile.createdat || undefined,
-      mainEntity: {
-        '@type': 'Person',
-        name,
-        alternateName: '@' + String(profile.username || username).replace(/^@/, ''),
-        description,
-        url: canonical,
-        image: image ? absolutePublicUrl(origin, image) : undefined,
-        sameAs: profile.website ? [normalizePublicUrl(profile.website)].filter(Boolean) : undefined,
-      },
+      '@graph': [
+        {
+          '@type': 'ProfilePage',
+          name: name + ' | QuickChat',
+          url: canonical,
+          dateCreated: profile.created_at || profile.createdat || undefined,
+          mainEntity: {
+            '@type': 'Person',
+            name,
+            alternateName: '@' + safeUsername,
+            description,
+            url: canonical,
+            image: image ? absolute(image) : undefined,
+            sameAs: profile.website ? [normalizePublicUrl(profile.website)].filter(Boolean) : undefined,
+          },
+        },
+        ...(itemList ? [itemList] : []),
+      ],
     };
-    return sendStructuredPage(req, res, { title: name + ' | QuickChat', description, image, jsonLd }, '/profile/' + encodeURIComponent(String(profile.username || username).replace(/^@/, '')), next);
+
+    return sendStructuredPage(
+      req,
+      res,
+      { title: name + ' | QuickChat', description, image, jsonLd, bodyHtml: publicProfileHtml },
+      '/profile/' + encodeURIComponent(safeUsername),
+      next,
+    );
   } catch (error) { next(error); }
 });
 
@@ -462,9 +552,10 @@ function sendStructuredPage(req, res, metadata, pagePath, next) {
   ].filter(Boolean).join('\n  ');
   fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
     if (error) return next(error);
-    const page = html.replace(/<title>[^<]*<\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
-      .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
-      .replace('</head>', '  ' + tags + '\n</head>');
+    const page = html.replace(/<title>[^<]*<\\/title>/i, '<title>' + escapeHtml(metadata.title) + '</title>')
+      .replace(/<link\\s+rel=["']canonical["'][^>]*>\\s*/gi, '')
+      .replace('</head>', '  ' + tags + '\\n</head>')
+      .replace('<div id="root"></div>', '<div id="root">' + (metadata.bodyHtml || '') + '</div>');
     res.type('html').send(page);
   });
 }
@@ -569,62 +660,7 @@ app.get('/robots.txt', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.get('/profile/:username', async (req, res, next) => {
-  try {
-    const username = String(req.params.username || '').trim().replace(/^@/, '');
-    if (!username || !/^[a-zA-Z0-9_.-]{1,60}$/.test(username)) return res.status(404).send('Profile not found.');
-    const user = await db.getOne(
-      `SELECT u.id, u.username, u.fullname, u.bio, u.location, u.website, u.avatar_url, u.picture, u.cover_url,
-              u.verified, u.created_at,
-              (SELECT COUNT(*) FROM follows f WHERE f.followed_id = u.id) AS followers,
-              (SELECT COUNT(*) FROM posts p WHERE p.author_id = u.id AND p.visibility = 'public') AS posts
-         FROM users u
-        WHERE LOWER(REPLACE(u.username, '@', '')) = LOWER(?) AND COALESCE(u.is_synthetic, 0) = 0`,
-      [username],
-    );
-    if (!user) return res.status(404).send('Profile not found.');
-    const origin = (() => { try { return new URL(String(process.env.PUBLIC_APP_URL || `${req.protocol}://${req.get('host')}`).trim()).origin; } catch (_error) { return `${req.protocol}://${req.get('host')}`; } })();
-    const canonical = `${origin}/profile/${encodeURIComponent(String(user.username).replace(/^@/, ''))}`;
-    const image = user.avatar_url || user.picture || user.cover_url || '';
-    const title = `${user.fullname || user.username} | QuickChat`;
-    const description = String(user.bio || `${user.fullname || user.username} on QuickChat`).replace(/\s+/g, ' ').slice(0, 300);
-    const imageUrl = image ? (() => { try { return new URL(image, origin).toString(); } catch (_error) { return ''; } })() : '';
-    const jsonLd = JSON.stringify({
-      '@context': 'https://schema.org',
-      '@type': 'Person',
-      name: user.fullname || user.username,
-      url: canonical,
-      image: imageUrl || undefined,
-      description,
-      address: user.location ? { '@type': 'PostalAddress', addressLocality: user.location } : undefined,
-      sameAs: user.website ? [user.website] : undefined,
-    });
-    const escape = (value) => String(value || '').replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-    const tags = [
-      `<meta name="description" content="${escape(description)}">`,
-      `<link rel="canonical" href="${escape(canonical)}">`,
-      `<meta property="og:type" content="profile">`,
-      `<meta property="og:title" content="${escape(title)}">`,
-      `<meta property="og:description" content="${escape(description)}">`,
-      `<meta property="og:url" content="${escape(canonical)}">`,
-      imageUrl && `<meta property="og:image" content="${escape(imageUrl)}">`,
-      `<meta name="twitter:card" content="${imageUrl ? 'summary_large_image' : 'summary'}">`,
-      `<meta name="twitter:title" content="${escape(title)}">`,
-      `<meta name="twitter:description" content="${escape(description)}">`,
-      imageUrl && `<meta name="twitter:image" content="${escape(imageUrl)}">`,
-      `<script type="application/ld+json">${jsonLd.replace(/</g, '\\u003c')}</script>`,
-    ].filter(Boolean).join('\n');
-    fs.readFile(path.join(frontendBuildPath, 'index.html'), 'utf8', (error, html) => {
-      if (error) return next(error);
-      res.type('html').send(
-        html
-          .replace(/<title>[^<]*<\/title>/i, `<title>${escape(title)}</title>`)
-          .replace(/<link\s+rel=["']canonical["'][^>]*>\s*/gi, '')
-          .replace('</head>', `  ${tags}\n</head>`),
-      );
-    });
-  } catch (error) { next(error); }
-});
+
 
 // Page APIs require the bearer token returned by the login and registration routes.
 app.use('/api', (req, res, next) => {
