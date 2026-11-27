@@ -6,6 +6,7 @@ const links = [
   { to: '/creator', label: 'Overview', icon: 'fa-grid-2', end: true },
   { to: '/creator/content-library', label: 'Content Library', icon: 'fa-calendar-days' },
   { to: '/creator/analytics', label: 'Analytics & Insights', icon: 'fa-chart-line' },
+  { to: '/creator/copyright', label: 'Copyright Protection', icon: 'fa-shield-halved' },
 ];
 
 const SPACE_GROUPS = [
