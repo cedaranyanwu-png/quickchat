@@ -68,7 +68,8 @@ async function getJev() {
   const model = String(await getSetting('typesafe_jev_model', process.env.TYPESAFE_JEV_MODEL || 'jev-latest')).trim() || 'jev-latest';
   if (!enabled || !key) throw new Error('JEV is not enabled or TYPESAFE_API_KEY is missing in server configuration.');
   if (!jevClient || jevClientKey !== key) {
-    jevClient = new TypeSafeClient({ apiKey: key, defaultModel: model });
+    process.env.TYPESAFE_API_KEY = key;
+    jevClient = new TypeSafeClient();
     jevClientKey = key;
   }
   return { client: jevClient, model };
