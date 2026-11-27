@@ -3,7 +3,11 @@ import { apiRequest } from '../api';
 import Avatar from './Avatar';
 import VerifiedBadge from './VerifiedBadge';
 
-export default function PostDetailModal({ post, src, type = 'image', onClose }) {
+export default function PostDetailModal({ post, src, type = 'image', media = [], initialMediaIndex = 0, onClose }) {
+  const [activeMediaIndex, setActiveMediaIndex] = useState(initialMediaIndex);
+  const activeMedia = media[activeMediaIndex] || { url: src, type };
+  const activeSrc = activeMedia.url || src;
+  const isVideo = activeMedia.type === 'video';
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState('');
   const [loading, setLoading] = useState(true);
@@ -39,18 +43,21 @@ export default function PostDetailModal({ post, src, type = 'image', onClose }) 
   };
 
   if (!post) return null;
-  const isVideo = type === 'video';
-
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/85 p-0 sm:p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="Post details">
       <div className="relative flex h-full w-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl sm:h-[min(88vh,860px)] sm:flex-row sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
         <button type="button" onClick={onClose} aria-label="Close post" className="absolute right-3 top-3 z-20 grid h-9 w-9 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80">
           <i className="fa-solid fa-xmark" />
         </button>
-        <section className="flex min-h-0 flex-1 items-center justify-center bg-black sm:w-[58%] sm:flex-none">
+        <section className="relative flex min-h-0 flex-1 items-center justify-center bg-black sm:w-[58%] sm:flex-none">
           {isVideo
-            ? <video src={src} controls autoPlay playsInline className="max-h-full max-w-full object-contain" />
-            : <img src={src} alt="Post media" className="max-h-full max-w-full object-contain" />}
+            ? <video key={activeSrc} src={activeSrc} controls autoPlay playsInline className="max-h-full max-w-full object-contain" />
+            : <img key={activeSrc} src={activeSrc} alt={`Post media ${activeMediaIndex + 1}`} className="max-h-full max-w-full object-contain" />}
+          {media.length > 1 && <>
+            <button type="button" aria-label="Previous media" disabled={activeMediaIndex === 0} onClick={() => setActiveMediaIndex((index) => Math.max(0, index - 1))} className="absolute left-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white disabled:opacity-30"><i className="fa-solid fa-chevron-left" /></button>
+            <button type="button" aria-label="Next media" disabled={activeMediaIndex >= media.length - 1} onClick={() => setActiveMediaIndex((index) => Math.min(media.length - 1, index + 1))} className="absolute right-3 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white disabled:opacity-30"><i className="fa-solid fa-chevron-right" /></button>
+            <span className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-3 py-1 text-xs font-semibold text-white">{activeMediaIndex + 1} / {media.length}</span>
+          </>}
         </section>
         <aside className="flex min-h-0 flex-1 flex-col sm:w-[42%]">
           <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3 pr-14">
