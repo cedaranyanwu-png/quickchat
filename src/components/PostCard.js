@@ -331,12 +331,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
 
   const openFocusedMedia = () => {
     if (!currentMedia) return;
-    if (currentMedia.type === 'video') {
-      if (item.videoId) openVideo?.(item.videoId);
-      else openModal?.(currentMedia.url, 'video', item);
-      return;
-    }
-    openModal?.(currentMedia.url, 'image', item);
+    openModal?.(currentMedia.url, currentMedia.type, item, media, mediaIndex);
   };
 
   const handlePostCardClick = (event) => {
@@ -499,7 +494,7 @@ export default function PostCard({ post, openModal, openVideo, onChange, onDismi
                 ) : currentMedia?.embed ? (
                   <iframe src={currentMedia.url} title="Embedded video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen className="aspect-video w-full border-0 bg-black" />
                 ) : currentMedia ? (
-                  <button type="button" onClick={() => item.videoId ? openVideo?.(item.videoId) : openModal?.(currentMedia.url, 'video')} className="block w-full border-0 bg-black p-0">
+                  <button type="button" onClick={openFocusedMedia} className="block w-full border-0 bg-black p-0">
                     <video src={currentMedia.url} poster={currentMedia.thumbnailUrl || undefined} muted playsInline preload="metadata" className="max-h-[460px] w-full object-contain" />
                     <span className="absolute left-1/2 top-1/2 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/55 text-white">
                       <i className="fa-solid fa-play" />

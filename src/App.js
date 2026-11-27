@@ -90,9 +90,16 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   if (!presenceSessionId.current) {
     presenceSessionId.current = window.crypto?.randomUUID?.() || `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
-  const openModal = (src, type = 'image', post = null) => {
+  const openModal = (src, type = 'image', post = null, media = [], mediaIndex = 0) => {
     const resolvedSrc = resolveMediaUrl(src);
-    if (resolvedSrc) setModalImage({ src: resolvedSrc, type, post });
+    if (resolvedSrc) {
+      const resolvedMedia = (Array.isArray(media) ? media : []).map((entry) => ({
+        ...entry,
+        url: resolveMediaUrl(entry?.url),
+        type: entry?.type === 'video' ? 'video' : 'image',
+      })).filter((entry) => entry.url);
+      setModalImage({ src: resolvedSrc, type, post, media: resolvedMedia, mediaIndex });
+    }
   };
   const closeModal = () => setModalImage(null);
   const openPostModal = () => setIsPostModalOpen(true);
@@ -254,7 +261,7 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
         <PostModal isOpen={isPostModalOpen} onClose={closePostModal} onOpenAdvanced={openAdvancedComposer} onPost={() => setFeedRevision((revision) => revision + 1)} />
         <VideoModal videoId={activeVideoId} onClose={() => setActiveVideoId(null)} />
         {modalImage && (modalImage.post
-          ? <PostDetailModal post={modalImage.post} src={modalImage.src} type={modalImage.type} onClose={closeModal} />
+          ? <PostDetailModal post={modalImage.post} src={modalImage.src} type={modalImage.type} media={modalImage.media} initialMediaIndex={modalImage.mediaIndex} onClose={closeModal} />
           : <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={closeModal}>
               <button className="absolute right-4 top-4 text-xl text-white" onClick={closeModal}><i className="fa-solid fa-xmark" /></button>
               {modalImage.type === 'video'
