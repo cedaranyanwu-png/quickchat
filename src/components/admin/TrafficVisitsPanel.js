@@ -84,7 +84,7 @@ export default function TrafficVisitsPanel() {
     <div className="overflow-x-auto rounded-xl border border-slate-200">
       <table className="min-w-full text-left text-xs">
         <thead className="bg-slate-50 text-slate-500"><tr>
-          <th className="whitespace-nowrap px-3 py-3">Timestamp</th><th className="px-3 py-3">IP address</th>
+          <th className="whitespace-nowrap px-3 py-3">Timestamp</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">IP address</th>
           <th className="px-3 py-3">Device</th><th className="px-3 py-3">Browser / OS</th>
           <th className="px-3 py-3">Network / ISP</th><th className="px-3 py-3">Page</th>
           <th className="px-3 py-3">Referrer</th><th className="px-3 py-3">Traffic flag</th>
@@ -92,6 +92,7 @@ export default function TrafficVisitsPanel() {
         <tbody>
           {result.visits.map((visit) => <tr key={visit.id} className="border-t border-slate-100 align-top">
             <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-700">{formatTimestamp(visit.timestamp)}</td>
+            <td className="whitespace-nowrap px-3 py-3 text-slate-600">{String(visit.eventType || 'page_view').replace('_', ' ')}</td>
             <td className="whitespace-nowrap px-3 py-3 font-mono font-bold text-slate-900">{visit.ip}</td>
             <td className="px-3 py-3 text-slate-700">{visit.device}</td>
             <td className="px-3 py-3 text-slate-700">{visit.browser}<div className="text-[10px] text-slate-500">{visit.operatingSystem}</div></td>
@@ -100,7 +101,7 @@ export default function TrafficVisitsPanel() {
             <td className="max-w-xs break-all px-3 py-3 text-slate-500">{visit.referrer || 'Direct / unknown'}</td>
             <td className="px-3 py-3">{visit.isBot ? <span className="font-bold text-amber-700">Flagged ({visit.botScore})</span> : <span className="text-emerald-700">Normal</span>}</td>
           </tr>)}
-          {!loading && result.visits.length === 0 && <tr><td colSpan="8" className="px-3 py-8 text-center text-slate-500">No page visits match these filters yet.</td></tr>}
+          {!loading && result.visits.length === 0 && <tr><td colSpan="9" className="px-3 py-8 text-center text-slate-500">No page visits match these filters yet.</td></tr>}
         </tbody>
       </table>
     </div>
