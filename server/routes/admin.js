@@ -5,7 +5,7 @@ const { faker } = require('@faker-js/faker');
 const db = require('../database');
 const whatsapp = require('../whatsapp');
 const { initializePlatformSettings, getSetting, setSetting } = require('../platform-settings');
-const { getTrafficOverview } = require('../traffic-security');
+const { getTrafficOverview, getTrafficVisits } = require('../traffic-security');
 const { fetchFeed, validateFeedUrl, syncSource } = require('../services/rss-service');
 const googleSearchConsole = require('../services/google-search-console');
 
@@ -524,6 +524,18 @@ router.get('/admin/me', asyncRoute(async (req, res) => {
 router.get('/admin/traffic', requirePermission('analytics.view'), asyncRoute(async (_req, res) => {
   const traffic = await getTrafficOverview();
   res.json(traffic);
+}));
+
+router.get('/admin/traffic/visits', requirePermission('settings.manage'), asyncRoute(async (req, res) => {
+  const result = await getTrafficVisits({
+    page: req.query.page,
+    limit: req.query.limit,
+    ip: req.query.ip,
+    path: req.query.path,
+    from: req.query.from,
+    to: req.query.to,
+  });
+  res.json(result);
 }));
 
 router.get('/admin/overview', requirePermission('dashboard.view'), asyncRoute(async (_req, res) => {
