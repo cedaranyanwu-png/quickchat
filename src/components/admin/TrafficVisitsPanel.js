@@ -84,7 +84,7 @@ export default function TrafficVisitsPanel() {
     <div className="overflow-x-auto rounded-xl border border-slate-200">
       <table className="min-w-full text-left text-xs">
         <thead className="bg-slate-50 text-slate-500"><tr>
-          <th className="whitespace-nowrap px-3 py-3">Timestamp</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">IP address</th>
+          <th className="whitespace-nowrap px-3 py-3">Timestamp</th><th className="px-3 py-3">Event</th><th className="px-3 py-3">IP address</th><th className="px-3 py-3">Country</th>
           <th className="px-3 py-3">Device</th><th className="px-3 py-3">Browser / OS</th>
           <th className="px-3 py-3">Network / ISP</th><th className="px-3 py-3">Page</th>
           <th className="px-3 py-3">Referrer</th><th className="px-3 py-3">Traffic flag</th>
@@ -94,6 +94,7 @@ export default function TrafficVisitsPanel() {
             <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-700">{formatTimestamp(visit.timestamp)}</td>
             <td className="whitespace-nowrap px-3 py-3 text-slate-600">{String(visit.eventType || 'page_view').replace('_', ' ')}</td>
             <td className="whitespace-nowrap px-3 py-3 font-mono font-bold text-slate-900">{visit.ip}</td>
+            <td className="whitespace-nowrap px-3 py-3 text-slate-700">{visit.country || 'Unknown'}{visit.countryCode ? <span className="ml-1 text-[10px] text-slate-400">({visit.countryCode})</span> : null}</td>
             <td className="px-3 py-3 text-slate-700">{visit.device}</td>
             <td className="px-3 py-3 text-slate-700">{visit.browser}<div className="text-[10px] text-slate-500">{visit.operatingSystem}</div></td>
             <td className="px-3 py-3 text-slate-500">{visit.networkProvider || 'Not available'}</td>
@@ -101,7 +102,7 @@ export default function TrafficVisitsPanel() {
             <td className="max-w-xs break-all px-3 py-3 text-slate-500">{visit.referrer || 'Direct / unknown'}</td>
             <td className="px-3 py-3">{visit.isBot ? <span className="font-bold text-amber-700">Flagged ({visit.botScore})</span> : <span className="text-emerald-700">Normal</span>}</td>
           </tr>)}
-          {!loading && result.visits.length === 0 && <tr><td colSpan="9" className="px-3 py-8 text-center text-slate-500">No page visits match these filters yet.</td></tr>}
+          {!loading && result.visits.length === 0 && <tr><td colSpan="10" className="px-3 py-8 text-center text-slate-500">No page visits match these filters yet.</td></tr>}
         </tbody>
       </table>
     </div>
@@ -112,6 +113,6 @@ export default function TrafficVisitsPanel() {
         <button type="button" onClick={() => load(Math.min(pages, page + 1))} disabled={loading || page >= pages} className="rounded-lg border border-slate-200 px-3 py-2 font-bold disabled:opacity-40">Next</button>
       </div>
     </div>
-    <p className="text-[11px] leading-5 text-slate-500">IP addresses are visible only inside this permission-protected admin view. Network/ISP is marked unavailable because QuickChat does not currently use a verified ASN/IP intelligence provider; no carrier is guessed from an IP address.</p>
+    <p className="text-[11px] leading-5 text-slate-500">Country is read from the trusted edge proxy country header (Cloudflare, CloudFront or Vercel). Older records and visits that do not pass through a country-aware proxy show Unknown. IP addresses are visible only inside this permission-protected admin view. Network/ISP is marked unavailable because QuickChat does not currently use a verified ASN/IP intelligence provider; no carrier is guessed from an IP address.</p>
   </section>;
 }
