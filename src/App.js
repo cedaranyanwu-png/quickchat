@@ -120,6 +120,16 @@ const Layout = ({ googleEnabled, isAuthenticated, onAuthenticated }) => {
   }, [isVideosPage]);
 
   useEffect(() => {
+    const page = location.pathname || '/';
+    fetch(`${API_BASE_URL}/traffic/page-view`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [location.pathname]);
+
+  useEffect(() => {
     if (!isAuthenticated) return undefined;
     const markOffline = () => apiRequest('/messages/presence', { method: 'DELETE', body: { sessionId: presenceSessionId.current }, keepalive: true }).catch(() => {});
     const heartbeat = () => apiRequest('/messages/presence', { method: 'POST', body: { sessionId: presenceSessionId.current } }).catch(() => {});
