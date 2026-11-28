@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { adminRequest } from '../../api';
+import TrafficVisitsPanel from './TrafficVisitsPanel';
 
 function formatDate(value) {
   if (!value) return 'Not reported';
@@ -219,5 +220,6 @@ export default function GoogleSearchConsolePanel() {
     </div>}
 
     <p className="text-[11px] leading-5 text-slate-500">Important: Google's sitemap report and URL Inspection API are different data sources. A sitemap can show 0 indexed while individual URL inspections confirm indexed pages. Treat the sitemap figures as sitemap-processing statistics and the inspection results as a limited URL sample. Search performance reports pages that have actually appeared in Google Search.</p>
+    <TrafficVisitsPanel />
   </section>;
 }
