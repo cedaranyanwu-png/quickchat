@@ -36,7 +36,14 @@ export default function TrafficVisitsPanel() {
     }
   }, [ip, path, from, to]);
 
-  useEffect(() => { load(1); }, []); // Initial load only; filters are applied explicitly.
+  useEffect(() => {
+    let active = true;
+    adminRequest('/admin/traffic/visits?page=1&limit=50')
+      .then((data) => { if (active) setResult(data); })
+      .catch((err) => { if (active) setError(err.message || 'Unable to load visitor activity.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []); // Initial load only; filters are applied explicitly.
 
   const pages = Math.max(1, Math.ceil(Number(result.total || 0) / 50));
   const clearFilters = () => {
