@@ -245,11 +245,21 @@ async function getSearchAnalytics(days = 28) {
     { startDate: iso(start), endDate: iso(end), dimensions, rowLimit, dataState: 'final' },
   );
 
-  const [totals, pages] = await Promise.all([
+  const [totals, pages, queries, countries, devices] = await Promise.all([
     query([], 1),
     query(['page'], 50),
+    query(['query'], 50),
+    query(['country'], 50),
+    query(['device'], 10),
   ]);
   const totalRow = Array.isArray(totals.rows) ? totals.rows[0] : null;
+  const mapRows = (rows, keyName) => (Array.isArray(rows) ? rows : []).map((row) => ({
+    [keyName]: row.keys?.[0] || '',
+    clicks: Number(row.clicks || 0),
+    impressions: Number(row.impressions || 0),
+    ctr: Number(row.ctr || 0),
+    position: Number(row.position || 0),
+  }));
   return {
     startDate: iso(start),
     endDate: iso(end),
@@ -259,13 +269,10 @@ async function getSearchAnalytics(days = 28) {
       ctr: Number(totalRow?.ctr || 0),
       position: Number(totalRow?.position || 0),
     },
-    pages: (Array.isArray(pages.rows) ? pages.rows : []).map((row) => ({
-      page: row.keys?.[0] || '',
-      clicks: Number(row.clicks || 0),
-      impressions: Number(row.impressions || 0),
-      ctr: Number(row.ctr || 0),
-      position: Number(row.position || 0),
-    })),
+    pages: mapRows(pages.rows, 'page'),
+    queries: mapRows(queries.rows, 'query'),
+    countries: mapRows(countries.rows, 'country'),
+    devices: mapRows(devices.rows, 'device'),
   };
 }
 
