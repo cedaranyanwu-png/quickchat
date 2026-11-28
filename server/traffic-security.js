@@ -195,11 +195,83 @@ function trafficRouter() {
     });
     return res.status(204).end();
   });
+  router.post('/traffic/page-view', async (req, res) => {
+    const rawPage = String(req.body?.page || '').trim();
+    const page = rawPage.split(/[?#]/, 1)[0].slice(0, 120);
+    if (!page.startsWith('/') || page.startsWith('//')) {
+      return res.status(400).json({ message: 'A valid QuickChat page path is required.' });
+    }
+    await recordTraffic(req, {
+      eventType: 'page_view',
+      page: page || '/',
+      bot: req.botDetection,
+    });
+    return res.status(204).end();
+  });
   return router;
 }
 
 async function recordRegistration(req, userId) {
   await recordTraffic(req, { eventType: 'registration', page: '/register', userId, bot: req.botDetection });
+}
+
+function describeVisitor(userAgent) {
+  const ua = String(userAgent || '');
+  const device = /iPad|Tablet|PlayBook|Silk/i.test(ua)
+    ? 'Tablet'
+    : /Mobile|Android|iPhone|iPod|IEMobile|Opera Mini/i.test(ua)
+      ? 'Mobile'
+      : ua ? 'Desktop' : 'Unknown';
+  let browser = 'Unknown';
+  if (/Edg\//i.test(ua)) browser = 'Edge';
+  else if (/OPR\//i.test(ua)) browser = 'Opera';
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+  else if (/Safari\//i.test(ua)) browser = 'Safari';
+  let operatingSystem = 'Unknown';
+  if (/Windows NT/i.test(ua)) operatingSystem = 'Windows';
+  else if (/Android/i.test(ua)) operatingSystem = 'Android';
+  else if (/iPhone|iPad|iPod/i.test(ua)) operatingSystem = 'iOS';
+  else if (/Mac OS X/i.test(ua)) operatingSystem = 'macOS';
+  else if (/Linux/i.test(ua)) operatingSystem = 'Linux';
+  return { device, browser, operatingSystem };
+}
+
+async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from = '', to = '' } = {}) {
+  const safePage = Math.max(1, Math.min(100000, Number(page) || 1));
+  const safeLimit = Math.max(10, Math.min(100, Number(limit) || 50));
+  const offset = (safePage - 1) * safeLimit;
+  const clauses = ["event_type = 'page_view'"];
+  const params = [];
+  if (ip) { clauses.push('ip_address LIKE ?'); params.push('%' + String(ip).slice(0, 64) + '%'); }
+  if (path) { clauses.push('page LIKE ?'); params.push('%' + String(path).slice(0, 120) + '%'); }
+  if (from) { clauses.push('created_at >= ?'); params.push(String(from).slice(0, 10) + ' 00:00:00'); }
+  if (to) { clauses.push('created_at <= ?'); params.push(String(to).slice(0, 10) + ' 23:59:59'); }
+  const where = clauses.join(' AND ');
+  const [countRows, rows] = await Promise.all([
+    db.query('SELECT COUNT(*) AS total FROM traffic_events WHERE ' + where, params),
+    db.query(
+      'SELECT id, page, ip_address, user_agent, referrer, created_at, is_bot, bot_score FROM traffic_events WHERE ' +
+      where + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
+      [...params, safeLimit, offset],
+    ),
+  ]);
+  return {
+    page: safePage,
+    limit: safeLimit,
+    total: Number(countRows[0]?.total || 0),
+    visits: rows.map((row) => ({
+      id: row.id,
+      page: row.page || '/',
+      ip: row.ip_address || 'Unknown',
+      timestamp: row.created_at,
+      referrer: row.referrer || '',
+      isBot: Boolean(Number(row.is_bot || 0)),
+      botScore: Number(row.bot_score || 0),
+      ...describeVisitor(row.user_agent),
+      networkProvider: 'Not available',
+    })),
+  };
 }
 
 async function getTrafficOverview() {
@@ -267,5 +339,6 @@ module.exports = {
   trafficRouter,
   recordRegistration,
   getTrafficOverview,
+  getTrafficVisits,
   clientIp,
 };
