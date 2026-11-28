@@ -11,6 +11,24 @@ function number(value) { return Number(value || 0).toLocaleString(); }
 function percent(value) { return (Number(value || 0) * 100).toFixed(2) + '%'; }
 function position(value) { return Number(value || 0).toFixed(1); }
 
+function SearchBreakdownTable({ title, label, rows }) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  return <div className="space-y-2">
+    <h5 className="text-xs font-extrabold text-slate-800">{title}</h5>
+    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+      <table className="min-w-full text-left text-xs">
+        <thead className="bg-slate-50 text-slate-500"><tr>
+          <th className="px-3 py-2">{label}</th><th className="px-3 py-2">Clicks</th><th className="px-3 py-2">Impressions</th><th className="px-3 py-2">CTR</th><th className="px-3 py-2">Position</th>
+        </tr></thead>
+        <tbody>{rows.map((item, index) => <tr key={item[label] || index} className="border-t border-slate-100">
+          <td className="max-w-sm break-all px-3 py-2 font-medium text-slate-700">{item[label]}</td>
+          <td className="px-3 py-2">{number(item.clicks)}</td><td className="px-3 py-2">{number(item.impressions)}</td><td className="px-3 py-2">{percent(item.ctr)}</td><td className="px-3 py-2">{position(item.position)}</td>
+        </tr>)}</tbody>
+      </table>
+    </div>
+  </div>;
+}
+
 export default function GoogleSearchConsolePanel() {
   const [status, setStatus] = useState(null);
   const [sitemaps, setSitemaps] = useState([]);
@@ -190,6 +208,11 @@ export default function GoogleSearchConsolePanel() {
         <table className="min-w-full text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr><th className="px-3 py-2">Page appearing in Google Search</th><th className="px-3 py-2">Clicks</th><th className="px-3 py-2">Impressions</th><th className="px-3 py-2">CTR</th><th className="px-3 py-2">Position</th></tr></thead>
         <tbody>{analytics.pages.map((item) => <tr key={item.page} className="border-t border-slate-100"><td className="max-w-md break-all px-3 py-2 font-medium text-slate-700">{item.page}</td><td className="px-3 py-2">{number(item.clicks)}</td><td className="px-3 py-2">{number(item.impressions)}</td><td className="px-3 py-2">{percent(item.ctr)}</td><td className="px-3 py-2">{position(item.position)}</td></tr>)}</tbody></table>
       </div>}
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SearchBreakdownTable title="Google search queries" label="query" rows={analytics.queries} />
+        <SearchBreakdownTable title="Search traffic by country" label="country" rows={analytics.countries} />
+        <SearchBreakdownTable title="Search traffic by device" label="device" rows={analytics.devices} />
+      </div>
     </div>}
 
     {sitemaps.length > 0 && <div className="space-y-2">
