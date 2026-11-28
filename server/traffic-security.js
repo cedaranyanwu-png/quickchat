@@ -86,6 +86,25 @@ async function initializeSecurityTables() {
   ];
   for (const statement of statements) await db.query(statement);
 
+  // Store the visitor's country when the trusted edge proxy supplies it.
+  // Cloudflare and CloudFront/Vercel headers are only meaningful when the
+  // request actually passes through that provider's proxy.
+  let trafficColumns;
+  if (db.type === 'sqlite') {
+    trafficColumns = new Set((await db.query('PRAGMA table_info(traffic_events)')).map((row) => String(row.name).toLowerCase()));
+  } else if (db.type === 'postgres') {
+    trafficColumns = new Set((await db.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'traffic_events'",
+    )).map((row) => String(row.column_name).toLowerCase()));
+  } else {
+    trafficColumns = new Set((await db.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'traffic_events'",
+    )).map((row) => String(row.column_name).toLowerCase()));
+  }
+  if (!trafficColumns.has('country_code')) {
+    await db.query("ALTER TABLE traffic_events ADD COLUMN country_code VARCHAR(2)");
+  }
+
   const indexes = [
     ['traffic_events_type_date_idx', 'traffic_events (event_type, created_at)', false],
     ['traffic_events_ip_date_idx', 'traffic_events (ip_address, created_at)', false],
@@ -106,13 +125,34 @@ async function initializeSecurityTables() {
   }
 }
 
+function getVisitorCountryCode(req) {
+  const candidates = [
+    req.get('cf-ipcountry'), // Cloudflare
+    req.get('cloudfront-viewer-country'), // AWS CloudFront
+    req.get('x-vercel-ip-country'), // Vercel
+  ];
+  const code = candidates.map((value) => String(value || '').trim().toUpperCase())
+    .find((value) => /^[A-Z]{2}$/.test(value) && value !== 'XX' && value !== 'T1');
+  return code || null;
+}
+
+function countryNameFromCode(code) {
+  if (!code) return 'Unknown';
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
+  } catch (_error) {
+    return code;
+  }
+}
+
 async function recordTraffic(req, { eventType, page, userId = null, bot = null } = {}) {
   try {
     const detection = bot || { score: 0 };
+    const countryCode = getVisitorCountryCode(req);
     await db.insert(
       `INSERT INTO traffic_events
-        (event_type, page, ip_address, user_id, user_agent, referrer, is_bot, bot_score)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (event_type, page, ip_address, user_id, user_agent, referrer, is_bot, bot_score, country_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         eventType,
         page || null,
@@ -122,6 +162,7 @@ async function recordTraffic(req, { eventType, page, userId = null, bot = null }
         String(req.get('referer') || '').slice(0, 1000) || null,
         detection.score >= 70 ? 1 : 0,
         detection.score,
+        countryCode,
       ],
     );
   } catch (error) {
@@ -251,7 +292,7 @@ async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from
   const [countRows, rows] = await Promise.all([
     db.query('SELECT COUNT(*) AS total FROM traffic_events WHERE ' + where, params),
     db.query(
-      'SELECT id, event_type, page, ip_address, user_agent, referrer, created_at, is_bot, bot_score FROM traffic_events WHERE ' +
+      'SELECT id, event_type, page, ip_address, user_agent, referrer, created_at, is_bot, bot_score, country_code FROM traffic_events WHERE ' +
       where + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
       [...params, safeLimit, offset],
     ),
@@ -265,6 +306,8 @@ async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from
       eventType: row.event_type || 'page_view',
       page: row.page || '/',
       ip: row.ip_address || 'Unknown',
+      countryCode: row.country_code || null,
+      country: countryNameFromCode(row.country_code || null),
       timestamp: row.created_at,
       referrer: row.referrer || '',
       isBot: Boolean(Number(row.is_bot || 0)),
