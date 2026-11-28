@@ -241,7 +241,7 @@ async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from
   const safePage = Math.max(1, Math.min(100000, Number(page) || 1));
   const safeLimit = Math.max(10, Math.min(100, Number(limit) || 50));
   const offset = (safePage - 1) * safeLimit;
-  const clauses = ["event_type = 'page_view'"];
+  const clauses = ["event_type IN ('page_view', 'landing_view', 'registration')"];
   const params = [];
   if (ip) { clauses.push('ip_address LIKE ?'); params.push('%' + String(ip).slice(0, 64) + '%'); }
   if (path) { clauses.push('page LIKE ?'); params.push('%' + String(path).slice(0, 120) + '%'); }
@@ -251,7 +251,7 @@ async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from
   const [countRows, rows] = await Promise.all([
     db.query('SELECT COUNT(*) AS total FROM traffic_events WHERE ' + where, params),
     db.query(
-      'SELECT id, page, ip_address, user_agent, referrer, created_at, is_bot, bot_score FROM traffic_events WHERE ' +
+      'SELECT id, event_type, page, ip_address, user_agent, referrer, created_at, is_bot, bot_score FROM traffic_events WHERE ' +
       where + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?',
       [...params, safeLimit, offset],
     ),
@@ -262,6 +262,7 @@ async function getTrafficVisits({ page = 1, limit = 50, ip = '', path = '', from
     total: Number(countRows[0]?.total || 0),
     visits: rows.map((row) => ({
       id: row.id,
+      eventType: row.event_type || 'page_view',
       page: row.page || '/',
       ip: row.ip_address || 'Unknown',
       timestamp: row.created_at,
